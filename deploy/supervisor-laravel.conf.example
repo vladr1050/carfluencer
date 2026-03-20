@@ -1,0 +1,15 @@
+; Supervisor — очередь Laravel (ClickHouse jobs и прочее).
+; Файл: /etc/supervisor/conf.d/laravel-worker.conf
+
+[program:laravel-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/carfluencer/backend/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=evoapp
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/www/carfluencer/backend/storage/logs/worker.log
+stopwaitsecs=3600

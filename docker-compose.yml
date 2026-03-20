@@ -1,0 +1,15 @@
+# Optional Postgres for local Laravel (set DB_* in backend/.env to match).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: evo
+      POSTGRES_PASSWORD: evo
+      POSTGRES_DB: evo
+    ports:
+      - '5432:5432'
+    volumes:
+      - evo_pg_data:/var/lib/postgresql/data
+
+volumes:
+  evo_pg_data:

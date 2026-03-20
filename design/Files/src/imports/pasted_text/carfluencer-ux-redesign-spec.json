@@ -1,0 +1,261 @@
+# Carfluencer UX/UI Redesign Task (Based on Audit)
+
+## Context
+
+You are improving an existing design system and screens for:
+
+- MediaOwner portal
+- Advertiser portal
+
+The current design is partially complete but has **critical UX, product logic, and MVP alignment issues**.
+
+Your goal:
+
+Bring the design to **production-ready MVP quality**.
+
+---
+
+## PRIORITY
+
+This is NOT a redesign from scratch.
+
+This is:
+
+Fix → Align → Simplify → Strengthen
+
+---
+
+# 🔴 BLOCK 1 — CRITICAL FIXES (MUST DO FIRST)
+
+---
+
+## 1. Add Missing Detail Screens
+
+You MUST introduce new routes and screens:
+
+### MediaOwner
+
+- Vehicle Details
+- Campaign Details
+
+---
+
+### Advertiser
+
+- Vehicle Details
+- Campaign Details
+
+---
+
+## Requirements:
+
+Each detail screen must include:
+
+### Vehicle Details
+
+- Image
+- Specs (brand, model, year, color)
+- Campaign participation
+- Earnings (MediaOwner) OR Exposure (Advertiser)
+
+---
+
+### Campaign Details
+
+- Campaign name
+- Dates
+- Vehicles
+- Status
+- Link to Heatmap
+
+---
+
+## UX Rule:
+
+Table / Card → CLICK → Detail Page
+
+---
+
+## 2. Rebuild Heatmap (CORE SCREEN)
+
+Current implementation is NOT acceptable.
+
+---
+
+## Must implement:
+
+### A. Real Heatmap Layer
+
+Replace:
+
+❌ circles with radius  
+❌ simple polylines  
+
+With:
+
+✅ density-based heatmap layer  
+(kernel/grid based visualization)
+
+---
+
+### B. Mode Selector
+
+Replace checkboxes:
+
+- Driving
+- Parking
+
+With:
+
+Segmented control:
+
+```plaintext
+Driving | Parking | Both
+C. Add Missing KPI
+Add:
+Driving time (MANDATORY)
+D. Fix Layout Priority
+Map must dominate the screen.
+Layout:
+[ Filters (collapsible) ]
+
+[ FULL WIDTH MAP ]
+
+[ KPI PANEL ]
+E. Add Legend
+Heat intensity scale:
+Low → High exposure
+F. Fix Colors
+❌ Remove #00A8FF
+✅ Use only brand palette
+3. Fix MVP Scope Violations
+Remove or redesign:
+Advertiser Portal
+❌ Remove:
+"New Campaign"
+"Select vehicle"
+Replace with:
+"View details"
+"Included in campaigns"
+Rule:
+Advertiser does NOT create campaigns in MVP.
+4. Add Driving Time Everywhere
+Required metric:
+driving time
+Must appear in:
+Heatmap KPI panel
+Dashboard
+Campaign details
+🟠 BLOCK 2 — UX FLOW FIXES
+5. Complete User Flows
+MediaOwner
+Add Vehicle
+Must include:
+Form (modal or page)
+Upload vehicle image
+Save → appear in list
+Upload Campaign Proof
+Must include:
+Upload screen / modal
+File preview
+Status:
+uploaded
+pending
+rejected
+Advertiser
+Heatmap Navigation
+Fix:
+"View Heatmap" must pass:
+campaign_id
+date range
+Result:
+Heatmap opens in correct context
+6. Fix Filters UX
+If filters auto-update:
+❌ Remove "Apply" button
+OR
+Make it real:
+Apply triggers API reload
+🟡 BLOCK 3 — DATA VISUALIZATION
+7. Fix KPI System
+Required Metrics:
+impressions
+driving distance (km)
+driving time
+parking time
+Fix:
+unify units (km, minutes/hours)
+add labels
+ensure hierarchy
+Dashboard Fix:
+Reduce:
+❌ budget / spent / progress
+Add:
+✅ mobility metrics
+🟢 BLOCK 4 — UI SYSTEM
+8. Create Consistent Component System
+Unify:
+Filters (one component system)
+Tables
+Cards
+Buttons
+Fix broken patterns:
+❌ Eye icon without navigation
+✅ Click → open detail page
+Add missing:
+Breadcrumbs
+Notifications
+Profile menu
+🎨 BLOCK 5 — BRAND FIXES
+9. Enforce Brand System
+Colors
+Allowed:
+#C1F60D
+#F10DBF
+#000000
+#545454
+#FFFFFF
+❌ Remove:
+#00A8FF
+non-brand chart colors
+Typography
+Use Helios
+Or approved fallback
+Tokens
+Remove hardcoded colors.
+Use design tokens only.
+🌗 BLOCK 6 — DARK / LIGHT THEMES
+Ensure:
+Both themes exist
+Proper contrast
+Consistent UI
+Dark theme must feel:
+Premium
+Tech
+Mobility-focused
+🧠 DESIGN PRINCIPLE (VERY IMPORTANT)
+This is NOT:
+❌ Ad marketplace UI
+This is:
+✅ Mobility analytics platform
+Core Experience:
+User should feel:
+"I understand where my ads are actually seen"
+📦 FINAL DELIVERABLE
+Update Figma with:
+1. New Screens
+Vehicle Details (2 roles)
+Campaign Details (2 roles)
+2. Rebuilt Heatmap
+real heatmap layer
+driving time
+mode switch
+legend
+3. Fixed Flows
+Add vehicle
+Upload proof
+Open heatmap (with context)
+4. Cleaned MVP scope
+5. Updated Design System
+DONE WHEN:
+Design can be directly used for development without clarification.

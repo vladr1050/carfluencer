@@ -1,0 +1,70 @@
+# Deployment notes (Hetzner & production)
+
+## Server assumptions
+
+- Ubuntu LTS VM on Hetzner Cloud
+- Nginx (or Caddy) as reverse proxy
+- PHP 8.4 + PHP-FPM
+- PostgreSQL
+- Node.js 20+ (for building Filament assets if needed; pre-built assets live in `public/`)
+
+## Environment variables
+
+Copy `backend/.env.example` to `.env` on the server and set at minimum:
+
+| Variable | Purpose |
+|----------|---------|
+| `APP_ENV` | `production` |
+| `APP_DEBUG` | `false` |
+| `APP_URL` | Public HTTPS URL |
+| `DB_*` | PostgreSQL connection |
+| `SESSION_DRIVER` | `database` or `redis` |
+| `QUEUE_CONNECTION` | `database` or `redis` (recommended for jobs) |
+| `CACHE_STORE` | `redis` or `database` |
+
+Generate key: `php artisan key:generate`
+
+## Build & migrate
+
+```bash
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan storage:link
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+## Scheduler
+
+Add to crontab (single server):
+
+```cron
+* * * * * cd /var/www/carfluencer/backend && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## Queues
+
+If using async jobs:
+
+```bash
+php artisan queue:work --sleep=3 --tries=3
+```
+
+Run under `supervisor` or systemd.
+
+## Storage
+
+User uploads (vehicle images, campaign proofs) use `storage/app/public`. Ensure `php artisan storage:link` and that `public/storage` is writable by the web user.
+
+## CORS / SPA
+
+For a separate React origin, configure `config/cors.php` (publish if needed) and Sanctum `SANCTUM_STATEFUL_DOMAINS` if using cookie-based SPA auth. For pure Bearer tokens from the React app, CORS `allowed_origins` must include the frontend URL.
+
+## SSL
+
+Terminate TLS at Nginx with Let’s Encrypt (`certbot`).
+
+## GitHub
+
+Push this repository to GitHub; deploy via SSH pull, GitHub Actions, or your CI of choice. Keep `.env` out of version control.
