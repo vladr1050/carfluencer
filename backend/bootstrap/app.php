@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\AssignRequestId;
+use App\Http\Middleware\EnsureUserRole;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -13,8 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(AssignRequestId::class);
         $middleware->alias([
-            'role' => \App\Http\Middleware\EnsureUserRole::class,
+            'role' => EnsureUserRole::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

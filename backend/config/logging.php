@@ -1,5 +1,6 @@
 <?php
 
+use App\Logging\Tap\JsonFormatterTap;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -12,9 +13,8 @@ return [
     | Default Log Channel
     |--------------------------------------------------------------------------
     |
-    | This option defines the default log channel that is utilized to write
-    | messages to your logs. The value provided here should match one of
-    | the channels present in the list of "channels" configured below.
+    | Typical: LOG_CHANNEL=stack and LOG_STACK=daily (human-readable rotation)
+    | or daily,daily_json for a parallel JSON Lines file (Loki / ELK / CloudWatch).
     |
     */
 
@@ -24,11 +24,6 @@ return [
     |--------------------------------------------------------------------------
     | Deprecations Log Channel
     |--------------------------------------------------------------------------
-    |
-    | This option controls the log channel that should be used to log warnings
-    | regarding deprecated PHP and library features. This allows you to get
-    | your application ready for upcoming major versions of dependencies.
-    |
     */
 
     'deprecations' => [
@@ -40,21 +35,13 @@ return [
     |--------------------------------------------------------------------------
     | Log Channels
     |--------------------------------------------------------------------------
-    |
-    | Here you may configure the log channels for your application. Laravel
-    | utilizes the Monolog PHP logging library, which includes a variety
-    | of powerful log handlers and formatters that you're free to use.
-    |
-    | Available drivers: "single", "daily", "slack", "syslog",
-    |                    "errorlog", "monolog", "custom", "stack"
-    |
     */
 
     'channels' => [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 
@@ -69,8 +56,21 @@ return [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
-            'days' => env('LOG_DAILY_DAYS', 14),
+            'days' => (int) env('LOG_DAILY_DAYS', 30),
             'replace_placeholders' => true,
+        ],
+
+        /*
+         * Same rotation as "daily" but each line is JSON (ship to log aggregators).
+         * Enable via LOG_STACK=daily,daily_json
+         */
+        'daily_json' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/laravel-json.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => (int) env('LOG_DAILY_DAYS', 30),
+            'replace_placeholders' => true,
+            'tap' => [JsonFormatterTap::class],
         ],
 
         'slack' => [
@@ -78,7 +78,7 @@ return [
             'url' => env('LOG_SLACK_WEBHOOK_URL'),
             'username' => env('LOG_SLACK_USERNAME', env('APP_NAME', 'Laravel')),
             'emoji' => env('LOG_SLACK_EMOJI', ':boom:'),
-            'level' => env('LOG_LEVEL', 'critical'),
+            'level' => env('LOG_SLACK_LEVEL', 'critical'),
             'replace_placeholders' => true,
         ],
 

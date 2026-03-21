@@ -11,7 +11,7 @@
 | **`vps-first-deploy.sh.example`** | Ручной «только Laravel» без полного стека (если уже есть Nginx/PHP/БД). |
 | **`frontend-build-production.sh`** | Сборка **`frontend/dist`** с **`API_URL=...`** для выкладки на VPS. |
 
-Полная инструкция: **`docs/DEPLOY/12_vps_production.md`**, CI/CD: **`docs/DEPLOY/15_github_actions.md`**.
+Полная инструкция: **`docs/DEPLOY/12_vps_production.md`**, CI/CD: **`docs/DEPLOY/15_github_actions.md`**, логи Laravel: **`docs/OPERATIONS/01_logging.md`**.
 
 ### Первый админ Filament
 
