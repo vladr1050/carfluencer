@@ -56,8 +56,10 @@ The MVP focuses on:
 /deploy
 12_vps_production.md — продакшен на VPS (Nginx, PHP-FPM, PostgreSQL, очередь, cron, ClickHouse, **GitHub Actions деплой**)
 13_github_push.md — первый push в репозиторий [vladr1050/carfluencer](https://github.com/vladr1050/carfluencer)
+14_docker.md — Docker Compose: Nginx, PHP-FPM, Postgres, queue, scheduler
+15_github_actions.md — GitHub Actions: CI, деплой на VPS, секреты, environment production
 
-Репозиторий также содержит: `deploy/nginx-carfluencer.conf.example`, `deploy/supervisor-laravel.conf.example`, `deploy/vps-first-deploy.sh.example`, `deploy/post-pull.sh`, `.github/workflows/deploy-production.yml`.
+Репозиторий также содержит: `deploy/nginx-carfluencer.conf.example`, `deploy/supervisor-laravel.conf.example`, `deploy/vps-first-deploy.sh.example`, `deploy/setup-ubuntu-server.sh` (авто-`.env` + стек на VPS), `deploy/post-pull.sh`, `.github/workflows/deploy-production.yml`.
 
 ## Local UI
 

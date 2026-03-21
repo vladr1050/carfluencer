@@ -6,6 +6,19 @@
 
 ---
 
+## Быстрый старт (один скрипт)
+
+Если репозиторий уже в **`/var/www/carfluencer`** и Ubuntu с пакетами из репозиториев (PHP 8.3 доступен):
+
+```bash
+cd /var/www/carfluencer
+sudo bash deploy/setup-ubuntu-server.sh 'http://ТВОЙ_IP_ИЛИ_https://домен'
+```
+
+Скрипт ставит **Nginx, PostgreSQL, PHP 8.3-FPM, Composer**, создаёт пользователя/БД **`evo`**, собирает **`backend/.env`** из **`.env.production.example`**, выполняет **`composer install`**, **`migrate`**, кэши, включает сайт. Пароль БД выводится в конце — **сохрани**. Дальше: **Supervisor + cron** (§6).
+
+---
+
 ## 1. Базовые пакеты
 
 ```bash
@@ -28,15 +41,15 @@ sudo mv composer.phar /usr/local/bin/composer
 ## 2. Пользователь и каталог приложения
 
 ```bash
-sudo adduser --disabled-password --gecos "" evoapp
+sudo adduser --disabled-password --gecos "" evoad
 sudo mkdir -p /var/www/carfluencer
-sudo chown evoapp:evoapp /var/www/carfluencer
+sudo chown evoad:evoad /var/www/carfluencer
 ```
 
 Деплой кода (один из вариантов):
 
 ```bash
-sudo -u evoapp -H bash -c 'cd /var/www/carfluencer && git clone <YOUR_REPO_URL> .'
+sudo -u evoad -H bash -c 'cd /var/www/carfluencer && git clone <YOUR_REPO_URL> .'
 # или rsync/scp с локальной машины в /var/www/carfluencer/backend
 ```
 
@@ -66,7 +79,17 @@ DB_PASSWORD=...
 
 ## 4. Laravel `.env` на проде
 
-Скопируйте `backend/.env.example` → `backend/.env`, затем обязательно:
+Готовый шаблон для прода: **`backend/.env.production.example`** — скопируйте в **`backend/.env`** и замените **`YOUR_SERVER_IP_OR_DOMAIN`**, **`CHANGE_ME_DB_PASSWORD`**, при необходимости CORS/ClickHouse:
+
+```bash
+cd /var/www/carfluencer/backend
+cp .env.production.example .env
+nano .env
+```
+
+Либо по-прежнему: `backend/.env.example` → `.env` и руками выставить `APP_ENV=production`, `APP_DEBUG=false`, `DB_CONNECTION=pgsql`, …
+
+Далее обязательно:
 
 | Переменная | Значение |
 |------------|----------|
@@ -117,7 +140,7 @@ php artisan filament:optimize
 Права:
 
 ```bash
-sudo chown -R evoapp:www-data /var/www/carfluencer/backend/storage /var/www/carfluencer/backend/bootstrap/cache
+sudo chown -R evoad:www-data /var/www/carfluencer/backend/storage /var/www/carfluencer/backend/bootstrap/cache
 sudo chmod -R ug+rwx /var/www/carfluencer/backend/storage /var/www/carfluencer/backend/bootstrap/cache
 ```
 
@@ -138,7 +161,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## 6. Очередь и планировщик (обязательно для синка ClickHouse)
 
-**Cron** (пользователь `evoapp`):
+**Cron** (пользователь `evoad`):
 
 ```cron
 * * * * * cd /var/www/carfluencer/backend && php artisan schedule:run >> /dev/null 2>&1
@@ -189,7 +212,9 @@ sudo ufw enable
 
 ## 10. GitHub Actions — автодеплой по SSH
 
-В репозитории: **`.github/workflows/deploy-production.yml`** и скрипт **`deploy/post-pull.sh`**.
+Полная инструкция по workflow, секретам и окружению **`production`**: **`docs/DEPLOY/15_github_actions.md`**.
+
+Кратко: **`.github/workflows/deploy-production.yml`**, скрипт **`deploy/post-pull.sh`**. Деплой после **успешного CI** на push в `main`/`master` или вручную из вкладки Actions.
 
 ### Два ключа (не путать)
 
@@ -205,14 +230,9 @@ sudo ufw enable
 | Имя | Содержимое |
 |-----|------------|
 | `DEPLOY_HOST` | IP или домен (нестандартный порт: `host:2222`) |
-| `DEPLOY_USER` | Пользователь SSH (например `evoapp`) |
+| `DEPLOY_USER` | Пользователь SSH: **`root`** или отдельный пользователь (**`evoad`** и т.д.). Ключ для Actions — в `authorized_keys` этого пользователя (`/root/.ssh/…` или `/home/evoad/.ssh/…`). |
 | `DEPLOY_SSH_PRIVATE_KEY` | Весь файл приватного ключа (от `BEGIN` до `END`) |
 | `DEPLOY_PATH` | Каталог **корня git** на сервере, например `/var/www/carfluencer` (рядом должны быть `backend/` и `deploy/`) |
-
-Запуск:
-
-- вручную: **Actions → Deploy production → Run workflow**
-- автоматически: **push в `main` или `master`** при изменениях в `backend/**`, `deploy/post-pull.sh` или самом workflow
 
 На сервере перед первым деплоем: `git clone` репозитория в `DEPLOY_PATH`, один раз выполнить настройку из разделов 3–6 (`.env`, nginx, supervisor, cron).
 
@@ -225,7 +245,7 @@ sudo ufw enable
 - [ ] Открывается `/` или `/admin` без 502  
 - [ ] `php artisan migrate --force` без ошибок  
 - [ ] `supervisorctl status` — worker `RUNNING`  
-- [ ] Cron от `evoapp` каждую минуту  
+- [ ] Cron от `evoad` каждую минуту  
 - [ ] `telemetry:test-clickhouse` OK  
 - [ ] После синка в админке Heatmap показывает точки из `device_locations`  
 
