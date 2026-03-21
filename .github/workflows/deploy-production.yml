@@ -53,10 +53,13 @@ jobs:
             cd "$DEPLOY_PATH"
             git config --global --add safe.directory "$DEPLOY_PATH" || true
             git fetch origin
+            # На VPS часто лежат правки/scp в deploy/ — checkout падает. Чистим только deploy/ от мусора,
+            # затем жёстко совпадаем с origin (backend/.env и прочие untracked вне deploy/ не трогаем).
+            git clean -fd -- deploy/ 2>/dev/null || true
             if git show-ref --verify --quiet refs/remotes/origin/main; then
-              git checkout -B main origin/main
+              git reset --hard origin/main
             elif git show-ref --verify --quiet refs/remotes/origin/master; then
-              git checkout -B master origin/master
+              git reset --hard origin/master
             else
               echo "No origin/main or origin/master found."
               exit 1

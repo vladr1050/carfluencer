@@ -63,8 +63,9 @@
 ### Что делает деплой на сервере
 
 1. `cd DEPLOY_PATH`
-2. `git fetch` + переключение на `origin/main` или `origin/master`
-3. `./deploy/post-pull.sh` — `composer install --no-dev`, `migrate`, кэши Laravel/Filament, **`queue:restart`** (воркеры Supervisor перезапускаются сами)
+2. `git fetch` + **`git clean -fd -- deploy/`** (убирает неотслеживаемые файлы только в `deploy/`, чтобы не конфликтовали с репо; **`backend/.env` не трогается**)
+3. **`git reset --hard origin/main`** (или `master`) — сбрасывает локальные правки в отслеживаемых файлах, как после ручного `scp` в `deploy/`
+4. `./deploy/post-pull.sh` — `composer install --no-dev`, `migrate`, кэши Laravel/Filament, **`queue:restart`** (воркеры Supervisor перезапускаются сами)
 
 ---
 
