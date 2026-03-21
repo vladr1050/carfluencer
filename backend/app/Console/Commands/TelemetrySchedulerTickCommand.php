@@ -6,6 +6,7 @@ use App\Models\PlatformSetting;
 use App\Services\Telemetry\ClickHouseLocationCollector;
 use App\Services\Telemetry\TelemetrySchedulerConfig;
 use App\Services\Telemetry\TelemetrySyncImeiResolver;
+use App\Services\Telemetry\TelemetryVehicleSyncState;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
@@ -53,13 +54,36 @@ class TelemetrySchedulerTickCommand extends Command
             }
         }
 
-        $imeis = app(TelemetrySyncImeiResolver::class)->resolve('all_vehicles', null, [], onlyTelemetryPullEnabled: true);
-        $n = app(ClickHouseLocationCollector::class)->syncIncrementalForImeis($imeis);
+        $resolver = app(TelemetrySyncImeiResolver::class);
+        $collector = app(ClickHouseLocationCollector::class);
+        $syncState = app(TelemetryVehicleSyncState::class);
+
+        $imeis = $resolver->orderedImeisForScheduledIncrementalPull();
+        $maxPerTick = (int) config('telemetry.clickhouse.max_imeis_per_scheduler_tick', 35);
+        if ($maxPerTick > 0) {
+            $imeis = array_slice($imeis, 0, $maxPerTick);
+        }
+
+        $pauseUs = ((int) config('telemetry.clickhouse.pause_ms_between_imei', 300)) * 1000;
+        $n = 0;
+        $lastIdx = count($imeis) - 1;
+        foreach ($imeis as $idx => $imei) {
+            try {
+                $n += $collector->syncIncrementalForImei($imei);
+                $syncState->markIncrementalSuccessForImeis([$imei]);
+            } catch (\Throwable $e) {
+                $syncState->recordFailureForImeis([$imei], $e);
+            }
+            if ($pauseUs > 0 && $idx < $lastIdx) {
+                usleep($pauseUs);
+            }
+        }
+
         PlatformSetting::set(
             TelemetrySchedulerConfig::KEY_LAST_INCREMENTAL_RUN,
             now('UTC')->toIso8601String()
         );
-        $this->line("Ran incremental telemetry sync for platform vehicles ({$n} row(s), ".count($imeis).' IMEI(s)).');
+        $this->line("Ran incremental telemetry sync ({$n} row(s), ".count($imeis).' IMEI(s) this tick).');
     }
 
     private function maybeRunDailyJobs(): void

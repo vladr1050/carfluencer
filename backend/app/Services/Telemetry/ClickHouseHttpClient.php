@@ -27,7 +27,8 @@ class ClickHouseHttpClient
             'default_format' => 'JSONEachRow',
         ]);
 
-        $request = Http::timeout(180)->acceptJson();
+        $timeout = (int) config('telemetry.clickhouse.http_timeout_seconds', 120);
+        $request = Http::timeout($timeout)->connectTimeout(min(30, $timeout))->acceptJson();
         if (is_string($user) && $user !== '') {
             $request = $request->withBasicAuth($user, (string) $pass);
         }

@@ -3,7 +3,8 @@
 | Файл | Назначение |
 |------|------------|
 | **`setup-ubuntu-server.sh`** | Первичная настройка VPS (PHP 8.4, Postgres, Nginx, `.env`, Composer, миграции, **Supervisor**, **cron**). Запуск: `sudo bash deploy/setup-ubuntu-server.sh 'https://домен'` |
-| **`post-pull.sh`** | После `git pull` на сервере: зависимости, миграции, кэши, `queue:restart`. Вызывается из **GitHub Actions** (`.github/workflows/deploy-production.yml`). |
+| **`post-pull.sh`** | После `git pull`: зависимости, миграции, **`php artisan telemetry:ensure-env`** (добавляет в `.env` только отсутствующие ключи из **`telemetry.env.fragment`**), кэши, `queue:restart`, при `TELEMETRY_CLICKHOUSE_ENABLED=true` — **`telemetry:test-clickhouse`**. |
+| **`telemetry.env.fragment`** | Шаблон переменных телеметрии/ClickHouse для автослияния в `backend/.env` (не перезаписывает существующие ключи). |
 | **`nginx-carfluencer.conf.example`** | Виртуальный хост Nginx → `backend/public`, PHP-FPM 8.4. |
 | **`supervisor-laravel.conf.example`** | Шаблон воркера очереди (`queue:work database`). Копируется скриптом в `/etc/supervisor/conf.d/`. |
 | **`cron-carfluencer.example`** | Шаблон cron для `schedule:run`. На чистой установке создаётся скриптом автоматически. |

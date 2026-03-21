@@ -74,8 +74,26 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
 
         try {
             if ($this->mode === 'incremental') {
-                $n = $collector->syncIncrementalForImeis($imeis);
-                $syncState->markIncrementalSuccessForImeis($imeis);
+                $pauseUs = ((int) config('telemetry.clickhouse.pause_ms_between_imei', 300)) * 1000;
+                $n = 0;
+                $lastIdx = count($imeis) - 1;
+                foreach ($imeis as $idx => $imei) {
+                    try {
+                        $n += $collector->syncIncrementalForImei($imei);
+                        $syncState->markIncrementalSuccessForImeis([$imei]);
+                    } catch (Throwable $e) {
+                        $syncState->recordFailureForImeis([$imei], $e);
+                        Log::warning('Telemetry incremental sync: IMEI failed (scoped job continues)', [
+                            'imei' => $imei,
+                            'scope' => $this->scope,
+                            'campaign_id' => $this->campaignId,
+                            'message' => $e->getMessage(),
+                        ]);
+                    }
+                    if ($pauseUs > 0 && $idx < $lastIdx) {
+                        usleep($pauseUs);
+                    }
+                }
                 Log::info('Telemetry incremental sync (scoped)', [
                     'scope' => $this->scope,
                     'campaign_id' => $this->campaignId,
@@ -102,7 +120,10 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
                 ]);
             }
         } catch (Throwable $e) {
-            $syncState->recordFailureForImeis($imeis, $e);
+            // Incremental path records per-IMEI above; only historical uses this bulk failure.
+            if ($this->mode === 'historical') {
+                $syncState->recordFailureForImeis($imeis, $e);
+            }
             throw $e;
         }
     }

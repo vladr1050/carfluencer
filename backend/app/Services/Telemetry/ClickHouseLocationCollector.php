@@ -28,13 +28,16 @@ class ClickHouseLocationCollector
      *
      * @return int Imported row count (mapped)
      */
-    public function syncIncremental(int $limit = 100_000): int
+    public function syncIncremental(?int $limit = null): int
     {
         if (! $this->isEnabled()) {
             Log::info('ClickHouse collector skipped (TELEMETRY_CLICKHOUSE_ENABLED=false).');
 
             return 0;
         }
+
+        $limit ??= (int) config('telemetry.clickhouse.global_incremental_rows', 25_000);
+        $limit = max(500, min(2_000_000, $limit));
 
         $key = (string) config('telemetry.cursor_incremental');
         $cursor = TelemetrySyncCursor::query()->firstOrCreate(
@@ -63,11 +66,14 @@ class ClickHouseLocationCollector
      *
      * @return int Imported row count
      */
-    public function syncIncrementalForImei(string $imei, int $limit = 200_000): int
+    public function syncIncrementalForImei(string $imei, ?int $limit = null): int
     {
         if (! $this->isEnabled()) {
             return 0;
         }
+
+        $limit ??= (int) config('telemetry.clickhouse.incremental_rows_per_imei', 15_000);
+        $limit = max(500, min(500_000, $limit));
 
         $imei = $this->sanitizeImei($imei);
         $key = 'clickhouse:imei:'.$imei.':incremental';
@@ -98,11 +104,14 @@ class ClickHouseLocationCollector
      *
      * @return int Imported row count
      */
-    public function syncHistorical(CarbonInterface $from, CarbonInterface $to, int $limit = 500_000): int
+    public function syncHistorical(CarbonInterface $from, CarbonInterface $to, ?int $limit = null): int
     {
         if (! $this->isEnabled()) {
             return 0;
         }
+
+        $limit ??= (int) config('telemetry.clickhouse.historical_rows_per_chunk', 80_000);
+        $limit = max(1_000, min(2_000_000, $limit));
 
         $where = $this->buildTimeWhereRange($from, $to);
         $sql = $this->buildSelectSql($where, $limit);
@@ -116,11 +125,14 @@ class ClickHouseLocationCollector
      *
      * @return int Imported row count
      */
-    public function syncHistoricalForImei(string $imei, CarbonInterface $from, CarbonInterface $to, int $limit = 500_000): int
+    public function syncHistoricalForImei(string $imei, CarbonInterface $from, CarbonInterface $to, ?int $limit = null): int
     {
         if (! $this->isEnabled()) {
             return 0;
         }
+
+        $limit ??= (int) config('telemetry.clickhouse.historical_rows_per_chunk', 80_000);
+        $limit = max(1_000, min(2_000_000, $limit));
 
         $imei = $this->sanitizeImei($imei);
         $where = $this->buildTimeWhereRange($from, $to);
@@ -155,15 +167,23 @@ class ClickHouseLocationCollector
      * @param  list<string|int|float>  $imeis
      * @return int Total imported rows
      */
-    public function syncIncrementalForImeis(array $imeis, int $limitPerImei = 200_000): int
+    public function syncIncrementalForImeis(array $imeis, ?int $limitPerImei = null): int
     {
         if (! $this->isEnabled()) {
             return 0;
         }
 
+        $limitPerImei ??= (int) config('telemetry.clickhouse.incremental_rows_per_imei', 15_000);
+        $pauseUs = ((int) config('telemetry.clickhouse.pause_ms_between_imei', 300)) * 1000;
+
         $total = 0;
-        foreach ($this->sanitizeImeiList($imeis) as $imei) {
+        $list = $this->sanitizeImeiList($imeis);
+        $lastIdx = count($list) - 1;
+        foreach ($list as $idx => $imei) {
             $total += $this->syncIncrementalForImei($imei, $limitPerImei);
+            if ($pauseUs > 0 && $idx < $lastIdx) {
+                usleep($pauseUs);
+            }
         }
 
         return $total;
@@ -179,12 +199,18 @@ class ClickHouseLocationCollector
         array $imeis,
         CarbonInterface $from,
         CarbonInterface $to,
-        int $limitPerChunk = 500_000,
-        int $chunkSize = 200,
+        ?int $limitPerChunk = null,
+        ?int $chunkSize = null,
     ): int {
         if (! $this->isEnabled()) {
             return 0;
         }
+
+        $limitPerChunk ??= (int) config('telemetry.clickhouse.historical_rows_per_chunk', 80_000);
+        $limitPerChunk = max(1_000, min(2_000_000, $limitPerChunk));
+        $chunkSize ??= (int) config('telemetry.clickhouse.historical_imei_chunk_size', 40);
+        $chunkSize = max(1, min(500, $chunkSize));
+        $pauseUs = ((int) config('telemetry.clickhouse.pause_ms_between_historical_chunks', 500)) * 1000;
 
         $imeis = $this->sanitizeImeiList($imeis);
         if ($imeis === []) {
@@ -195,12 +221,16 @@ class ClickHouseLocationCollector
         $devCol = $this->deviceColumnSql();
         $total = 0;
 
-        foreach (array_chunk($imeis, max(1, $chunkSize)) as $chunk) {
+        $chunks = array_chunk($imeis, $chunkSize);
+        foreach ($chunks as $idx => $chunk) {
             $inList = implode(',', array_map(fn (string $i): string => "'{$i}'", $chunk));
             $where = $baseWhere." AND {$devCol} IN ({$inList})";
             $sql = $this->buildSelectSql($where, $limitPerChunk);
             $rows = $this->client->queryJsonEachRow($sql);
             $total += $this->importer->import($rows);
+            if ($pauseUs > 0 && $idx < count($chunks) - 1) {
+                usleep($pauseUs);
+            }
         }
 
         return $total;
@@ -210,7 +240,7 @@ class ClickHouseLocationCollector
      * After historical backfill, advance the per-IMEI incremental cursor so the next incremental sync
      * does not scan the full ClickHouse range again (PostgreSQL upsert is idempotent but slow).
      *
-     * @param  \Carbon\CarbonInterface  $exclusiveUpperBound  Same upper bound as historical query (exclusive).
+     * @param  CarbonInterface  $exclusiveUpperBound  Same upper bound as historical query (exclusive).
      */
     public function advanceIncrementalCursorAfterHistorical(string $imei, CarbonInterface $exclusiveUpperBound): void
     {

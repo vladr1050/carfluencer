@@ -32,5 +32,7 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Не ходим во внешний ClickHouse при тестах, даже если в .env включено -->
+        <env name="TELEMETRY_CLICKHOUSE_ENABLED" value="false"/>
     </php>
 </phpunit>

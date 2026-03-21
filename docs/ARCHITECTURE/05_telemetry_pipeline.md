@@ -70,10 +70,10 @@ Two modes (Artisan):
 
 | Command | Purpose |
 |---------|---------|
-| `php artisan telemetry:sync-incremental` | Rows with CH `timestamp` **greater than** cursor; advances cursor |
+| `php artisan telemetry:sync-incremental` | Rows with CH `timestamp` **greater than** global cursor; batch size = `--limit` or `TELEMETRY_CH_GLOBAL_INCREMENTAL_ROWS` |
 | `php artisan telemetry:sync-historical --from=… --to=…` | Window backfill; does **not** rewind incremental cursor |
 
-Requires `TELEMETRY_CLICKHOUSE_ENABLED=true` and ClickHouse HTTP settings in `.env` / `config/telemetry.php`.
+Requires `TELEMETRY_CLICKHOUSE_ENABLED=true` and ClickHouse HTTP settings in `.env` / `config/telemetry.php`. На деплое **`deploy/post-pull.sh`** вызывает **`php artisan telemetry:ensure-env`**, чтобы в `backend/.env` появились недостающие ключи из **`deploy/telemetry.env.fragment`** (уже заданные значения не перезаписываются).
 
 **Smoke test (no sync):** `php artisan telemetry:test-clickhouse` — uses `TELEMETRY_CLICKHOUSE_URL` (optional `--url=http://178.63.17.153:8123`).
 
@@ -94,7 +94,7 @@ Default CH query expects table columns: `device_id`, `timestamp`, `latitude`, `l
 2. `telemetry:build-stop-sessions --date=yesterday`  
 3. `telemetry:aggregate-daily --date=yesterday`  
 
-Scheduler (see `backend/bootstrap/app.php`): incremental every 5 minutes; build + aggregate for **yesterday** nightly.
+Scheduler (see `backend/bootstrap/app.php`): `telemetry:scheduler-tick` every minute (incremental when due per admin interval, default **10** min); build + aggregate for **yesterday** nightly.
 
 ---
 
@@ -116,5 +116,5 @@ See `docs/API/11_public_api.md` — routes under `/api/telemetry/*`.
 
 1. Ensure vehicles carry correct **IMEI** = ClickHouse `device_id`.  
 2. Create **geo_zones** (Filament/seeder/SQL) for markets you attribute.  
-3. Enable ClickHouse env vars; run **historical** sync once, then rely on **incremental**.  
+3. Enable ClickHouse env vars (`TELEMETRY_CLICKHOUSE_*`, `TELEMETRY_CH_*`); smoke test: **`php artisan telemetry:test-clickhouse`**. Override CH column names if needed (`TELEMETRY_CH_TIMESTAMP_COLUMN`, etc.). Run **historical** sync once, then rely on **incremental**.  
 4. Run **build-stop-sessions** and **aggregate-daily** after sync (or use scheduler).  

@@ -19,9 +19,9 @@ final class TelemetrySchedulerConfig
 
     public static function incrementalIntervalMinutes(): int
     {
-        $v = (int) (PlatformSetting::get(self::KEY_INCREMENTAL_INTERVAL) ?? 5);
+        $v = (int) (PlatformSetting::get(self::KEY_INCREMENTAL_INTERVAL) ?? 10);
 
-        return max(1, min(1440, $v > 0 ? $v : 5));
+        return max(1, min(1440, $v > 0 ? $v : 10));
     }
 
     public static function buildSessionsAt(): string
@@ -66,7 +66,7 @@ final class TelemetrySchedulerConfig
     {
         PlatformSetting::set(
             self::KEY_INCREMENTAL_INTERVAL,
-            (string) max(1, min(1440, (int) ($data['incremental_interval_minutes'] ?? 5)))
+            (string) max(1, min(1440, (int) ($data['incremental_interval_minutes'] ?? 10)))
         );
         PlatformSetting::set(
             self::KEY_BUILD_SESSIONS_AT,

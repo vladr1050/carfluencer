@@ -109,16 +109,23 @@ nano .env
 
 ```env
 TELEMETRY_CLICKHOUSE_ENABLED=true
-TELEMETRY_CLICKHOUSE_URL=http://ВАШ_CH:8123
+TELEMETRY_CLICKHOUSE_URL=http://178.63.17.153:8123
 TELEMETRY_CLICKHOUSE_DATABASE=default
 TELEMETRY_CLICKHOUSE_USER=...
 TELEMETRY_CLICKHOUSE_PASSWORD=...
 TELEMETRY_CLICKHOUSE_LOCATIONS_TABLE=location
 TELEMETRY_CH_SCHEMA_PRESET=location
+TELEMETRY_CH_TIMESTAMP_COLUMN=timestamp
 TELEMETRY_CH_TIMESTAMP_TYPE=unix_seconds
 TELEMETRY_CH_DEVICE_ID_COLUMN=imei
 TELEMETRY_CH_SPEED_COLUMN=gpsSpeed
 TELEMETRY_HEATMAP_DRIVER=database
+# Лимиты нагрузки на внешний CH (см. config/telemetry.php и .env.production.example)
+TELEMETRY_CH_INCREMENTAL_ROWS_PER_IMEI=15000
+TELEMETRY_CH_PAUSE_MS_BETWEEN_IMEI=300
+TELEMETRY_CH_MAX_IMEIS_PER_TICK=35
+TELEMETRY_CH_GLOBAL_INCREMENTAL_ROWS=25000
+TELEMETRY_CH_HTTP_TIMEOUT=120
 ```
 
 **CORS для SPA** (если фронт на другом origin):
@@ -138,6 +145,7 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan filament:optimize
+php artisan telemetry:test-clickhouse
 ```
 
 Права:
@@ -169,7 +177,7 @@ sudo nginx -t && sudo systemctl reload nginx
 - **`/etc/cron.d/carfluencer-laravel`** — каждую минуту `php8.4 artisan schedule:run` от **`www-data`**
 - **Supervisor** — программа **`carfluencer-queue`** (`queue:work database`), лог: `backend/storage/logs/worker.log`
 
-Планировщик Laravel: в **`bootstrap/app.php`** зарегистрировано **`telemetry:scheduler-tick`** каждую минуту.
+Планировщик Laravel: в **`bootstrap/app.php`** зарегистрировано **`telemetry:scheduler-tick`** каждую минуту. Сам **инкрементальный** опрос ClickHouse срабатывает не чаще интервала из админки (**Telematics → ClickHouse & automation**, по умолчанию 10 минут) и обрабатывает ограниченное число IMEI за проход (`TELEMETRY_CH_MAX_IMEIS_PER_TICK`), чтобы не перегружать внешний сервер.
 
 **Если ставили сервер вручную** (без скрипта):
 
@@ -239,7 +247,7 @@ sudo ufw enable
 
 Полная инструкция по workflow, секретам и окружению **`production`**: **`docs/DEPLOY/15_github_actions.md`**.
 
-Кратко: **`.github/workflows/deploy-production.yml`**, скрипт **`deploy/post-pull.sh`**. Деплой после **успешного CI** на push в `main`/`master` или вручную из вкладки Actions.
+Кратко: **`.github/workflows/deploy-production.yml`**, скрипт **`deploy/post-pull.sh`**. Деплой после **успешного CI** на push в `main`/`master` или вручную из вкладки Actions. **`post-pull.sh`** сам дополняет `backend/.env` телеметрией из **`deploy/telemetry.env.fragment`** (существующие переменные не меняются).
 
 ### Два ключа (не путать)
 

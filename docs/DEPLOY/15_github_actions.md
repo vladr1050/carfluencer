@@ -65,7 +65,7 @@
 1. `cd DEPLOY_PATH`
 2. `git fetch` + **`git clean -fd -- deploy/`** (убирает неотслеживаемые файлы только в `deploy/`, чтобы не конфликтовали с репо; **`backend/.env` не трогается**)
 3. **`git reset --hard origin/main`** (или `master`) — сбрасывает локальные правки в отслеживаемых файлах, как после ручного `scp` в `deploy/`
-4. `./deploy/post-pull.sh` — `composer install --no-dev`, `migrate`, кэши Laravel/Filament, **`queue:restart`** (воркеры Supervisor перезапускаются сами)
+4. `./deploy/post-pull.sh` — `composer install --no-dev`, `migrate`, **`php artisan telemetry:ensure-env`** (недостающие ключи из `deploy/telemetry.env.fragment` → `backend/.env`), кэши Laravel/Filament, **`queue:restart`**, при **`TELEMETRY_CLICKHOUSE_ENABLED=true`** — **`telemetry:test-clickhouse`**
 
 ---
 

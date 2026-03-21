@@ -8,8 +8,8 @@ use App\Models\Campaign;
 use App\Models\CampaignVehicle;
 use App\Models\ContentBlock;
 use App\Models\GeoZone;
-use App\Models\PlatformSetting;
 use App\Models\MediaOwnerProfile;
+use App\Models\PlatformSetting;
 use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -133,7 +133,7 @@ class DatabaseSeeder extends Seeder
 
         PlatformSetting::query()->updateOrCreate(
             ['key' => 'telemetry_incremental_interval_minutes'],
-            ['value' => '5']
+            ['value' => '10']
         );
         PlatformSetting::query()->updateOrCreate(
             ['key' => 'telemetry_build_sessions_at'],

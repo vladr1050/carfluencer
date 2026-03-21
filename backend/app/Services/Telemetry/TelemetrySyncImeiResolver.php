@@ -26,6 +26,24 @@ class TelemetrySyncImeiResolver
     }
 
     /**
+     * IMEI для фонового incremental: только включённые на тягу, сначала те, кого давно не трогали
+     * (честное распределение нагрузки на ClickHouse между объектами).
+     *
+     * @return list<string>
+     */
+    public function orderedImeisForScheduledIncrementalPull(): array
+    {
+        return Vehicle::query()
+            ->whereNotNull('imei')
+            ->where('imei', '!=', '')
+            ->where('telemetry_pull_enabled', true)
+            ->orderByRaw('COALESCE(telemetry_last_incremental_at, ?) ASC', ['1970-01-01 00:00:00'])
+            ->orderBy('id')
+            ->pluck('imei')
+            ->all();
+    }
+
+    /**
      * @return list<string>
      */
     private function allVehicleImeis(bool $onlyTelemetryPullEnabled): array

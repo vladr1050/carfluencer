@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 class TelemetrySyncIncrementalCommand extends Command
 {
-    protected $signature = 'telemetry:sync-incremental {--limit=100000 : Max rows per run}';
+    protected $signature = 'telemetry:sync-incremental {--limit= : Max rows (default: TELEMETRY_CH_GLOBAL_INCREMENTAL_ROWS)}';
 
     protected $description = 'Pull new rows from ClickHouse into PostgreSQL (incremental cursor).';
 
@@ -19,7 +19,9 @@ class TelemetrySyncIncrementalCommand extends Command
             return self::SUCCESS;
         }
 
-        $n = $collector->syncIncremental((int) $this->option('limit'));
+        $raw = $this->option('limit');
+        $limit = ($raw !== null && $raw !== '') ? (int) $raw : null;
+        $n = $collector->syncIncremental($limit);
         $this->info("Imported {$n} location row(s).");
 
         return self::SUCCESS;
