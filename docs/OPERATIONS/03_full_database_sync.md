@@ -1,116 +1,129 @@
-# Полная копия БД: локально = сервер
+# Полная копия БД: локально → прод (готовый сценарий)
 
-Цель — на сервере **та же PostgreSQL/SQLite**, что и у тебя локально: все таблицы, пользователи, сессии, очереди, телеметрия и т.д.
-
-**Важно**
-
-- Это **перезаписывает** данные на сервере (или целевой БД). Сначала сделай **бэкап прода**, если там что-то нужно сохранить.
-- **`storage/`** (картинки, документы) в дамп БД **не входят** — их копируй отдельно (`rsync`/`scp` каталога `backend/storage/app/public`).
-- После восстановления на сервере: **`php artisan config:cache`**, при необходимости **`php artisan storage:link`**, проверь **`.env`** (тот же `APP_KEY` не обязателен, но `DB_*` должны указывать на восстановленную БД).
+Цель: на сервере **та же база**, что и локально (все таблицы, пользователи, сессии, очереди и т.д.).
 
 ---
 
-## Вариант A (рекомендуется): и локально, и прод — **PostgreSQL**
+## Что уже подготовлено в репозитории
 
-Тогда «один в один» делается стандартным дампом.
+| Что | Назначение |
+|-----|------------|
+| **`php artisan db:export-snapshot`** | Снимок текущей БД в **`backend/storage/app/db-snapshots/`** |
+| **`deploy/restore-postgres-snapshot.sh.example`** | Шаблон **`pg_restore`** на сервере (PostgreSQL) |
+| **`vehicles:export` / `vehicles:import`** | Только машины, если полный дамп не нужен |
 
-### 1) Локально — экспорт
+**Не входит в дамп:** файлы в **`storage/`** (картинки и т.п.) — копируй отдельно.
 
-Подставь свои `USER`, `DBNAME`, хост:
+---
+
+## Сценарий 1: локально PostgreSQL → прод PostgreSQL (рекомендуется)
+
+### Локально
+
+1. В **`.env`**: `DB_CONNECTION=pgsql` и корректные `DB_*`.
+2. Установи клиент **`pg_dump`** (macOS: `brew install libpq`, в PATH добавь `$(brew --prefix libpq)/bin`).
+3. Экспорт:
 
 ```bash
-pg_dump -h 127.0.0.1 -p 5432 -U USER -d DBNAME \
-  -Fc --no-owner --no-acl \
-  -f carfluencer-full.dump
+cd backend
+php artisan db:export-snapshot
 ```
 
-Файл `carfluencer-full.dump` перенеси на сервер (`scp`).
+В консоли будет путь к файлу вида **`storage/app/db-snapshots/snapshot-pgsql_YYYY-MM-DD_HHMMSS.dump`**.
 
-### 2) На сервере — перед заливкой
-
-Останови воркеры очереди (опционально, чтобы не писали в БД во время замены):
+4. На сервер:
 
 ```bash
-sudo supervisorctl stop carfluencer-queue:*   # имя программы как у тебя в Supervisor
+scp backend/storage/app/db-snapshots/snapshot-pgsql_*.dump user@SERVER:/tmp/
 ```
 
-Сделай **бэкап** текущей БД на сервере:
+### На сервере
+
+1. Сделай **бэкап** текущей БД прода (`pg_dump`), если там есть ценные данные.
+2. Скопируй и отредактируй скрипт:
 
 ```bash
-pg_dump -h 127.0.0.1 -U SERVER_USER -d SERVER_DB -Fc -f ~/prod-before-clone.dump
+cd /var/www/carfluencer   # корень клона
+cp deploy/restore-postgres-snapshot.sh.example deploy/restore-postgres-snapshot.sh
+nano deploy/restore-postgres-snapshot.sh   # DUMP_FILE=..., PGUSER, PGDATABASE
+export PGPASSWORD='...'
+chmod +x deploy/restore-postgres-snapshot.sh
+sudo ./deploy/restore-postgres-snapshot.sh
 ```
 
-### 3) На сервере — восстановление
-
-Целевая БД должна существовать (пустая или её можно очистить). Частый способ — восстановить в **пустую** базу:
+3. Laravel:
 
 ```bash
-# создать пустую БД (пример; имена свои)
-sudo -u postgres psql -c "DROP DATABASE IF EXISTS evo WITH (FORCE);"
-sudo -u postgres psql -c "CREATE DATABASE evo OWNER evo;"
-
-pg_restore --no-owner --no-acl -h 127.0.0.1 -U evo -d evo carfluencer-full.dump
-```
-
-Если `pg_restore` ругается на существующие объекты, используют связку **`--clean --if-exists`** (осторожно: удаляет объекты в целевой БД перед созданием):
-
-```bash
-pg_restore --clean --if-exists --no-owner --no-acl -h 127.0.0.1 -U evo -d evo carfluencer-full.dump
-```
-
-### 4) Laravel на сервере
-
-```bash
-cd /var/www/carfluencer/backend
+cd backend
 sudo -u www-data php artisan migrate --force
 sudo -u www-data php artisan config:cache
 sudo -u www-data php artisan queue:restart
-sudo supervisorctl start carfluencer-queue:*
 ```
 
-`migrate` подтянет только недостающие миграции, если схема чуть разошлась.
+4. **Storage:** при необходимости синхронизируй `backend/storage/app/public` с локали (`rsync`/`scp`).
 
 ---
 
-## Вариант B: локально **SQLite**, на сервере **PostgreSQL**
+## Сценарий 2: локально SQLite (как в `.env.example`) → прод PostgreSQL
 
-Один файл `.sqlite` на Postgres **напрямую** не кладётся. Варианты:
+`db:export-snapshot` создаст файл **`snapshot-sqlite_*.sqlite`**. Его **нельзя** отдать в `pg_restore`.
 
-1. **Перейти локально на PostgreSQL** (как на проде) → один раз залить данные → дальше пользоваться **вариантом A**. Самый предсказуемый путь.
-2. Утилита **`pgloader`** (SQLite → PostgreSQL), например:
-   ```bash
-   pgloader sqlite:///path/to/database.sqlite postgresql://USER:PASS@127.0.0.1/DBNAME
-   ```
-   После загрузки проверь миграции Laravel и уникальные ограничения; при необходимости прогон **`php artisan migrate --force`** на сервере.
+Варианты:
 
-Пока локально остаёшься на SQLite, «абсолютно та же» база на Postgres = либо pgloader, либо дублирование окружения на Postgres локально.
+### A) Один раз перейти на PostgreSQL локально
 
----
+1. Подними локальный Postgres, пропиши `DB_CONNECTION=pgsql` в `.env`.
+2. `php artisan migrate:fresh` (или миграции + импорт) — перенеси данные через **`pgloader`** из старого SQLite в локальный Postgres (см. ниже).
+3. Дальше **сценарий 1** (`db:export-snapshot` → `.dump` → сервер).
 
-## Вариант C: и локально, и сервер — **SQLite** (не для типичного прода)
+### B) Оставить SQLite и залить на прод через pgloader (на сервере или на машине с доступом к обоим)
 
-Если бы оба были на SQLite (обычно только для экспериментов):
+Пример (на сервере или промежуточном хосте, где есть оба драйвера):
 
-1. Останови приложение на сервере.
-2. Скопируй файл, например **`backend/database/database.sqlite`**, на сервер поверх существующего.
-3. Права на файл: пользователь PHP-FPM должен читать/писать.
+```bash
+pgloader sqlite:///path/to/snapshot-sqlite_*.sqlite postgresql://USER:PASS@127.0.0.1/evo
+```
 
-На проде Laravel обычно с **PostgreSQL**, этот вариант редко подходит.
+После загрузки на сервере: **`php artisan migrate --force`**, **`config:cache`**, проверка приложения.
 
 ---
 
-## Что не копируется дампом БД
+## Сценарий 3: только SQLite → SQLite (не типичный прод)
 
-| Что | Действие |
-|-----|----------|
-| Файлы в **`storage/`** | Отдельный `scp`/`rsync` |
-| Переменные **`.env`** | Вручную (URL, ключи, `TELEMETRY_*`) |
-| **Redis** / кэш | Не в БД Laravel по умолчанию — сбросится |
+Если бы на сервере тоже был SQLite:
+
+```bash
+php artisan db:export-snapshot
+scp backend/storage/app/db-snapshots/snapshot-sqlite_*.sqlite user@SERVER:/var/www/carfluencer/backend/database/database.sqlite
+# права: пользователь PHP-FPM должен писать файл
+```
 
 ---
 
-## Кратко
+## Без Artisan (вручную, PostgreSQL)
 
-- **Postgres + Postgres** → `pg_dump -Fc` → `pg_restore` — это и есть «та же база целиком».
-- **SQLite → Postgres** → лучше выровнять локаль на Postgres или **pgloader**.
-- Только машины без остальной БД → по-прежнему **[02_sync_vehicles_between_envs.md](02_sync_vehicles_between_envs.md)** и `vehicles:export` / `vehicles:import`.
+Локально:
+
+```bash
+pg_dump -h 127.0.0.1 -U USER -d DBNAME -Fc --no-owner --no-acl -f carfluencer.dump
+```
+
+Дальше как в **сценарии 1**, шаг «На сервере».
+
+---
+
+## Чеклист перед продом
+
+- [ ] Снимок создан (`db:export-snapshot` или `pg_dump`).
+- [ ] На проде сделан **бэкап** старой БД (если нужна откатка).
+- [ ] Остановлена очередь на время restore (скрипт пример это делает).
+- [ ] Восстановлен дамп / выполнен pgloader.
+- [ ] `migrate --force`, `config:cache`, `queue:restart`.
+- [ ] Скопирован **`storage`** при необходимости.
+- [ ] `.env` на сервере указывает на эту БД (`DB_*`).
+
+---
+
+## Связанные документы
+
+- [Перенос только Vehicles](02_sync_vehicles_between_envs.md)

@@ -155,6 +155,10 @@ sudo chown -R evoad:www-data /var/www/carfluencer/backend/storage /var/www/carfl
 sudo chmod -R ug+rwx /var/www/carfluencer/backend/storage /var/www/carfluencer/backend/bootstrap/cache
 ```
 
+### Полная копия локальной БД на прод
+
+Пошагово (PostgreSQL / SQLite, `db:export-snapshot`, `pg_restore`, `pgloader`): **`docs/OPERATIONS/03_full_database_sync.md`**.
+
 ### Демо-сидер на проде (опционально)
 
 `DatabaseSeeder` **не** очищает БД, но создаёт/обновляет демо-пользователей, политики размеров, настройки телеметрии, демо-кампанию и т.д. (см. `backend/database/seeders/DatabaseSeeder.php`).

@@ -11,6 +11,7 @@
 | **`vps-first-deploy.sh.example`** | Ручной «только Laravel» без полного стека (если уже есть Nginx/PHP/БД). |
 | **`frontend-build-production.sh`** | Сборка **`frontend/dist`** с **`API_URL=...`** для выкладки на VPS. |
 | **`seed-production-on-server.sh.example`** | Один раз на VPS: **`php artisan db:seed --force`** от **`www-data`** (демо-данные + админ `admin@carfluencer.test` / `password`). |
+| **`restore-postgres-snapshot.sh.example`** | Восстановление **`pg_dump -Fc`** на сервере (после **`php artisan db:export-snapshot`** локально при PostgreSQL). См. **`docs/OPERATIONS/03_full_database_sync.md`**. |
 
 Полная инструкция: **`docs/DEPLOY/12_vps_production.md`**, CI/CD: **`docs/DEPLOY/15_github_actions.md`**, логи Laravel: **`docs/OPERATIONS/01_logging.md`**.
 

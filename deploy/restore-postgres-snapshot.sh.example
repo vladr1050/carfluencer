@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Восстановление дампа PostgreSQL (формат -Fc от db:export-snapshot / pg_dump).
+# 1) Скопируй snapshot-pgsql_*.dump на сервер (например в /root/).
+# 2) Скопируй этот файл, заполни переменные, запусти от root или пользователя с правами на postgres.
+#
+# ВНИМАНИЕ: перезаписывает объекты в целевой БД (--clean --if-exists).
+set -euo pipefail
+
+# === задай свои значения ===
+DUMP_FILE="/root/snapshot-pgsql_YYYY-MM-DD_HHMMSS.dump"
+PGHOST="${PGHOST:-127.0.0.1}"
+PGPORT="${PGPORT:-5432}"
+PGUSER="${PGUSER:-evo}"
+PGDATABASE="${PGDATABASE:-evo}"
+# пароль: export PGPASSWORD='...' перед запуском или .pgpass
+
+if [[ ! -f "$DUMP_FILE" ]]; then
+  echo "Файл не найден: $DUMP_FILE"
+  exit 1
+fi
+
+read -r -p "Это УДАЛИТ существующие объекты в БД $PGDATABASE на $PGHOST. Продолжить? [y/N] " ans
+if [[ ! "${ans,,}" =~ ^y ]]; then
+  echo "Отменено."
+  exit 1
+fi
+
+# Остановить очередь (имена как у вас в Supervisor)
+supervisorctl stop 'carfluencer-queue:*' 2>/dev/null || true
+
+pg_restore --clean --if-exists --no-owner --no-acl \
+  -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+  "$DUMP_FILE"
+
+echo "Готово. Дальше от www-data:"
+echo "  cd /var/www/carfluencer/backend"
+echo "  php artisan migrate --force"
+echo "  php artisan config:cache"
+echo "  php artisan queue:restart"
+echo "  supervisorctl start 'carfluencer-queue:*'"
