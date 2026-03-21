@@ -1,28 +1,19 @@
-# Деплой Laravel backend на VPS по SSH (после git pull на сервере).
+# Деплой Laravel backend на VPS по SSH (git pull + deploy/post-pull.sh).
 #
-# Секреты репозитория (Settings → Secrets and variables → Actions):
-#   DEPLOY_HOST          — IP или домен (например 135.181.36.104)
-#   DEPLOY_USER          — SSH-пользователь (например evoapp)
-#   DEPLOY_SSH_PRIVATE_KEY — полный приватный ключ OpenSSH (-----BEGIN ... PRIVATE KEY-----)
-#   DEPLOY_PATH          — абсолютный путь к корню git-репозитория на сервере (например /var/www/carfluencer)
+# Запуск:
+#   • вручную: Actions → Deploy production → Run workflow
+#   • автоматически: после успешного завершения workflow «CI» на push в main/master
 #
-# Опционально:
-#   DEPLOY_PORT          — порт SSH (по умолчанию 22)
-#   DEPLOY_SSH_KNOWN_HOSTS — вывод: ssh-keyscan -p PORT -H HOST (защита от MITM)
-#
-# На сервере один раз: git clone репозитория в DEPLOY_PATH, настроить .env в backend/,
-# nginx, supervisor, cron — см. docs/DEPLOY/12_vps_production.md
+# Секреты: см. docs/DEPLOY/15_github_actions.md
 
 name: Deploy production
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main, master]
-    paths:
-      - 'backend/**'
-      - 'deploy/post-pull.sh'
-      - '.github/workflows/deploy-production.yml'
 
 concurrency:
   group: production-deploy
@@ -33,6 +24,15 @@ jobs:
     name: SSH deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: production
+
+    # Автодеплой только после успешного CI на push; ручной запуск — всегда
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       (github.event.workflow_run.head_branch == 'main' ||
+        github.event.workflow_run.head_branch == 'master'))
 
     steps:
       - name: Deploy via SSH
@@ -41,7 +41,6 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          # Порт SSH: по умолчанию 22. Нестандартный — укажите в DEPLOY_HOST как host:port (см. appleboy/ssh-action).
           command_timeout: 25m
           request_pty: false
           script: |

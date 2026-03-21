@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { apiJson, getToken, setToken } from '../api/client';
+import { apiJson, getToken, setToken } from '@/lib/api';
 
 export type UserRole = 'admin' | 'media_owner' | 'advertiser';
 
@@ -24,19 +24,8 @@ type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<AuthUser>;
-  register: (payload: RegisterPayload) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
-};
-
-type RegisterPayload = {
-  name: string;
-  email: string;
-  password: string;
-  password_confirmation: string;
-  role: 'media_owner' | 'advertiser';
-  company_name: string;
-  phone?: string;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -77,16 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     return res.user;
   }, []);
 
-  const register = useCallback(async (payload: RegisterPayload) => {
-    const res = await apiJson<{ token: string; user: AuthUser }>('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    setToken(res.token);
-    setUser(res.user);
-    return res.user;
-  }, []);
-
   const logout = useCallback(async () => {
     try {
       await apiJson('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
@@ -98,8 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, refreshMe }),
-    [user, loading, login, register, logout, refreshMe],
+    () => ({ user, loading, login, logout, refreshMe }),
+    [user, loading, login, logout, refreshMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

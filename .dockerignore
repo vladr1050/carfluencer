@@ -1,0 +1,10 @@
+.git
+.github
+**/.env
+**/node_modules
+**/vendor
+backend/storage/logs/*
+!backend/storage/logs/.gitignore
+backend/bootstrap/cache/*.php
+!backend/bootstrap/cache/.gitignore
+backend/database/*.sqlite*

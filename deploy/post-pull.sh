@@ -3,6 +3,10 @@
 # Путь: ./deploy/post-pull.sh от корня клона (рядом с каталогом backend/).
 set -euo pipefail
 
+if [[ "${EUID:-0}" -eq 0 ]]; then
+  export COMPOSER_ALLOW_SUPERUSER=1
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/backend"
 
@@ -15,7 +19,7 @@ php artisan route:cache
 php artisan view:cache
 php artisan filament:optimize || true
 
-# Перезапуск воркеров очереди после обновления кода (Supervisor подхватит новый процесс)
+# Воркеры Supervisor сами перезапустятся после выхода процесса (см. deploy/supervisor-laravel.conf.example)
 php artisan queue:restart || true
 
 echo "Deploy script finished OK."

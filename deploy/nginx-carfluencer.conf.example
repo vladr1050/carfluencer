@@ -1,5 +1,6 @@
-# Nginx — Laravel (PHP-FPM). Скопировать в /etc/nginx/sites-available/ и подставить server_name / root.
-# Пример для IP: server_name 135.181.36.104;
+# Nginx — Laravel API + Filament + React SPA (media owner / advertiser).
+# Сборка: cd frontend && VITE_API_URL=https://ВАШ_ХОСТ npm ci && npm run build
+# Артефакты: /var/www/carfluencer/frontend/dist
 
 server {
     listen 80;
@@ -7,24 +8,74 @@ server {
     server_name 135.181.36.104;  # или ваш домен
     root /var/www/carfluencer/backend/public;
 
+    client_max_body_size 32m;
+
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
 
     index index.php;
-
     charset utf-8;
+
+    location ^~ /assets/ {
+        alias /var/www/carfluencer/frontend/dist/assets/;
+        access_log off;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
+    location = / {
+        root /var/www/carfluencer/frontend/dist;
+        try_files /index.html =404;
+    }
+
+    # SPA fallback через named location (иначе /index.html уйдёт в Laravel location /)
+    location ^~ /media-owner {
+        root /var/www/carfluencer/frontend/dist;
+        try_files $uri $uri/ @carfluencer_spa;
+    }
+
+    location ^~ /advertiser {
+        root /var/www/carfluencer/frontend/dist;
+        try_files $uri $uri/ @carfluencer_spa;
+    }
+
+    location ^~ /login {
+        root /var/www/carfluencer/frontend/dist;
+        try_files $uri $uri/ @carfluencer_spa;
+    }
+
+    location ^~ /register {
+        root /var/www/carfluencer/frontend/dist;
+        try_files $uri $uri/ @carfluencer_spa;
+    }
+
+    location ^~ /welcome {
+        root /var/www/carfluencer/frontend/dist;
+        try_files $uri $uri/ @carfluencer_spa;
+    }
+
+    location @carfluencer_spa {
+        root /var/www/carfluencer/frontend/dist;
+        try_files /index.html =404;
+    }
+
+    location = /favicon.ico {
+        access_log off;
+        log_not_found off;
+        return 204;
+    }
+
+    location = /robots.txt {
+        access_log off;
+        log_not_found off;
+    }
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    error_page 404 /index.php;
-
     location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         include fastcgi_params;
         fastcgi_hide_header X-Powered-By;

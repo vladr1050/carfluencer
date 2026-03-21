@@ -37,21 +37,17 @@ php artisan view:cache
 
 ## Scheduler
 
-Add to crontab (single server):
+На VPS после **`deploy/setup-ubuntu-server.sh`** cron уже в **`/etc/cron.d/carfluencer-laravel`** (`www-data`, `php8.4 artisan schedule:run`). Вручную:
 
 ```cron
-* * * * * cd /var/www/carfluencer/backend && php artisan schedule:run >> /dev/null 2>&1
+* * * * * www-data cd /var/www/carfluencer/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
 ```
 
 ## Queues
 
-If using async jobs:
+Async jobs (ClickHouse sync и др.): **`deploy/supervisor-laravel.conf.example`** → программа **`carfluencer-queue`** (`queue:work database`, пользователь `www-data`). Индекс артефактов: **`deploy/README.md`**.
 
-```bash
-php artisan queue:work --sleep=3 --tries=3
-```
-
-Run under `supervisor` or systemd.
+После деплоя **`deploy/post-pull.sh`** вызывает **`queue:restart`** — воркеры завершают текущий job и Supervisor поднимает новый процесс.
 
 ## Storage
 

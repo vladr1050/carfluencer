@@ -27,7 +27,7 @@ git push -u origin main
 
 После появления кода на GitHub:
 
-1. **Settings → Secrets and variables → Actions** — секреты из `docs/DEPLOY/12_vps_production.md` §10.
+1. **Settings → Secrets and variables → Actions** — секреты из **`docs/DEPLOY/15_github_actions.md`**.
 2. На VPS: `git clone git@github.com:vladr1050/carfluencer.git` в ваш `DEPLOY_PATH` (и настроить deploy key **read** для `git fetch`).
 3. **Actions → Deploy production** — ручной запуск или push в `main`.
 

@@ -1,4 +1,18 @@
-# Optional Postgres for local Laravel (set DB_* in backend/.env to match).
+# Полный стек для локальной разработки и деплоя на VPS через Docker.
+# Документация: docs/DEPLOY/14_docker.md
+#
+# Первый запуск:
+#   cp backend/.env.example backend/.env
+#   # В backend/.env: DB_HOST=postgres DB_DATABASE=evo DB_USERNAME=evo DB_PASSWORD=evo
+#   docker compose build
+#   docker compose run --rm app composer install --no-interaction
+#   docker compose run --rm app php artisan key:generate
+#   docker compose run --rm app php artisan migrate --force
+#   docker compose up -d
+#
+# Сайт: http://localhost:8080  (Filament: /admin)
+# Только PostgreSQL (старый сценарий): docker compose up -d postgres
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,10 +20,65 @@ services:
       POSTGRES_USER: evo
       POSTGRES_PASSWORD: evo
       POSTGRES_DB: evo
-    ports:
-      - '5432:5432'
     volumes:
       - evo_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U evo -d evo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - '8080:80'
+    volumes:
+      - ./backend:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  queue:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    working_dir: /var/www/html
+    command: php artisan queue:work database --sleep=3 --tries=3 --no-interaction
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      app:
+        condition: service_started
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    working_dir: /var/www/html
+    command: php artisan schedule:work --no-interaction
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      app:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   evo_pg_data:

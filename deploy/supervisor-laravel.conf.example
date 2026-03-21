@@ -1,14 +1,15 @@
-; Supervisor — очередь Laravel (ClickHouse jobs и прочее).
-; Файл: /etc/supervisor/conf.d/laravel-worker.conf
+; Supervisor — очередь Laravel (ClickHouse sync и прочие jobs).
+; Устанавливается скриптом setup-ubuntu-server.sh в /etc/supervisor/conf.d/carfluencer-queue.conf
+; При другом корне репозитория подставь путь к artisan.
 
-[program:laravel-worker]
+[program:carfluencer-queue]
 process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/carfluencer/backend/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+command=/usr/bin/php8.4 /var/www/carfluencer/backend/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
 autostart=true
 autorestart=true
 stopasgroup=true
 killasgroup=true
-user=evoapp
+user=www-data
 numprocs=1
 redirect_stderr=true
 stdout_logfile=/var/www/carfluencer/backend/storage/logs/worker.log

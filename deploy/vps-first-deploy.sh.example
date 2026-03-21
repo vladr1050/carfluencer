@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# ПЕРВЫЙ ДЕПЛОЙ НА VPS — скопируйте на сервер, выставьте chmod +x, отредактируйте переменные и запустите.
+# ПЕРВЫЙ ДЕПЛОЙ НА VPS — если стек (Nginx/PHP/Postgres) уже есть; иначе лучше deploy/setup-ubuntu-server.sh
+# Скопируйте на сервер, chmod +x, поправьте APP_DIR / пользователя.
 set -euo pipefail
 
 APP_DIR="/var/www/carfluencer/backend"
-APP_USER="evoapp"
+APP_USER="www-data"
 
 echo "== Composer (no dev) =="
 sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && composer install --no-dev --optimize-autoloader"
@@ -17,7 +18,7 @@ sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && php artisan view:cache"
 sudo -u "$APP_USER" -H bash -c "cd '$APP_DIR' && php artisan filament:optimize || true"
 
 echo "== Permissions =="
-sudo chown -R "$APP_USER":www-data "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
+sudo chown -R www-data:www-data "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
 sudo chmod -R ug+rwx "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
 
-echo "Done. Настройте Nginx, Supervisor, cron и .env вручную — см. docs/DEPLOY/12_vps_production.md"
+echo "Done. Nginx/Supervisor/cron: deploy/README.md и docs/DEPLOY/12_vps_production.md"

@@ -1,0 +1,9 @@
+# Laravel scheduler (telemetry:scheduler-tick каждую минуту через schedule:run).
+# Установка: sudo cp deploy/cron-carfluencer.example /etc/cron.d/carfluencer-laravel
+# Замени пути, если корень репозитория не /var/www/carfluencer.
+# Права: chmod 644 /etc/cron.d/carfluencer-laravel
+#
+SHELL=/bin/sh
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+* * * * * www-data cd /var/www/carfluencer/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1

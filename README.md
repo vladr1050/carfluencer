@@ -8,9 +8,9 @@ Full-stack MVP for advertising placements on vehicles (initial fleet: Carguru).
 | Path | Description |
 |------|-------------|
 | `backend/` | Laravel 13 API + Filament admin + Sanctum auth |
-| `design/Files/` | React UI prototype (Figma export) — reference for portals |
+| `design/Files/` | React UI prototype (Figma export) — **reference**; `frontend/` tracks this UI |
 | `docs/` | Product & architecture documentation |
-| `frontend/` | Vite + React portals (see `frontend/README.md`) |
+| `frontend/` | Vite + React portals — **same UI/UX as `design/Files`**, API-integrated (see `frontend/README.md`) |
 
 ## Backend (Laravel)
 
@@ -94,9 +94,18 @@ Set `VITE_API_URL=http://localhost:8000` (or your API URL). The app uses Bearer 
 
 Advertiser area includes **Heatmap** (OpenStreetMap + Leaflet) and **Pricing** (S/M/L/XL placement rates). For a richer UI, merge components from `design/Files/` into `frontend/src/`. See `frontend/README.md`.
 
-## Deployment (Hetzner)
+## Production deployment
 
-See `backend/docs/DEPLOYMENT.md` for environment variables, queues, storage, and build steps.
+| Resource | Purpose |
+|----------|---------|
+| **`deploy/setup-ubuntu-server.sh`** | One-shot VPS: PHP 8.4, Postgres, Nginx, `.env`, migrations, **Supervisor** (`carfluencer-queue`), **cron** (`schedule:run`) |
+| **`deploy/post-pull.sh`** | After `git pull` / GitHub Actions deploy |
+| **`deploy/frontend-build-production.sh`** | Build React portals (`frontend/`) → upload `frontend/dist` to the server |
+| **`deploy/README.md`** | Index of nginx / supervisor / cron templates |
+| **`docs/DEPLOY/12_vps_production.md`** | Full VPS checklist (TLS, firewall, first admin) |
+| **`docs/DEPLOY/15_github_actions.md`** | CI/CD secrets and workflows |
+
+Env template: **`backend/.env.production.example`**. First Filament user on server: `php artisan make:filament-user` (as `www-data` if `.env` is group-readable). See also **`backend/docs/DEPLOYMENT.md`**.
 
 ## Implementation status
 
