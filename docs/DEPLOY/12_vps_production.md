@@ -155,6 +155,28 @@ sudo chown -R evoad:www-data /var/www/carfluencer/backend/storage /var/www/carfl
 sudo chmod -R ug+rwx /var/www/carfluencer/backend/storage /var/www/carfluencer/backend/bootstrap/cache
 ```
 
+### Демо-сидер на проде (опционально)
+
+`DatabaseSeeder` **не** очищает БД, но создаёт/обновляет демо-пользователей, политики размеров, настройки телеметрии, демо-кампанию и т.д. (см. `backend/database/seeders/DatabaseSeeder.php`).
+
+**Скрипт из репозитория** (запуск из **корня** клона, удобно от `root`):
+
+```bash
+cd /var/www/carfluencer
+cp deploy/seed-production-on-server.sh.example deploy/seed-production-on-server.sh
+chmod +x deploy/seed-production-on-server.sh
+./deploy/seed-production-on-server.sh
+```
+
+Вручную:
+
+```bash
+cd /var/www/carfluencer/backend
+sudo -u www-data php artisan db:seed --force --no-interaction
+```
+
+После сида вход в админку: **`admin@carfluencer.test`** / **`password`** — **сразу смените пароль** (и демо-аккаунты `media@…` / `advertiser@…`).
+
 ---
 
 ## 5. Nginx

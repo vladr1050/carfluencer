@@ -10,19 +10,22 @@
 | **`cron-carfluencer.example`** | Шаблон cron для `schedule:run`. На чистой установке создаётся скриптом автоматически. |
 | **`vps-first-deploy.sh.example`** | Ручной «только Laravel» без полного стека (если уже есть Nginx/PHP/БД). |
 | **`frontend-build-production.sh`** | Сборка **`frontend/dist`** с **`API_URL=...`** для выкладки на VPS. |
+| **`seed-production-on-server.sh.example`** | Один раз на VPS: **`php artisan db:seed --force`** от **`www-data`** (демо-данные + админ `admin@carfluencer.test` / `password`). |
 
 Полная инструкция: **`docs/DEPLOY/12_vps_production.md`**, CI/CD: **`docs/DEPLOY/15_github_actions.md`**, логи Laravel: **`docs/OPERATIONS/01_logging.md`**.
 
 ### Первый админ Filament
 
-После миграций на сервере:
+**Вариант A — демо-сидер** (даёт админа `admin@carfluencer.test` / `password`, см. **`seed-production-on-server.sh.example`**).
+
+**Вариант B — вручную** после миграций:
 
 ```bash
 cd /var/www/carfluencer/backend
 sudo -u www-data php artisan make:filament-user
 ```
 
-(или от `root`, если `.env` читается.)
+У `make:filament-user` роль по умолчанию может быть не `admin` — для панели нужно **`role=admin`** и **`status=active`** в БД.
 
 ### Если Supervisor не стартует (`status=2`, нет `/var/run/supervisor.sock`)
 

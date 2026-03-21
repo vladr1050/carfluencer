@@ -10,7 +10,6 @@ use App\Models\ContentBlock;
 use App\Models\GeoZone;
 use App\Models\MediaOwnerProfile;
 use App\Models\PlatformSetting;
-use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Database\Seeder;

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Запускать НА СЕРВЕРЕ из корня git-клона (рядом с backend/ и deploy/), один раз или осознанно.
+#   cp deploy/seed-production-on-server.sh.example deploy/seed-production-on-server.sh
+#   chmod +x deploy/seed-production-on-server.sh
+#   ./deploy/seed-production-on-server.sh
+#
+# Внимание: DatabaseSeeder создаёт/обновляет демо-пользователей и настройки (см. database/seeders/DatabaseSeeder.php).
+# Админка после сида: admin@carfluencer.test / password — сразу смените пароль.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT/backend"
+
+if [[ "${EUID:-0}" -eq 0 ]]; then
+  export COMPOSER_ALLOW_SUPERUSER=1
+fi
+
+RUN_USER="${SEED_AS_USER:-www-data}"
+if id "$RUN_USER" &>/dev/null && [[ "${EUID:-0}" -eq 0 ]]; then
+  exec sudo -u "$RUN_USER" -H php artisan db:seed --force --no-interaction
+else
+  php artisan db:seed --force --no-interaction
+fi
+
+echo "OK: db:seed finished. If this was first seed: admin panel admin@carfluencer.test / password — change immediately."
