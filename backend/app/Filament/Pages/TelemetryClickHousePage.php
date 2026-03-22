@@ -6,6 +6,7 @@ use App\Jobs\SyncTelemetryScopeFromClickHouseJob;
 use App\Jobs\SyncVehicleTelemetryFromClickHouseJob;
 use App\Models\Campaign;
 use App\Models\Vehicle;
+use App\Services\Telemetry\ClickHouseLocationCollector;
 use App\Services\Telemetry\TelemetrySchedulerConfig;
 use App\Services\Telemetry\TelemetrySyncActivityPresenter;
 use BackedEnum;
@@ -215,6 +216,20 @@ class TelemetryClickHousePage extends Page
 
                 return;
             }
+        }
+
+        $collector = app(ClickHouseLocationCollector::class);
+        if (! $collector->isEnabled()) {
+            Notification::make()
+                ->title(__('ClickHouse import is turned off'))
+                ->body(__(
+                    'In .env set TELEMETRY_CLICKHOUSE_ENABLED=true and TELEMETRY_CLICKHOUSE_URL=… (plus user/password if required). On the server run php artisan config:clear or php artisan config:cache, then restart the queue worker. Until then, sync jobs exit immediately and no rows are imported (this is why the activity log stays empty).'
+                ))
+                ->danger()
+                ->persistent()
+                ->send();
+
+            return;
         }
 
         $scope = (string) ($s['map_scope'] ?? 'vehicle');

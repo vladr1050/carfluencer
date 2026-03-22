@@ -3,6 +3,7 @@
 namespace App\Services\Telemetry;
 
 use App\Models\DeviceLocation;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -98,11 +99,11 @@ class DeviceLocationBulkImporter
             return $value;
         }
         if (is_numeric($value)) {
-            return \Carbon\Carbon::createFromTimestampUTC((int) $value);
+            return Carbon::createFromTimestampUTC((int) $value);
         }
         if (is_string($value) && $value !== '') {
             try {
-                return \Carbon\Carbon::parse($value, 'UTC');
+                return Carbon::parse($value, 'UTC');
             } catch (\Throwable) {
                 return null;
             }
@@ -116,6 +117,14 @@ class DeviceLocationBulkImporter
      */
     private function upsertBatch(array $batch): void
     {
+        if ($batch === []) {
+            return;
+        }
+
+        // PostgreSQL: ON CONFLICT DO UPDATE cannot touch the same row twice in one INSERT.
+        // ClickHouse can return duplicate (device_id, event_at) in one pull; collapse to last row.
+        $batch = $this->deduplicateBatchByDeviceAndEventAt($batch);
+
         DB::transaction(function () use ($batch): void {
             DeviceLocation::query()->upsert(
                 $batch,
@@ -123,5 +132,21 @@ class DeviceLocationBulkImporter
                 ['latitude', 'longitude', 'speed', 'battery', 'gsm_signal', 'odometer', 'ignition', 'extra_json', 'updated_at']
             );
         });
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $batch
+     * @return list<array<string, mixed>>
+     */
+    private function deduplicateBatchByDeviceAndEventAt(array $batch): array
+    {
+        $deduped = [];
+        foreach ($batch as $row) {
+            $deviceId = (string) ($row['device_id'] ?? '');
+            $eventAt = (string) ($row['event_at'] ?? '');
+            $deduped[$deviceId."\0".$eventAt] = $row;
+        }
+
+        return array_values($deduped);
     }
 }

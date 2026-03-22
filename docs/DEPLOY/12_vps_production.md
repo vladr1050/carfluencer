@@ -128,6 +128,11 @@ TELEMETRY_CH_GLOBAL_INCREMENTAL_ROWS=25000
 TELEMETRY_CH_HTTP_TIMEOUT=120
 ```
 
+**Если в админке «ClickHouse pull: Disabled» или джобы не качают данные:**
+
+- Команда **`php artisan telemetry:ensure-env`** (уже в **`deploy/post-pull.sh`**) добавляет в **`backend/.env` только отсутствующие** ключи из **`deploy/telemetry.env.fragment`**. Уже записанные значения **не перезаписывает** — если у вас стоит **`TELEMETRY_CLICKHOUSE_ENABLED=false`**, поменяйте вручную на **`true`** (или скопируйте блок из **`backend/.env.production.example`**).
+- После правок: **`php artisan config:cache`** (или **`config:clear`**) и **`php artisan queue:restart`**. Проверка: **`php artisan telemetry:test-clickhouse`**.
+
 **CORS для SPA** (если фронт на другом origin):
 
 ```env

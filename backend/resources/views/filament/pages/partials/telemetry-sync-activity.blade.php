@@ -10,6 +10,21 @@
         {{ __('Last updated: :t', ['t' => $refreshed_at]) }}
     </p>
 
+    @unless ($summary['clickhouse_enabled'])
+        <div class="rounded-lg border-2 border-amber-500/80 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-400/60 dark:bg-amber-500/10 dark:text-amber-50">
+            <p class="font-semibold">{{ __('ClickHouse import is disabled — sync jobs do nothing') }}</p>
+            <p class="mt-2 leading-relaxed">
+                {{ __('Laravel reads TELEMETRY_CLICKHOUSE_ENABLED from .env (default false). While it is false, queued jobs return immediately: no GPS rows are loaded, timestamps in this log stay empty, and the queue worker may show no “Processing …” lines.') }}
+            </p>
+            <ol class="mt-3 list-decimal space-y-1 ps-5">
+                <li><code class="rounded bg-black/10 px-1 dark:bg-white/10">TELEMETRY_CLICKHOUSE_ENABLED=true</code></li>
+                <li><code class="rounded bg-black/10 px-1 dark:bg-white/10">TELEMETRY_CLICKHOUSE_URL=…</code> {{ __('(current config base URL: :u)', ['u' => $summary['clickhouse_base_url'] ?: '—']) }}</li>
+                <li>{{ __('Run') }} <code class="rounded bg-black/10 px-1 dark:bg-white/10">php artisan config:clear</code> {{ __('or') }} <code class="rounded bg-black/10 px-1 dark:bg-white/10">config:cache</code>, {{ __('then restart the queue worker.') }}</li>
+            </ol>
+            <p class="mt-2 text-xs opacity-90">{{ __('See backend/.env.production.example and docs/ARCHITECTURE/05_telemetry_pipeline.md') }}</p>
+        </div>
+    @endunless
+
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
             <div class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ __('ClickHouse pull') }}</div>
