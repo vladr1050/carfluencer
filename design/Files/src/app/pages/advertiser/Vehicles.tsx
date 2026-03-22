@@ -9,7 +9,10 @@ type Vehicle = {
   model: string;
   imei: string;
   year: number | null;
+  color_key?: string | null;
+  color_label?: string | null;
   status: string;
+  status_label?: string;
 };
 
 export function AdvertiserVehicles() {
@@ -65,7 +68,9 @@ export function AdvertiserVehicles() {
                 <Car className="w-8 h-8 shrink-0 opacity-50" style={{ color: '#C1F60D' }} />
               </div>
               <p className="text-sm text-muted-foreground">
-                Year: {v.year ?? '—'} · {v.status}
+                Year: {v.year ?? '—'}
+                {v.color_label ? ` · ${v.color_label}` : ''}
+                {v.status_label ? ` · ${v.status_label}` : ` · ${v.status}`}
               </p>
               <Link
                 to={`/advertiser/vehicles/${v.id}`}

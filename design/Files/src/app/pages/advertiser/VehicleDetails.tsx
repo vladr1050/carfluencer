@@ -3,15 +3,27 @@ import { useParams, Link } from 'react-router';
 import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { apiJson, storageUrl } from '@/lib/api';
 
+type CampaignBrief = {
+  id: number;
+  name: string;
+  status: string;
+  start_date?: string | null;
+  end_date?: string | null;
+};
+
 type Vehicle = {
   id: number;
   brand: string;
   model: string;
   imei: string;
   year: number | null;
-  color: string | null;
+  color_key?: string | null;
+  color_label?: string | null;
   status: string;
+  status_label?: string;
   image_path?: string | null;
+  campaigns?: CampaignBrief[];
+  media_owner?: { name: string; company_name: string | null } | null;
 };
 
 export function AdvertiserVehicleDetails() {
@@ -80,12 +92,34 @@ export function AdvertiserVehicleDetails() {
               <span className="text-muted-foreground">Year:</span> {vehicle.year ?? '—'}
             </li>
             <li>
-              <span className="text-muted-foreground">Color:</span> {vehicle.color ?? '—'}
+              <span className="text-muted-foreground">Color:</span> {vehicle.color_label ?? '—'}
             </li>
             <li>
-              <span className="text-muted-foreground">Status:</span> {vehicle.status}
+              <span className="text-muted-foreground">Status:</span> {vehicle.status_label ?? vehicle.status}
             </li>
+            {vehicle.media_owner ? (
+              <li>
+                <span className="text-muted-foreground">Media owner:</span>{' '}
+                {vehicle.media_owner.company_name || vehicle.media_owner.name}
+              </li>
+            ) : null}
           </ul>
+
+          {vehicle.campaigns && vehicle.campaigns.length > 0 ? (
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold mb-2">Your campaigns using this vehicle</h2>
+              <ul className="text-sm space-y-1 border border-border rounded-lg p-3 bg-card">
+                {vehicle.campaigns.map((c) => (
+                  <li key={c.id}>
+                    <Link to={`/advertiser/campaigns/${c.id}`} className="text-primary hover:underline">
+                      {c.name}
+                    </Link>
+                    <span className="text-muted-foreground text-xs ml-2 capitalize">({c.status})</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

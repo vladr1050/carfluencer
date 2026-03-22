@@ -2,6 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\CampaignVehicle;
+use App\Observers\CampaignVehicleObserver;
+use App\Services\Telemetry\DashboardMetricsServiceInterface;
+use App\Services\Telemetry\DatabaseHeatmapDataService;
+use App\Services\Telemetry\HeatmapDataServiceInterface;
+use App\Services\Telemetry\HttpDashboardMetricsService;
+use App\Services\Telemetry\MockDashboardMetricsService;
+use App\Services\Telemetry\MockHeatmapDataService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -12,19 +20,19 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(
-            \App\Services\Telemetry\HeatmapDataServiceInterface::class,
+            HeatmapDataServiceInterface::class,
             function ($app) {
                 return config('telemetry.heatmap.driver') === 'database'
-                    ? $app->make(\App\Services\Telemetry\DatabaseHeatmapDataService::class)
-                    : $app->make(\App\Services\Telemetry\MockHeatmapDataService::class);
+                    ? $app->make(DatabaseHeatmapDataService::class)
+                    : $app->make(MockHeatmapDataService::class);
             }
         );
 
-        $this->app->singleton(\App\Services\Telemetry\MockDashboardMetricsService::class);
+        $this->app->singleton(MockDashboardMetricsService::class);
 
         $this->app->bind(
-            \App\Services\Telemetry\DashboardMetricsServiceInterface::class,
-            \App\Services\Telemetry\HttpDashboardMetricsService::class
+            DashboardMetricsServiceInterface::class,
+            HttpDashboardMetricsService::class
         );
     }
 
@@ -33,6 +41,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        CampaignVehicle::observe(CampaignVehicleObserver::class);
     }
 }

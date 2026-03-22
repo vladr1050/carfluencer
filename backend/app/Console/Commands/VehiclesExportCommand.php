@@ -34,7 +34,7 @@ class VehiclesExportCommand extends Command
                     'brand' => $v->brand,
                     'model' => $v->model,
                     'year' => $v->year,
-                    'color' => $v->color,
+                    'color_key' => $v->color_key,
                     'quantity' => $v->quantity,
                     'image_path' => $v->image_path,
                     'imei' => $v->imei,

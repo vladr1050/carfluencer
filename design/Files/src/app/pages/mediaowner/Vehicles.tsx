@@ -2,6 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Car, Loader2, Plus } from 'lucide-react';
 import { apiFormData, apiJson, storageUrl } from '@/lib/api';
+import { fetchVehicleMeta, type VehicleFieldOption } from '@/lib/vehicleMeta';
+
+type CampaignBrief = {
+  id: number;
+  name: string;
+  status: string;
+  advertiser?: { name: string; company_name: string | null } | null;
+};
 
 type Vehicle = {
   id: number;
@@ -9,7 +17,11 @@ type Vehicle = {
   model: string;
   imei: string;
   year: number | null;
+  color_key?: string | null;
+  color_label?: string | null;
   status: string;
+  status_label?: string;
+  campaigns?: CampaignBrief[];
   image_path?: string | null;
 };
 
@@ -19,7 +31,17 @@ export function MediaOwnerVehicles() {
   const [error, setError] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ brand: '', model: '', imei: '', year: '' });
+  const [form, setForm] = useState({
+    brand: '',
+    model: '',
+    imei: '',
+    year: '',
+    color_key: '',
+    status: 'active',
+  });
+  const [meta, setMeta] = useState<{ colors: VehicleFieldOption[]; fleet_statuses: VehicleFieldOption[] } | null>(
+    null
+  );
 
   const load = useCallback(() => {
     setLoading(true);
@@ -30,6 +52,12 @@ export function MediaOwnerVehicles() {
   }, []);
 
   useEffect(() => {
+    fetchVehicleMeta()
+      .then((m) => setMeta({ colors: m.colors, fleet_statuses: m.fleet_statuses }))
+      .catch(() => setMeta({ colors: [], fleet_statuses: [] }));
+  }, []);
+
+  useEffect(() => {
     load();
   }, [load]);
 
@@ -37,16 +65,23 @@ export function MediaOwnerVehicles() {
     e.preventDefault();
     setSaving(true);
     try {
+      const payload: Record<string, unknown> = {
+        brand: form.brand,
+        model: form.model,
+        imei: form.imei,
+        year: form.year ? Number(form.year) : null,
+      };
+      if (form.color_key) {
+        payload.color_key = form.color_key;
+      }
+      if (form.status) {
+        payload.status = form.status;
+      }
       await apiJson('/api/media-owner/vehicles', {
         method: 'POST',
-        body: JSON.stringify({
-          brand: form.brand,
-          model: form.model,
-          imei: form.imei,
-          year: form.year ? Number(form.year) : null,
-        }),
+        body: JSON.stringify(payload),
       });
-      setForm({ brand: '', model: '', imei: '', year: '' });
+      setForm({ brand: '', model: '', imei: '', year: '', color_key: '', status: 'active' });
       setShowAdd(false);
       load();
     } catch (err) {
@@ -97,7 +132,10 @@ export function MediaOwnerVehicles() {
       {error ? <p className="text-destructive text-sm mb-4">{error}</p> : null}
 
       {showAdd ? (
-        <form onSubmit={(e) => void onAdd(e)} className="mb-8 bg-card border border-border rounded-lg p-4 grid grid-cols-1 md:grid-cols-4 gap-3 max-w-4xl">
+        <form
+          onSubmit={(e) => void onAdd(e)}
+          className="mb-8 bg-card border border-border rounded-lg p-4 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 max-w-6xl"
+        >
           <input
             required
             placeholder="Brand"
@@ -125,7 +163,36 @@ export function MediaOwnerVehicles() {
             onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))}
             className="px-3 py-2 rounded-md border border-border bg-input-background dark:bg-input"
           />
-          <button type="submit" disabled={saving} className="md:col-span-4 py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50">
+          <select
+            value={form.color_key}
+            onChange={(e) => setForm((f) => ({ ...f, color_key: e.target.value }))}
+            className="px-3 py-2 rounded-md border border-border bg-input-background dark:bg-input text-sm"
+            aria-label="Body color"
+          >
+            <option value="">Color (optional)</option>
+            {(meta?.colors ?? []).map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={form.status}
+            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+            className="px-3 py-2 rounded-md border border-border bg-input-background dark:bg-input text-sm"
+            aria-label="Fleet status"
+          >
+            {(meta?.fleet_statuses ?? []).map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            disabled={saving}
+            className="lg:col-span-6 py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50"
+          >
             {saving ? 'Saving…' : 'Save vehicle'}
           </button>
         </form>
@@ -135,12 +202,14 @@ export function MediaOwnerVehicles() {
         <p className="text-muted-foreground">No vehicles yet. Add one above.</p>
       ) : (
         <div className="border border-border rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[900px]">
             <thead className="bg-muted">
               <tr>
                 <th className="text-left p-3">Vehicle</th>
                 <th className="text-left p-3">IMEI</th>
+                <th className="text-left p-3">Color</th>
                 <th className="text-left p-3">Status</th>
+                <th className="text-left p-3">Campaigns</th>
                 <th className="text-left p-3">Image</th>
                 <th className="p-3" />
               </tr>
@@ -148,6 +217,9 @@ export function MediaOwnerVehicles() {
             <tbody>
               {rows.map((v) => {
                 const thumb = storageUrl(v.image_path);
+                const statusText = v.status_label ?? v.status.replace(/_/g, ' ');
+                const colorText = v.color_label ?? '—';
+                const campaignNames = (v.campaigns ?? []).map((c) => c.name).join(', ');
                 return (
                   <tr key={v.id} className="border-t border-border">
                     <td className="p-3">
@@ -160,7 +232,11 @@ export function MediaOwnerVehicles() {
                       </div>
                     </td>
                     <td className="p-3 font-mono text-xs">{v.imei}</td>
-                    <td className="p-3 capitalize">{v.status}</td>
+                    <td className="p-3">{colorText}</td>
+                    <td className="p-3">{statusText}</td>
+                    <td className="p-3 max-w-[200px] truncate text-muted-foreground" title={campaignNames || undefined}>
+                      {campaignNames || '—'}
+                    </td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
                         {thumb ? <img src={thumb} alt="" className="w-10 h-10 rounded object-cover border border-border" /> : null}

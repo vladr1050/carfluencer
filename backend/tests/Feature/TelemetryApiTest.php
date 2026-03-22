@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Campaign;
 use App\Models\CampaignVehicle;
-use App\Models\DeviceLocation;
 use App\Models\DailyImpression;
+use App\Models\DeviceLocation;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,7 +26,7 @@ class TelemetryApiTest extends TestCase
             'brand' => 'X',
             'model' => 'Y',
             'year' => 2024,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => '777777777777777',
             'status' => 'active',
@@ -84,7 +84,7 @@ class TelemetryApiTest extends TestCase
             'brand' => 'A',
             'model' => 'B',
             'year' => 2024,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => '666666666666666',
             'status' => 'active',

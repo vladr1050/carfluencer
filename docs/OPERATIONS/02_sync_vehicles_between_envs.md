@@ -61,3 +61,13 @@ sudo -u www-data php artisan vehicles:import storage/app/vehicles-export.json --
 ## 6. Телеметрия
 
 Поля вроде `telemetry_last_*` в экспорт **не входят** — на новом окружении курсоры синка начнутся «с чистого листа» для этих записей (после импорта при необходимости настройте pull в карточке ТС).
+
+## 7. Цвет и статус флота
+
+В JSON используется **`color_key`** (ключ из `config/vehicle.php`, например `white`, `black`). Старое поле **`color`** в импорте по-прежнему распознаётся и маппится в ближайший ключ или `other`.
+
+Статус машины — один из: `active`, `booked`, `in_campaign`, `not_available`. После массового импорта или ручных правок в БД можно выровнять статусы относительно связей с кампаниями:
+
+```bash
+php artisan vehicles:reconcile-fleet-status
+```

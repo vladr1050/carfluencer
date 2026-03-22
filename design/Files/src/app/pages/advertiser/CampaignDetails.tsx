@@ -3,7 +3,14 @@ import { useParams, Link } from 'react-router';
 import { ArrowLeft, Calendar, Car, ExternalLink, MapPin, Loader2, Upload } from 'lucide-react';
 import { apiFormData, apiJson } from '@/lib/api';
 
-type VehicleRow = { id: number; brand: string; model: string; imei: string };
+type VehicleRow = {
+  id: number;
+  brand: string;
+  model: string;
+  imei: string;
+  color_label?: string | null;
+  status_label?: string;
+};
 type CampaignVehicleRow = {
   id: number;
   vehicle_id: number;
@@ -213,6 +220,7 @@ export function AdvertiserCampaignDetails() {
               {availableCatalog.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.brand} {v.model} — {v.imei}
+                  {v.color_label ? ` · ${v.color_label}` : ''}
                 </option>
               ))}
             </select>
@@ -248,6 +256,8 @@ export function AdvertiserCampaignDetails() {
               <tr>
                 <th className="text-left p-3">Vehicle</th>
                 <th className="text-left p-3">IMEI</th>
+                <th className="text-left p-3">Color</th>
+                <th className="text-left p-3">Fleet</th>
                 <th className="text-left p-3">Placement</th>
                 <th className="text-left p-3">Agreed</th>
                 <th className="p-3 w-24" />
@@ -263,6 +273,8 @@ export function AdvertiserCampaignDetails() {
                     </div>
                   </td>
                   <td className="p-3 font-mono text-xs">{cv.vehicle?.imei ?? '—'}</td>
+                  <td className="p-3">{cv.vehicle?.color_label ?? '—'}</td>
+                  <td className="p-3 text-xs">{cv.vehicle?.status_label ?? '—'}</td>
                   <td className="p-3">{cv.placement_size_class}</td>
                   <td className="p-3">{cv.agreed_price ?? '—'}</td>
                   <td className="p-3">

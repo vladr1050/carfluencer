@@ -20,7 +20,8 @@ class VehicleInfolist
                 TextEntry::make('model'),
                 TextEntry::make('year')
                     ->placeholder('-'),
-                TextEntry::make('color')
+                TextEntry::make('color_label')
+                    ->label(__('Body color'))
                     ->placeholder('-'),
                 TextEntry::make('quantity')
                     ->numeric(),
@@ -51,7 +52,8 @@ class VehicleInfolist
                     ])
                     ->columns(2)
                     ->collapsible(),
-                TextEntry::make('status'),
+                TextEntry::make('status_label')
+                    ->label(__('Fleet status')),
                 TextEntry::make('notes')
                     ->placeholder('-')
                     ->columnSpanFull(),

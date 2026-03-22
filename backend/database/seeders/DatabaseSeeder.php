@@ -96,7 +96,7 @@ class DatabaseSeeder extends Seeder
                 'brand' => 'Tesla',
                 'model' => 'Model 3',
                 'year' => 2024,
-                'color' => 'White',
+                'color_key' => 'white',
                 'quantity' => 2,
                 'status' => 'active',
             ]

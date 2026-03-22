@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Telemetry\ClickHouseLocationCollector;
 use App\Services\Telemetry\TelemetrySyncImeiResolver;
+use App\Services\Telemetry\TelemetryVehicleSyncState;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -26,7 +27,7 @@ class TelemetryVehicleSyncStateTest extends TestCase
             'brand' => 'T',
             'model' => 'M',
             'year' => 2024,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => '555555555555555',
             'status' => 'active',
@@ -41,7 +42,7 @@ class TelemetryVehicleSyncStateTest extends TestCase
         $job = new SyncVehicleTelemetryFromClickHouseJob($vehicle->id, 'incremental', null, null);
         $job->handle(
             $this->app->make(ClickHouseLocationCollector::class),
-            $this->app->make(\App\Services\Telemetry\TelemetryVehicleSyncState::class),
+            $this->app->make(TelemetryVehicleSyncState::class),
         );
 
         $vehicle->refresh();
@@ -58,7 +59,7 @@ class TelemetryVehicleSyncStateTest extends TestCase
             'brand' => 'T',
             'model' => 'M',
             'year' => 2024,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => '666666666666666',
             'status' => 'active',
@@ -76,7 +77,7 @@ class TelemetryVehicleSyncStateTest extends TestCase
         try {
             $job->handle(
                 $this->app->make(ClickHouseLocationCollector::class),
-                $this->app->make(\App\Services\Telemetry\TelemetryVehicleSyncState::class),
+                $this->app->make(TelemetryVehicleSyncState::class),
             );
         } finally {
             $vehicle->refresh();
@@ -93,7 +94,7 @@ class TelemetryVehicleSyncStateTest extends TestCase
             'brand' => 'T',
             'model' => 'M',
             'year' => 2024,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => $imei,
             'status' => 'active',
@@ -134,7 +135,7 @@ class TelemetryVehicleSyncStateTest extends TestCase
         );
         $job->handle(
             $this->app->make(ClickHouseLocationCollector::class),
-            $this->app->make(\App\Services\Telemetry\TelemetryVehicleSyncState::class),
+            $this->app->make(TelemetryVehicleSyncState::class),
         );
 
         $vehicle->refresh();
@@ -149,7 +150,7 @@ class TelemetryVehicleSyncStateTest extends TestCase
             'brand' => 'A',
             'model' => '1',
             'year' => 2024,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => '888888888888888',
             'status' => 'active',
@@ -160,7 +161,7 @@ class TelemetryVehicleSyncStateTest extends TestCase
             'brand' => 'B',
             'model' => '2',
             'year' => 2024,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => '999999999999999',
             'status' => 'active',

@@ -10,14 +10,15 @@ use App\Http\Controllers\Api\Advertiser\AdvertiserProfileController;
 use App\Http\Controllers\Api\Advertiser\AdvertiserVehicleController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContentBlockController;
-use App\Http\Controllers\Api\MediaOwner\MediaOwnerCampaignProofController;
 use App\Http\Controllers\Api\MediaOwner\MediaOwnerCampaignController;
+use App\Http\Controllers\Api\MediaOwner\MediaOwnerCampaignProofController;
 use App\Http\Controllers\Api\MediaOwner\MediaOwnerDashboardController;
 use App\Http\Controllers\Api\MediaOwner\MediaOwnerEarningsController;
 use App\Http\Controllers\Api\MediaOwner\MediaOwnerVehicleController;
 use App\Http\Controllers\Api\Telemetry\TelemetryFleetController;
 use App\Http\Controllers\Api\Telemetry\TelemetryImpressionController;
 use App\Http\Controllers\Api\Telemetry\TelemetryLocationController;
+use App\Http\Controllers\Api\VehicleMetaController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('content-blocks', [ContentBlockController::class, 'index']);
@@ -30,6 +31,8 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware(['auth:sanctum'])->group(function (): void {
+    Route::get('meta/vehicle-fields', [VehicleMetaController::class, 'show']);
+
     Route::prefix('media-owner')->middleware('role:media_owner')->group(function (): void {
         Route::get('dashboard', [MediaOwnerDashboardController::class, 'show']);
         Route::get('vehicles', [MediaOwnerVehicleController::class, 'index']);

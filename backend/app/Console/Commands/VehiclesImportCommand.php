@@ -75,15 +75,35 @@ class VehiclesImportCommand extends Command
                 continue;
             }
 
+            $colorKey = $row['color_key'] ?? null;
+            if ($colorKey === null && isset($row['color']) && is_string($row['color'])) {
+                $needle = strtolower(trim($row['color']));
+                foreach (config('vehicle.colors', []) as $key => $label) {
+                    if (strtolower((string) $label) === $needle) {
+                        $colorKey = $key;
+                        break;
+                    }
+                }
+                $colorKey ??= 'other';
+            }
+            if (is_string($colorKey) && $colorKey !== '' && ! array_key_exists($colorKey, config('vehicle.colors', []))) {
+                $colorKey = 'other';
+            }
+
+            $status = (string) ($row['status'] ?? Vehicle::STATUS_ACTIVE);
+            if (! in_array($status, Vehicle::STATUSES, true)) {
+                $status = Vehicle::STATUS_ACTIVE;
+            }
+
             $attributes = [
                 'media_owner_id' => $user->id,
                 'brand' => (string) ($row['brand'] ?? ''),
                 'model' => (string) ($row['model'] ?? ''),
                 'year' => isset($row['year']) ? (int) $row['year'] : null,
-                'color' => $row['color'] ?? null,
+                'color_key' => $colorKey,
                 'quantity' => isset($row['quantity']) ? max(1, (int) $row['quantity']) : 1,
                 'image_path' => $row['image_path'] ?? null,
-                'status' => (string) ($row['status'] ?? 'active'),
+                'status' => $status,
                 'notes' => $row['notes'] ?? null,
                 'telemetry_pull_enabled' => (bool) ($row['telemetry_pull_enabled'] ?? true),
             ];

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Vehicles\Tables;
 
 use App\Jobs\SyncTelemetryScopeFromClickHouseJob;
 use App\Jobs\SyncVehicleTelemetryFromClickHouseJob;
+use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
@@ -15,12 +16,13 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Collection;
 
 class VehiclesTable
 {
@@ -37,8 +39,11 @@ class VehiclesTable
                 TextColumn::make('year')
                     ->sortable()
                     ->placeholder('—'),
-                TextColumn::make('color')
-                    ->searchable(),
+                TextColumn::make('color_key')
+                    ->label(__('Color'))
+                    ->formatStateUsing(fn (?string $state): string => $state ? (string) (config('vehicle.colors.'.$state) ?? $state) : '—')
+                    ->searchable()
+                    ->placeholder('—'),
                 TextColumn::make('quantity')
                     ->numeric()
                     ->sortable(),
@@ -61,6 +66,16 @@ class VehiclesTable
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('status')
+                    ->label(__('Fleet status'))
+                    ->formatStateUsing(fn (string $state): string => (string) (config('vehicle.fleet_statuses.'.$state) ?? $state))
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        Vehicle::STATUS_ACTIVE => 'success',
+                        Vehicle::STATUS_BOOKED => 'warning',
+                        Vehicle::STATUS_IN_CAMPAIGN => 'info',
+                        Vehicle::STATUS_NOT_AVAILABLE => 'danger',
+                        default => 'gray',
+                    })
                     ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -87,7 +102,7 @@ class VehiclesTable
                         ->icon('heroicon-o-arrow-path')
                         ->requiresConfirmation()
                         ->modalDescription(__('Queues a job to pull new points from ClickHouse for this IMEI (per-device cursor).'))
-                        ->action(function (\App\Models\Vehicle $record): void {
+                        ->action(function (Vehicle $record): void {
                             SyncVehicleTelemetryFromClickHouseJob::dispatch($record->id, 'incremental', null, null);
                             Notification::make()->title(__('Telemetry sync queued'))->success()->send();
                         }),
@@ -99,7 +114,7 @@ class VehiclesTable
                             DatePicker::make('date_from')->label(__('From'))->required()->native(false),
                             DatePicker::make('date_to')->label(__('To'))->required()->native(false)->afterOrEqual('date_from'),
                         ])
-                        ->action(function (\App\Models\Vehicle $record, array $data): void {
+                        ->action(function (Vehicle $record, array $data): void {
                             SyncVehicleTelemetryFromClickHouseJob::dispatch(
                                 $record->id,
                                 'historical',
@@ -144,7 +159,7 @@ class VehiclesTable
                                 ->required(fn (Get $get): bool => $get('sync_kind') === 'historical')
                                 ->afterOrEqual('date_from'),
                         ])
-                        ->action(function (\Illuminate\Support\Collection $records, array $data): void {
+                        ->action(function (Collection $records, array $data): void {
                             $ids = $records->modelKeys();
                             if (($data['sync_kind'] ?? '') === 'historical') {
                                 if (empty($data['date_from']) || empty($data['date_to'])) {

@@ -4,7 +4,15 @@ import { ArrowLeft, ExternalLink, Loader2, Upload } from 'lucide-react';
 import { apiFormData, apiJson } from '@/lib/api';
 
 type Pivot = { placement_size_class?: string; agreed_price?: string | null };
-type Vehicle = { id: number; brand: string; model: string; imei: string; pivot?: Pivot };
+type Vehicle = {
+  id: number;
+  brand: string;
+  model: string;
+  imei: string;
+  color_label?: string | null;
+  status_label?: string;
+  pivot?: Pivot;
+};
 type Campaign = {
   id: number;
   name: string;
@@ -137,6 +145,8 @@ export function MediaOwnerCampaignDetails() {
               <tr>
                 <th className="text-left p-3">Vehicle</th>
                 <th className="text-left p-3">IMEI</th>
+                <th className="text-left p-3">Color</th>
+                <th className="text-left p-3">Fleet</th>
                 <th className="text-left p-3">Placement</th>
                 <th className="text-left p-3">Agreed</th>
               </tr>
@@ -148,6 +158,8 @@ export function MediaOwnerCampaignDetails() {
                     {v.brand} {v.model}
                   </td>
                   <td className="p-3 font-mono text-xs">{v.imei}</td>
+                  <td className="p-3">{v.color_label ?? '—'}</td>
+                  <td className="p-3 text-xs">{v.status_label ?? '—'}</td>
                   <td className="p-3">{v.pivot?.placement_size_class ?? '—'}</td>
                   <td className="p-3">{v.pivot?.agreed_price ?? '—'}</td>
                 </tr>

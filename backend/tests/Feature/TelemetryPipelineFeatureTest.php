@@ -31,7 +31,7 @@ class TelemetryPipelineFeatureTest extends TestCase
             'brand' => 'Test',
             'model' => 'Van',
             'year' => 2024,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => '888888888888888',
             'status' => 'active',

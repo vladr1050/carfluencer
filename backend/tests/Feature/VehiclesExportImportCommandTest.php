@@ -23,7 +23,7 @@ class VehiclesExportImportCommandTest extends TestCase
             'brand' => 'TestBrand',
             'model' => 'TestModel',
             'year' => 2023,
-            'color' => 'Black',
+            'color_key' => 'black',
             'quantity' => 1,
             'imei' => '111122223333444',
             'status' => 'active',

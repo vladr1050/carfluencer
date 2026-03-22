@@ -14,7 +14,15 @@ class VehiclePolicy
         }
 
         if ($user->isAdvertiser()) {
-            return $vehicle->status === 'active';
+            if (in_array($vehicle->status, Vehicle::catalogVisibleStatuses(), true)) {
+                return true;
+            }
+
+            if ($vehicle->status === Vehicle::STATUS_IN_CAMPAIGN) {
+                return $vehicle->campaigns()->where('advertiser_id', $user->id)->exists();
+            }
+
+            return false;
         }
 
         return false;
