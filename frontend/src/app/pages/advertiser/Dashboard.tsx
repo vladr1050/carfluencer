@@ -84,7 +84,22 @@ export function AdvertiserDashboard() {
     { label: 'Parking time', value: `${Number(dash.parking_time_hours).toLocaleString()} hrs`, icon: ParkingCircle, color: '#F10DBF' },
   ];
 
-  const activeList = campaigns.filter((c) => c.status === 'active').slice(0, 6);
+  /** Dashboard list: show recent campaigns of any status (not only active — drafts were hidden before). */
+  const campaignRows = [...campaigns].sort((a, b) => {
+    const aAct = a.status === 'active' ? 0 : 1;
+    const bAct = b.status === 'active' ? 0 : 1;
+    if (aAct !== bAct) {
+      return aAct - bAct;
+    }
+
+    return b.id - a.id;
+  });
+  const displayCampaigns = campaignRows.slice(0, 8);
+
+  function vehicleLinkedCount(c: CampaignRow): number {
+    const anyC = c as CampaignRow & { campaignVehicles?: unknown[] };
+    return c.campaign_vehicles?.length ?? anyC.campaignVehicles?.length ?? 0;
+  }
 
   return (
     <div className="p-8">
@@ -118,19 +133,29 @@ export function AdvertiserDashboard() {
       {dash.note ? <p className="mb-6 text-sm text-muted-foreground">{dash.note}</p> : null}
 
       <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="mb-4">Campaigns</h3>
-        {activeList.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No active campaigns. Create one under Campaigns.</p>
+        <h3 className="mb-1">Campaigns</h3>
+        <p className="mb-4 text-xs text-muted-foreground">Recent campaigns (all statuses). Open full list under Campaigns.</p>
+        {displayCampaigns.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No campaigns yet. Create one under Campaigns.</p>
         ) : (
           <ul className="space-y-3">
-            {activeList.map((c) => (
+            {displayCampaigns.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 p-3 bg-muted rounded-lg">
-                <Link to={`/advertiser/campaigns/${c.id}`} className="font-medium hover:text-primary">
-                  {c.name}
-                </Link>
-                <span className="text-xs text-muted-foreground">
-                  {(c.campaign_vehicles?.length ?? 0)} vehicles linked
-                </span>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Link to={`/advertiser/campaigns/${c.id}`} className="font-medium hover:text-primary truncate">
+                    {c.name}
+                  </Link>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      c.status === 'active'
+                        ? 'bg-primary/20 text-primary'
+                        : 'bg-background/80 text-muted-foreground'
+                    }`}
+                  >
+                    {c.status}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground">{vehicleLinkedCount(c)} vehicles linked</span>
               </li>
             ))}
           </ul>
