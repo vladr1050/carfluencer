@@ -6,11 +6,13 @@ use App\Http\Controllers\Admin\AdminTelemetryHeatmapController;
 use App\Models\Campaign;
 use App\Models\Vehicle;
 use App\Services\Telemetry\AdminHeatmapDataService;
+use App\Services\Telemetry\TelemetryHeatmapConfig;
 use BackedEnum;
 use DateTimeInterface;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -34,6 +36,7 @@ use UnitEnum;
 
 /**
  * @property-read Schema $form
+ * @property-read Schema $heatmapSettingsForm
  */
 class TelemetryHeatmapPage extends Page
 {
@@ -49,6 +52,9 @@ class TelemetryHeatmapPage extends Page
      */
     #[Url(as: 'form', history: false, keep: true, except: ['vehicle_ids'])]
     public array $data = [];
+
+    /** @var array<string, mixed> */
+    public ?array $heatmapSettings = [];
 
     public static function getNavigationLabel(): string
     {
@@ -101,6 +107,7 @@ class TelemetryHeatmapPage extends Page
         $this->data = $this->normalizeHeatmapScopeFields($this->data);
 
         $this->form->fill($this->data);
+        $this->heatmapSettingsForm->fill(TelemetryHeatmapConfig::allForForm());
 
         if (request()->boolean('no_heatmap_autoload')) {
             return;
@@ -340,6 +347,48 @@ class TelemetryHeatmapPage extends Page
         return $schema->statePath('data');
     }
 
+    public function defaultHeatmapSettingsForm(Schema $schema): Schema
+    {
+        return $schema->statePath('heatmapSettings');
+    }
+
+    public function heatmapSettingsForm(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                TextInput::make('intensity_gamma')
+                    ->label(__('Heatmap peak emphasis (γ)'))
+                    ->numeric()
+                    ->minValue(1)
+                    ->maxValue(3)
+                    ->step(0.05)
+                    ->required()
+                    ->helperText(
+                        __(
+                            '1 = linear (equal scaling). Higher values make the densest map cells hotter; mid-density fades. Applies to this admin heatmap and the advertiser portal API. When saved, overrides TELEMETRY_HEATMAP_INTENSITY_GAMMA from .env.'
+                        )
+                    ),
+            ]);
+    }
+
+    public function saveHeatmapDisplaySettings(): void
+    {
+        try {
+            $data = $this->heatmapSettingsForm->getState();
+            TelemetryHeatmapConfig::saveFromForm($data);
+            Notification::make()
+                ->title(__('Heatmap display settings saved'))
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title(__('Could not save settings'))
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
     public function form(Schema $schema): Schema
     {
         $vehicleOptions = fn () => Vehicle::query()
@@ -558,6 +607,23 @@ class TelemetryHeatmapPage extends Page
                     ])
                     ->columns(1),
                 SchemaView::make('filament.pages.telemetry-heatmap-body'),
+                Section::make(__('Heatmap display'))
+                    ->description(__('How strongly the densest location buckets stand out (shared with the advertiser heatmap).'))
+                    ->collapsed()
+                    ->schema([
+                        Form::make([EmbeddedSchema::make('heatmapSettingsForm')])
+                            ->id('heatmap-display-settings')
+                            ->livewireSubmitHandler('saveHeatmapDisplaySettings')
+                            ->footer([
+                                SchemaActions::make([
+                                    Action::make('saveHeatmapDisplaySettings')
+                                        ->label(__('Save display settings'))
+                                        ->submit('saveHeatmapDisplaySettings')
+                                        ->keyBindings(['mod+s']),
+                                ])->alignment(Alignment::Start),
+                            ]),
+                    ])
+                    ->columns(1),
             ]);
     }
 }

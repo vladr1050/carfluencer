@@ -102,6 +102,8 @@ Scheduler (see `backend/bootstrap/app.php`): `telemetry:scheduler-tick` every mi
 
 When `TELEMETRY_HEATMAP_DRIVER=database` (default in `config/telemetry.php`), `GET /api/advertiser/heatmap` reads **aggregated** points from `device_locations` for campaign vehicles (`device_id` = IMEI). Metrics prefer `daily_impressions` in range, else raw sample counts.
 
+Points are **0.001° grid buckets** (count `w` per cell). API `intensity` is \((w / \mathrm{max}_w)^\gamma\) capped at 1. **γ** is set in **Telematics → Heatmap → Heatmap display** (stored in `platform_settings`, key `telemetry_heatmap_intensity_gamma`). If unset, fallback is `telemetry.heatmap.intensity_gamma` / env `TELEMETRY_HEATMAP_INTENSITY_GAMMA` (default **1.55**). γ = 1 is linear; γ > 1 dims mid-density cells so the **highest-concentration** buckets read hotter on the map. Admin and advertiser API share `HeatmapBucketIntensity` / `TelemetryHeatmapConfig`.
+
 Set `TELEMETRY_HEATMAP_DRIVER=mock` for fixed demo points (no DB data).
 
 ---

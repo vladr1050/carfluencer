@@ -72,6 +72,11 @@ return [
     */
     'heatmap' => [
         'driver' => env('TELEMETRY_HEATMAP_DRIVER', 'database'),
+        /**
+         * leaflet heatmap: intensity = (w/maxW)^gamma, w = points per lat/lng bucket.
+         * 1.0 = linear; >1 (default) emphasizes peaks vs mid-density areas.
+         */
+        'intensity_gamma' => max(1.0, min(3.0, (float) env('TELEMETRY_HEATMAP_INTENSITY_GAMMA', 1.55))),
     ],
 
     /*

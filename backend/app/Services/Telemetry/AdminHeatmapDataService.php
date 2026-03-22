@@ -5,6 +5,7 @@ namespace App\Services\Telemetry;
 use App\Models\Campaign;
 use App\Models\DeviceLocation;
 use App\Models\Vehicle;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -71,7 +72,7 @@ class AdminHeatmapDataService
         $points = $buckets->map(fn ($r) => [
             'lat' => (float) $r->lat,
             'lng' => (float) $r->lng,
-            'intensity' => min(1.0, (int) $r->w / $maxW),
+            'intensity' => HeatmapBucketIntensity::normalize((int) $r->w, $maxW),
         ])->values()->all();
 
         $mult = (int) config('telemetry.impression_sample_multiplier');
@@ -151,7 +152,7 @@ class AdminHeatmapDataService
         return [];
     }
 
-    private function applyMotionFilter(\Illuminate\Database\Eloquent\Builder $q, string $motion): void
+    private function applyMotionFilter(Builder $q, string $motion): void
     {
         if ($motion === 'both') {
             return;

@@ -58,7 +58,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $points = $buckets->map(fn ($r) => [
             'lat' => (float) $r->lat,
             'lng' => (float) $r->lng,
-            'intensity' => min(1.0, (int) $r->w / $maxW),
+            'intensity' => HeatmapBucketIntensity::normalize((int) $r->w, $maxW),
         ])->values()->all();
 
         $metrics = $this->resolveMetrics($campaignId, $filters);
