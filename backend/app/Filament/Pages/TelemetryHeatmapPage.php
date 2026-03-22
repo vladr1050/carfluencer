@@ -26,6 +26,7 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Js;
+use Livewire\Attributes\Url;
 use UnitEnum;
 
 /**
@@ -39,7 +40,12 @@ class TelemetryHeatmapPage extends Page
 
     protected static ?int $navigationSort = 10;
 
-    public ?array $data = [];
+    /**
+     * Syncs heatmap filters to the browser URL as form[...] (e.g. form[campaign_id]=12).
+     * vehicle_ids omitted — multi-select can be huge; use "Load / refresh" for groups.
+     */
+    #[Url(as: 'form', history: false, keep: true, except: ['vehicle_ids'])]
+    public array $data = [];
 
     public static function getNavigationLabel(): string
     {
@@ -75,14 +81,20 @@ class TelemetryHeatmapPage extends Page
 
         $defaults = $this->mergeHeatmapDefaultsFromRequest($defaults);
 
-        $this->form->fill($defaults);
+        // #[Url] may have hydrated partial $this->data from ?form[...]= before mount; merge defaults then sync back.
+        $this->data = array_replace($defaults, array_filter(
+            $this->data,
+            static fn (mixed $v): bool => $v !== null && $v !== '' && (! is_array($v) || $v !== [])
+        ));
+
+        $this->form->fill($this->data);
 
         if (request()->boolean('no_heatmap_autoload')) {
             return;
         }
 
-        // Use $this->data here, not getState(): full form validation can throw when e.g. campaign_id is empty.
-        if ($this->validateHeatmapFilters($this->data ?? []) === null) {
+        // Use $this->data, not getState(): full form validation can throw when e.g. campaign_id is empty.
+        if ($this->validateHeatmapFilters($this->data) === null) {
             $this->loadHeatmap();
         }
     }
@@ -95,31 +107,14 @@ class TelemetryHeatmapPage extends Page
      */
     private function mergeHeatmapDefaultsFromRequest(array $defaults): array
     {
+        $formNested = request()->query('form');
+        if (is_array($formNested)) {
+            $defaults = $this->applyHeatmapKeyValuePairsToDefaults($defaults, $formNested);
+        }
+
         $data = request()->query('data');
         if (is_array($data)) {
-            foreach ([
-                'map_scope',
-                'campaign_id',
-                'vehicle_id',
-                'vehicle_ids',
-                'date_from',
-                'date_to',
-                'motion',
-            ] as $key) {
-                if (! array_key_exists($key, $data)) {
-                    continue;
-                }
-                $v = $data[$key];
-                if ($key === 'campaign_id' || $key === 'vehicle_id') {
-                    $defaults[$key] = $v === null || $v === '' ? null : (int) $v;
-                } elseif ($key === 'vehicle_ids') {
-                    $defaults[$key] = is_array($v)
-                        ? array_values(array_filter(array_map('intval', $v)))
-                        : array_values(array_filter([(int) $v]));
-                } else {
-                    $defaults[$key] = $v;
-                }
-            }
+            $defaults = $this->applyHeatmapKeyValuePairsToDefaults($defaults, $data);
         }
 
         $flatAliases = [
@@ -139,6 +134,40 @@ class TelemetryHeatmapPage extends Page
                 $defaults[$field] = $v === null || $v === '' ? null : (int) $v;
             } else {
                 $defaults[$field] = $v;
+            }
+        }
+
+        return $defaults;
+    }
+
+    /**
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $pairs
+     * @return array<string, mixed>
+     */
+    private function applyHeatmapKeyValuePairsToDefaults(array $defaults, array $pairs): array
+    {
+        foreach ([
+            'map_scope',
+            'campaign_id',
+            'vehicle_id',
+            'vehicle_ids',
+            'date_from',
+            'date_to',
+            'motion',
+        ] as $key) {
+            if (! array_key_exists($key, $pairs)) {
+                continue;
+            }
+            $v = $pairs[$key];
+            if ($key === 'campaign_id' || $key === 'vehicle_id') {
+                $defaults[$key] = $v === null || $v === '' ? null : (int) $v;
+            } elseif ($key === 'vehicle_ids') {
+                $defaults[$key] = is_array($v)
+                    ? array_values(array_filter(array_map('intval', $v)))
+                    : array_values(array_filter([(int) $v]));
+            } else {
+                $defaults[$key] = $v;
             }
         }
 
