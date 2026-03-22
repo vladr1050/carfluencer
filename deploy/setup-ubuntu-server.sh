@@ -16,7 +16,7 @@ if [[ "${EUID:-0}" -ne 0 ]]; then
   exit 1
 fi
 
-APP_URL="${1:?Укажи публичный URL без слэша в конце, например: http://135.181.36.104}"
+APP_URL="${1:?Укажи публичный URL без слэша в конце, например: https://www.carplace.lv}"
 
 if [[ -d "${REPO_ROOT:-}/backend" ]]; then
   :
@@ -60,14 +60,25 @@ fi
 ENV_FILE="$REPO_ROOT/backend/.env"
 cp -a "$REPO_ROOT/backend/.env.production.example" "$ENV_FILE"
 
-# Подстановка URL и пароля БД (Python надёжнее sed при спецсимволах)
+# Подстановка URL и пароля БД (APP_URL/FRONTEND_URL — любое значение из аргумента)
 python3 -c "
 import pathlib, sys
 p = pathlib.Path(sys.argv[1])
-t = p.read_text()
-t = t.replace('http://YOUR_SERVER_IP_OR_DOMAIN', sys.argv[2])
-t = t.replace('CHANGE_ME_DB_PASSWORD', sys.argv[3])
-p.write_text(t)
+raw = p.read_text()
+app_url = sys.argv[2]
+lines = []
+for line in raw.splitlines():
+    if line.startswith('APP_URL='):
+        lines.append('APP_URL=' + app_url)
+    elif line.startswith('FRONTEND_URL='):
+        lines.append('FRONTEND_URL=' + app_url)
+    else:
+        lines.append(line)
+text = '\n'.join(lines)
+if raw.endswith('\n') and not text.endswith('\n'):
+    text += '\n'
+text = text.replace('CHANGE_ME_DB_PASSWORD', sys.argv[3])
+p.write_text(text)
 " "$ENV_FILE" "$APP_URL" "$DB_PASS"
 
 # Чтение .env для www-data (очередь + cron)
@@ -93,7 +104,7 @@ chown www-data:www-data "$REPO_ROOT/backend/storage/logs/worker.log"
 
 NGINX_SITE=/etc/nginx/sites-available/carfluencer
 cp -a "$REPO_ROOT/deploy/nginx-carfluencer.conf.example" "$NGINX_SITE"
-sed -i "s/135.181.36.104/${SERVER_NAME}/g" "$NGINX_SITE"
+sed -i "s/server_name www.carplace.lv carplace.lv;/server_name ${SERVER_NAME};/g" "$NGINX_SITE"
 ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/carfluencer
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 nginx -t

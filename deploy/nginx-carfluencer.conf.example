@@ -1,11 +1,13 @@
 # Nginx — Laravel API + Filament + React SPA (media owner / advertiser).
-# Сборка: cd frontend && VITE_API_URL=https://ВАШ_ХОСТ npm ci && npm run build
+# Продакшен-домен: www.carplace.lv (и carplace.lv). TLS: certbot --nginx -d www.carplace.lv -d carplace.lv
+# Сборка SPA: cd frontend && npm ci && npm run build
+#   (VITE_API_URL не нужен, если /api на том же origin — см. docs/DEPLOY/16_carplace_lv.md)
 # Артефакты: /var/www/carfluencer/frontend/dist
 
 server {
     listen 80;
     listen [::]:80;
-    server_name 135.181.36.104;  # или ваш домен
+    server_name www.carplace.lv carplace.lv;
     root /var/www/carfluencer/backend/public;
 
     client_max_body_size 32m;

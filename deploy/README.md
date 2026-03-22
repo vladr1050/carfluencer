@@ -2,14 +2,15 @@
 
 | Файл | Назначение |
 |------|------------|
-| **`setup-ubuntu-server.sh`** | Первичная настройка VPS (PHP 8.4, Postgres, Nginx, `.env`, Composer, миграции, **Supervisor**, **cron**). Запуск: `sudo bash deploy/setup-ubuntu-server.sh 'https://домен'` |
+| **`setup-ubuntu-server.sh`** | Первичная настройка VPS (PHP 8.4, Postgres, Nginx, `.env`, Composer, миграции, **Supervisor**, **cron**). Запуск: `sudo bash deploy/setup-ubuntu-server.sh 'https://www.carplace.lv'` |
+| **`apply-carplace-lv-on-server.sh`** | На уже развёрнутом VPS: **.env** под **www.carplace.lv**, Nginx из примера с подстановкой пути, `config:cache`. `sudo bash deploy/apply-carplace-lv-on-server.sh` из корня клона. См. **`docs/DEPLOY/16_carplace_lv.md`**. |
 | **`post-pull.sh`** | После `git pull`: зависимости, миграции, **`php artisan telemetry:ensure-env`** (добавляет в `.env` только отсутствующие ключи из **`telemetry.env.fragment`**), кэши, `queue:restart`, при `TELEMETRY_CLICKHOUSE_ENABLED=true` — **`telemetry:test-clickhouse`**. |
 | **`telemetry.env.fragment`** | Шаблон переменных телеметрии/ClickHouse для автослияния в `backend/.env` (не перезаписывает существующие ключи). |
 | **`nginx-carfluencer.conf.example`** | Виртуальный хост Nginx → `backend/public`, PHP-FPM 8.4. |
 | **`supervisor-laravel.conf.example`** | Шаблон воркера очереди (`queue:work database`). Копируется скриптом в `/etc/supervisor/conf.d/`. |
 | **`cron-carfluencer.example`** | Шаблон cron для `schedule:run`. На чистой установке создаётся скриптом автоматически. |
 | **`vps-first-deploy.sh.example`** | Ручной «только Laravel» без полного стека (если уже есть Nginx/PHP/БД). |
-| **`frontend-build-production.sh`** | Сборка **`frontend/dist`** с **`API_URL=...`** для выкладки на VPS. |
+| **`frontend-build-production.sh`** | Сборка **`frontend/dist`**. Для same-origin с **www.carplace.lv** **`API_URL` не задавайте**. |
 | **`seed-production-on-server.sh.example`** | Один раз на VPS: **`php artisan db:seed --force`** от **`www-data`** (демо-данные + админ `admin@carfluencer.test` / `password`). |
 | **`restore-postgres-snapshot.sh.example`** | Восстановление **`pg_dump -Fc`** на сервере (после **`php artisan db:export-snapshot`** локально при PostgreSQL). См. **`docs/OPERATIONS/03_full_database_sync.md`**. |
 

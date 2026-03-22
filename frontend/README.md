@@ -24,7 +24,7 @@ UI/UX matches **`design/Files`** (Figma export): Tailwind v4, theme tokens, shad
 3. **Production build**
 
    ```bash
-   VITE_API_URL=https://your-domain npm run build
+   Для **www.carplace.lv** (SPA и `/api` на одном хосте): **`VITE_API_URL` не задавайте**. Иначе: `VITE_API_URL=https://www.carplace.lv npm run build`
    ```
 
    Or: `API_URL=... bash ../deploy/frontend-build-production.sh`

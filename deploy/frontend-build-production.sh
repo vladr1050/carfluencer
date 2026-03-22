@@ -2,7 +2,9 @@
 # Сборка React-порталов (media owner / advertiser) для продакшена.
 # Из корня репозитория:
 #
-#   API_URL=http://YOUR_HOST_OR_IP bash deploy/frontend-build-production.sh
+#   bash deploy/frontend-build-production.sh
+#   # или если API на другом origin:
+#   API_URL=https://www.carplace.lv bash deploy/frontend-build-production.sh
 #
 # Результат: frontend/dist — залей на сервер в /var/www/carfluencer/frontend/dist/
 # (rsync/scp) и перезагрузи nginx. Конфиг: deploy/nginx-carfluencer.conf.example
@@ -10,7 +12,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export VITE_API_URL="${API_URL:?Задай API_URL, например: http://135.181.36.104}"
+# Same-origin (типовой Nginx): не задавайте API_URL — VITE_API_URL будет пустым → относительный /api
+export VITE_API_URL="${API_URL-}"
 
 cd "$REPO_ROOT/frontend"
 npm ci

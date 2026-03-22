@@ -1,5 +1,7 @@
 # GitHub Actions: CI и деплой на VPS
 
+Продакшен на **www.carplace.lv**: чеклист DNS/Nginx/Laravel — **`docs/DEPLOY/16_carplace_lv.md`**.
+
 В репозитории два основных workflow:
 
 | Файл | Назначение |

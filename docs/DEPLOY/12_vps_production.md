@@ -1,6 +1,8 @@
-# Развёртывание на VPS (пример: 135.181.36.104)
+# Развёртывание на VPS
 
-Автоматически поднять сервер из этого репозитория **нельзя** без SSH-доступа с вашей машины. Ниже — что сделать **на сервере** после `ssh root@135.181.36.104` (или пользователь с sudo).
+Продакшен-домен: **https://www.carplace.lv** — см. **`docs/DEPLOY/16_carplace_lv.md`**.
+
+Автоматически поднять сервер из этого репозитория **нельзя** без SSH-доступа с вашей машины. Ниже — что сделать **на сервере** после `ssh root@ВАШ_IP_ИЛИ_ДОМЕН` (или пользователь с sudo).
 
 Предположения: **Ubuntu 22.04/24.04**, домен или доступ по IP, **PostgreSQL** (не SQLite в проде).
 
@@ -12,7 +14,7 @@
 
 ```bash
 cd /var/www/carfluencer
-sudo bash deploy/setup-ubuntu-server.sh 'http://ТВОЙ_IP_ИЛИ_https://домен'
+sudo bash deploy/setup-ubuntu-server.sh 'https://www.carplace.lv'
 ```
 
 Скрипт ставит **Nginx, PostgreSQL, PHP 8.4-FPM, Composer, Supervisor**, собирает **`backend/.env`**, **`composer install`**, **`migrate`**, кэши, включает сайт, пишет **cron** `schedule:run` в **`/etc/cron.d/carfluencer-laravel`**, поднимает воркер **`carfluencer-queue`** в Supervisor. Пароль БД выводится в конце — **сохрани**. Остаётся: **первый админ** (`make:filament-user`), при необходимости **TLS** (§7) и **ClickHouse** в `.env`.
@@ -82,7 +84,7 @@ DB_PASSWORD=...
 
 ## 4. Laravel `.env` на проде
 
-Готовый шаблон для прода: **`backend/.env.production.example`** — скопируйте в **`backend/.env`** и замените **`YOUR_SERVER_IP_OR_DOMAIN`**, **`CHANGE_ME_DB_PASSWORD`**, при необходимости CORS/ClickHouse:
+Готовый шаблон для прода: **`backend/.env.production.example`** (уже с **www.carplace.lv**) — скопируйте в **`backend/.env`** и замените **`CHANGE_ME_DB_PASSWORD`**, при необходимости ClickHouse; для другого домена поправьте `APP_URL`, `FRONTEND_URL`, CORS, Sanctum, `SESSION_DOMAIN`:
 
 ```bash
 cd /var/www/carfluencer/backend
@@ -98,7 +100,7 @@ nano .env
 |------------|----------|
 | `APP_ENV` | `production` |
 | `APP_DEBUG` | `false` |
-| `APP_URL` | `http://135.181.36.104` или `https://ваш-домен` |
+| `APP_URL` | `https://www.carplace.lv` (см. **`docs/DEPLOY/16_carplace_lv.md`**) |
 | `APP_KEY` | `php artisan key:generate` |
 | `DB_*` | см. выше |
 | `QUEUE_CONNECTION` | `database` (и таблицы jobs из миграций) или `redis` |
@@ -136,7 +138,7 @@ TELEMETRY_CH_HTTP_TIMEOUT=120
 **CORS для SPA** (если фронт на другом origin):
 
 ```env
-CORS_ALLOWED_ORIGINS=https://ваш-фронт,http://135.181.36.104:5174
+CORS_ALLOWED_ORIGINS=https://www.carplace.lv,https://carplace.lv
 ```
 
 Команды:
