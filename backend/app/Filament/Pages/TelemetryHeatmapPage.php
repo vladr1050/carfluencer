@@ -365,7 +365,7 @@ class TelemetryHeatmapPage extends Page
                     ->required()
                     ->helperText(
                         __(
-                            '1 = linear (equal scaling). Higher values make the densest map cells hotter; mid-density fades. Applies to this admin heatmap and the advertiser portal API. When saved, overrides TELEMETRY_HEATMAP_INTENSITY_GAMMA from .env.'
+                            '1 = linear (equal scaling). Higher values make the densest map cells hotter; mid-density fades. Applies to this admin heatmap and the advertiser portal API. When saved, overrides TELEMETRY_HEATMAP_INTENSITY_GAMMA from .env. If many grid cells have similar point counts, the map already looks uniform — changing γ has little effect. After save we reload the map when filters are valid; otherwise use “Load / refresh heatmap”.'
                         )
                     ),
             ]);
@@ -375,9 +375,27 @@ class TelemetryHeatmapPage extends Page
     {
         try {
             $data = $this->heatmapSettingsForm->getState();
+            $fallback = is_array($this->heatmapSettings) ? $this->heatmapSettings : [];
+            if (! array_key_exists('intensity_gamma', $data) || $data['intensity_gamma'] === null || $data['intensity_gamma'] === '') {
+                $data['intensity_gamma'] = $fallback['intensity_gamma'] ?? 1.55;
+            }
             TelemetryHeatmapConfig::saveFromForm($data);
+            $gamma = TelemetryHeatmapConfig::intensityGamma();
+
+            $heatmapState = $this->heatmapFormState();
+            $refreshed = false;
+            if ($this->validateHeatmapFilters($heatmapState) === null) {
+                $this->loadHeatmap(withSuccessToast: false);
+                $refreshed = true;
+            }
+
             Notification::make()
                 ->title(__('Heatmap display settings saved'))
+                ->body(
+                    $refreshed
+                        ? __('Map redrawn with γ=:g. Tip: if cells have similar point counts, the picture barely changes.', ['g' => $gamma])
+                        : __('γ=:g saved. Set filters above and click “Load / refresh heatmap” to update the map.', ['g' => $gamma])
+                )
                 ->success()
                 ->send();
         } catch (\Throwable $e) {
@@ -544,7 +562,10 @@ class TelemetryHeatmapPage extends Page
         return null;
     }
 
-    public function loadHeatmap(): void
+    /**
+     * @param  bool  $withSuccessToast  Set false when chaining after another success notification (e.g. save γ).
+     */
+    public function loadHeatmap(bool $withSuccessToast = true): void
     {
         $s = $this->heatmapFormState();
         if ($msg = $this->validateHeatmapFilters($s)) {
@@ -578,11 +599,18 @@ class TelemetryHeatmapPage extends Page
 
         $count = count($payload['heatmap']['points'] ?? []);
         $samples = (int) ($payload['heatmap']['metrics']['location_samples'] ?? 0);
-        Notification::make()
-            ->title(__('Heatmap updated'))
-            ->body(__('Clusters: :clusters · GPS samples in range: :samples', ['clusters' => $count, 'samples' => $samples]))
-            ->success()
-            ->send();
+        if ($withSuccessToast) {
+            $gamma = $payload['heatmap']['metrics']['intensity_gamma'] ?? null;
+            $body = __('Clusters: :clusters · GPS samples in range: :samples', ['clusters' => $count, 'samples' => $samples]);
+            if (is_numeric($gamma)) {
+                $body .= ' · γ='.(string) $gamma;
+            }
+            Notification::make()
+                ->title(__('Heatmap updated'))
+                ->body($body)
+                ->success()
+                ->send();
+        }
 
         $this->js('window.renderAdminTelemetryHeatmap('.Js::from($payload).')');
     }

@@ -64,6 +64,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $metrics = $this->resolveMetrics($campaignId, $filters);
         $metrics['mode'] = $mode;
         $metrics['campaign_id'] = $campaignId;
+        $metrics['intensity_gamma'] = TelemetryHeatmapConfig::intensityGamma();
 
         return [
             'points' => $points,
@@ -136,6 +137,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             'mode' => $mode,
             'campaign_id' => $campaignId,
             'data_source' => 'none',
+            'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
         ];
     }
 }

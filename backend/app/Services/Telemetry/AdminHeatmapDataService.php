@@ -38,6 +38,7 @@ class AdminHeatmapDataService
                     'location_samples' => 0,
                     'motion' => $motion,
                     'scope' => $filters['scope'],
+                    'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
                 ],
             ];
         }
@@ -89,6 +90,7 @@ class AdminHeatmapDataService
                 'driving_time_hours' => 0,
                 'parking_time_hours' => 0,
                 'data_source' => 'device_locations',
+                'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
             ],
         ];
     }

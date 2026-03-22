@@ -53,19 +53,21 @@ class AdminTelemetryHeatmapController extends Controller
 
         $vehiclesPayload = $this->resolveVehiclesPayload($data);
 
-        return response()->json([
-            'filter' => [
-                'scope' => $data['scope'],
-                'motion' => $motion,
-                'date_from' => $data['date_from'] ?? null,
-                'date_to' => $data['date_to'] ?? null,
-            ],
-            'vehicles' => $vehiclesPayload,
-            'heatmap' => [
-                'points' => $result['points'],
-                'metrics' => $result['meta'],
-            ],
-        ]);
+        return response()
+            ->json([
+                'filter' => [
+                    'scope' => $data['scope'],
+                    'motion' => $motion,
+                    'date_from' => $data['date_from'] ?? null,
+                    'date_to' => $data['date_to'] ?? null,
+                ],
+                'vehicles' => $vehiclesPayload,
+                'heatmap' => [
+                    'points' => $result['points'],
+                    'metrics' => $result['meta'],
+                ],
+            ])
+            ->header('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     }
 
     /**

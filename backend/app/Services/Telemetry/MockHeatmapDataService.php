@@ -26,6 +26,8 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
                 'parking_time_hours' => 156,
                 'mode' => $mode,
                 'campaign_id' => $campaignId,
+                'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
+                'data_source' => 'mock',
             ],
         ];
     }

@@ -36,14 +36,16 @@ class AdvertiserHeatmapController extends Controller
 
         $payload = $this->heatmapData->fetchHeatmapData((int) $campaign->id, $filters);
 
-        return response()->json([
-            'campaign' => [
-                'id' => $campaign->id,
-                'name' => $campaign->name,
-                'start_date' => $campaign->start_date?->format('Y-m-d'),
-                'end_date' => $campaign->end_date?->format('Y-m-d'),
-            ],
-            'heatmap' => $payload,
-        ]);
+        return response()
+            ->json([
+                'campaign' => [
+                    'id' => $campaign->id,
+                    'name' => $campaign->name,
+                    'start_date' => $campaign->start_date?->format('Y-m-d'),
+                    'end_date' => $campaign->end_date?->format('Y-m-d'),
+                ],
+                'heatmap' => $payload,
+            ])
+            ->header('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     }
 }
