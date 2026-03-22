@@ -7,6 +7,14 @@ use App\Models\Vehicle;
 
 class VehiclePolicy
 {
+    /**
+     * Filament admin panel: full access. API rules below for portal roles.
+     */
+    public function before(User $user, string $ability, mixed ...$arguments): ?bool
+    {
+        return $user->isAdmin() ? true : null;
+    }
+
     public function view(User $user, Vehicle $vehicle): bool
     {
         if ($user->isMediaOwner()) {

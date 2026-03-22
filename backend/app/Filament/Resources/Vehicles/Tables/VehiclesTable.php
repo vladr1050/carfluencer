@@ -29,36 +29,49 @@ class VehiclesTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Live column toggles (otherwise checkboxes look disabled until "Apply", and non-toggleable columns stay disabled).
+            ->deferColumnManager(false)
             ->columns([
                 TextColumn::make('mediaOwner.name')
-                    ->searchable(),
+                    ->label(__('Media owner'))
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('brand')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('model')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('year')
                     ->sortable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->toggleable(),
                 TextColumn::make('color_key')
                     ->label(__('Color'))
                     ->formatStateUsing(fn (?string $state): string => $state ? (string) (config('vehicle.colors.'.$state) ?? $state) : '—')
                     ->searchable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->toggleable(),
                 TextColumn::make('quantity')
                     ->numeric()
-                    ->sortable(),
-                ImageColumn::make('image_path'),
+                    ->sortable()
+                    ->toggleable(),
+                ImageColumn::make('image_path')
+                    ->toggleable(),
                 TextColumn::make('imei')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 IconColumn::make('telemetry_pull_enabled')
                     ->label(__('Sched. pull'))
                     ->boolean()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('telemetry_last_success_at')
                     ->label(__('Last CH sync'))
                     ->dateTime()
                     ->sortable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->toggleable(),
                 TextColumn::make('telemetry_last_error')
                     ->label(__('Sync error'))
                     ->limit(40)
@@ -76,7 +89,8 @@ class VehiclesTable
                         Vehicle::STATUS_NOT_AVAILABLE => 'danger',
                         default => 'gray',
                     })
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('campaign_names')
                     ->label(__('Campaign'))
                     ->getStateUsing(function (Vehicle $record): string {
@@ -98,7 +112,8 @@ class VehiclesTable
                             ->implode(', ');
 
                         return strlen($full) > 60 ? $full : null;
-                    }),
+                    })
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -117,7 +132,8 @@ class VehiclesTable
             ])
             ->recordActions([
                 ViewAction::make(),
-                EditAction::make(),
+                EditAction::make()
+                    ->label(__('Edit')),
                 ActionGroup::make([
                     Action::make('telemetry_incremental')
                         ->label(__('New data (incremental)'))

@@ -14,7 +14,12 @@ class CampaignVehicleObserver
             return;
         }
 
-        if (in_array($vehicle->status, [Vehicle::STATUS_ACTIVE, Vehicle::STATUS_BOOKED], true)) {
+        // Any link to a campaign means fleet row should read "In campaign" (except explicit not_available).
+        if ($vehicle->status === Vehicle::STATUS_NOT_AVAILABLE) {
+            return;
+        }
+
+        if ($vehicle->status !== Vehicle::STATUS_IN_CAMPAIGN) {
             $vehicle->update(['status' => Vehicle::STATUS_IN_CAMPAIGN]);
         }
     }
