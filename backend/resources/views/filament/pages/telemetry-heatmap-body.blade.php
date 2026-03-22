@@ -83,12 +83,44 @@
         tryInitMap();
     });
 
+    /**
+     * Admin-only heat styling: one dominant bucket (e.g. city centre) no longer eats the whole scale;
+     * sparse / parking-like buckets get a higher relative weight and a gradient with more colour in the low–mid range.
+     */
+    function buildAdminHeatmapPoints(pts) {
+        if (!pts.length) {
+            return [];
+        }
+        const vals = pts.map(function (p) {
+            return Math.max(0, Number(p.intensity) || 0);
+        });
+        const positive = vals.filter(function (v) {
+            return v > 0;
+        });
+        let clip;
+        if (positive.length >= 8) {
+            const sorted = positive.slice().sort(function (a, b) {
+                return a - b;
+            });
+            const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.86));
+            clip = sorted[idx];
+        } else {
+            clip = Math.max.apply(null, positive.concat([1e-6]));
+        }
+        clip = Math.max(clip, 1e-6);
+
+        return pts.map(function (p) {
+            const raw = Math.min(1, (Number(p.intensity) || 0) / clip);
+            const curved = Math.pow(raw, 0.48);
+            const w = 0.15 + 0.85 * curved;
+
+            return [Number(p.lat), Number(p.lng), Math.min(1, Math.max(0.14, w))];
+        });
+    }
+
     window.renderAdminTelemetryHeatmap = function (payload) {
         const pts = (payload.heatmap && payload.heatmap.points) ? payload.heatmap.points : [];
-        const heatData = pts.map(function (p) {
-            const w = Math.max(0.2, Math.min(1, Number(p.intensity) || 0.45));
-            return [Number(p.lat), Number(p.lng), w];
-        });
+        const heatData = buildAdminHeatmapPoints(pts);
 
         const el = document.getElementById('admin-telemetry-map');
         if (!el) {
@@ -108,11 +140,22 @@
 
         if (heatData.length && typeof L.heatLayer === 'function') {
             heatLayer = L.heatLayer(heatData, {
-                radius: 36,
-                blur: 22,
+                radius: 28,
+                blur: 16,
                 maxZoom: 17,
-                max: 1.0,
-                gradient: { 0.0: '#0d2818', 0.35: '#22c55e', 0.65: '#eab308', 1.0: '#ef4444' },
+                max: 0.78,
+                minOpacity: 0.09,
+                gradient: {
+                    0.0: '#0f2942',
+                    0.15: '#1c5f8f',
+                    0.28: '#2a8f84',
+                    0.42: '#4caf6a',
+                    0.55: '#9cbd3e',
+                    0.68: '#d4a84b',
+                    0.8: '#e0783a',
+                    0.9: '#d94a3d',
+                    1.0: '#a31b2d',
+                },
             });
             heatLayer.addTo(map);
             if (heatData.length === 1) {
