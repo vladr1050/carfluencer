@@ -58,6 +58,22 @@ function HeatmapLayer({ data, mode }: { data: [number, number, number][]; mode: 
   return null;
 }
 
+/** Leaflet often renders 0×0 until layout settles; flex parents make this worse. */
+function MapInvalidateOnResize() {
+  const map = useMap();
+  useEffect(() => {
+    const el = map.getContainer();
+    const target = el.parentElement ?? el;
+    const ro = new ResizeObserver(() => {
+      map.invalidateSize({ animate: false });
+    });
+    ro.observe(target);
+    requestAnimationFrame(() => map.invalidateSize({ animate: false }));
+    return () => ro.disconnect();
+  }, [map]);
+  return null;
+}
+
 function MapContent({ data, mode }: { data: [number, number, number][]; mode: string }) {
   return (
     <>
@@ -65,6 +81,7 @@ function MapContent({ data, mode }: { data: [number, number, number][]; mode: st
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <MapInvalidateOnResize />
       <HeatmapLayer data={data} mode={mode} />
     </>
   );
@@ -221,7 +238,7 @@ export function AdvertiserHeatmap() {
     heatmapData.length > 0 ? [heatmapData[0][0], heatmapData[0][1]] : [51.505, -0.09];
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="flex h-dvh min-h-0 flex-col bg-background">
       {hasCampaignContext && (
         <div className="bg-[#C1F60D] text-black px-4 py-3 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-6 flex-wrap">
@@ -354,7 +371,7 @@ export function AdvertiserHeatmap() {
         )}
       </div>
 
-      <div className="flex-1 relative min-h-[300px]">
+      <div className="relative min-h-0 flex-1">
         {isLoading && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-[2000] flex items-center justify-center">
             <div className="bg-card border border-border rounded-lg p-6 shadow-lg flex items-center gap-3">
@@ -380,7 +397,12 @@ export function AdvertiserHeatmap() {
           </div>
         ) : null}
 
-        <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }} className="z-0">
+        <MapContainer
+          center={center}
+          zoom={hasData ? 11 : 13}
+          className="z-0 h-full w-full min-h-[280px]"
+          style={{ height: '100%', width: '100%', minHeight: '280px' }}
+        >
           <MapContent data={heatmapData} mode={mode} />
         </MapContainer>
 

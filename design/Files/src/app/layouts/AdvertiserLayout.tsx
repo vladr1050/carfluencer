@@ -37,9 +37,9 @@ export function AdvertiserLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="flex h-dvh min-h-0 bg-background overflow-hidden">
       {/* Sidebar */}
-      <div className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
+      <div className="flex w-64 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
         <div className="p-6 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
             <Car className="w-8 h-8" style={{ color: '#C1F60D' }} />
@@ -97,8 +97,8 @@ export function AdvertiserLayout() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
+      {/* Main: min-h-0 so nested flex + Leaflet get a real height (not 0) */}
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <Outlet />
       </div>
     </div>
