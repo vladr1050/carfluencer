@@ -7,6 +7,7 @@ use App\Jobs\SyncVehicleTelemetryFromClickHouseJob;
 use App\Models\Campaign;
 use App\Models\Vehicle;
 use App\Services\Telemetry\TelemetrySchedulerConfig;
+use App\Services\Telemetry\TelemetrySyncActivityPresenter;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -17,14 +18,17 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Concerns\CanUseDatabaseTransactions;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions as SchemaActions;
+use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use UnitEnum;
 
 /**
@@ -247,8 +251,9 @@ class TelemetryClickHousePage extends Page
 
         Notification::make()
             ->title(__('ClickHouse sync queued'))
-            ->body(__('After the worker finishes, open **Heatmap** in the sidebar and load the map.'))
+            ->body(__('After the worker finishes, open **Heatmap** in the sidebar and load the map. Ensure a queue worker is running: `php artisan queue:work`.'))
             ->success()
+            ->seconds(12)
             ->send();
     }
 
@@ -266,15 +271,62 @@ class TelemetryClickHousePage extends Page
         }
     }
 
+    /**
+     * Reference copy for admins: where telemetry comes from and what “Queue sync” does.
+     */
+    public static function telematicsSyncInfoDescription(): HtmlString
+    {
+        $p1 = e(__('Raw GPS and device rows live in an external ClickHouse cluster (telematics provider / data warehouse). This platform does not talk to trackers directly — it pulls data over HTTP using credentials and endpoints in config/telemetry.php and .env (TELEMETRY_CLICKHOUSE_*).'));
+        $p2 = e(__('Pressing “Queue ClickHouse sync” dispatches a Laravel queue job. A worker (php artisan queue:work or Supervisor/systemd) must be running, otherwise nothing is imported.'));
+        $p3 = e(__('The collector upserts into PostgreSQL table device_locations. Rows are matched by device_id = vehicle IMEI — the IMEI in Fleet → Vehicles must match telematics.'));
+        $modesTitle = e(__('Sync modes'));
+        $liIncremental = e(__('Incremental (from last cursor): only points newer than the saved watermark; for routine catch-up.'));
+        $liHistorical = e(__('Historical window: backfill between the chosen UTC dates; does not roll back the incremental cursor. Use for gaps or new vehicles.'));
+        $liCampaign = e(__('Campaign or vehicle group: resolves to linked vehicles and queues work for that scope (same idea as the Heatmap target).'));
+        $liAfter = e(__('After jobs finish, Heatmap and analytics read PostgreSQL. The automation section below controls how often incremental pull runs and when daily sessions / impressions are rebuilt.'));
+        $p4 = e(__('Smoke test (no import): php artisan telemetry:test-clickhouse. Full pipeline: docs/ARCHITECTURE/05_telemetry_pipeline.md.'));
+
+        return new HtmlString(
+            <<<HTML
+            <div class="space-y-3 text-sm leading-relaxed">
+                <p>{$p1}</p>
+                <p>{$p2}</p>
+                <p>{$p3}</p>
+                <p class="font-medium text-gray-950 dark:text-white">{$modesTitle}</p>
+                <ul class="list-disc space-y-1 ps-5">
+                    <li>{$liIncremental}</li>
+                    <li>{$liHistorical}</li>
+                    <li>{$liCampaign}</li>
+                    <li>{$liAfter}</li>
+                </ul>
+                <p class="text-xs text-gray-600 dark:text-gray-400">{$p4}</p>
+            </div>
+            HTML
+        );
+    }
+
     public function content(Schema $schema): Schema
     {
         return $schema
             ->components([
+                Section::make(__('Sync activity log'))
+                    ->description(__('Live snapshot: per-vehicle sync fields in PostgreSQL, scheduler tick, queue backlog, newest stored GPS row, global ClickHouse cursor, and recent failed telemetry jobs. Auto-refresh every 15 seconds.'))
+                    ->schema([
+                        View::make('filament.pages.partials.telemetry-sync-activity')
+                            ->viewData(fn (): array => app(TelemetrySyncActivityPresenter::class)->forView()),
+                    ])
+                    ->columns(1),
+                Callout::make(__('Telematics sync: how it works'))
+                    ->info()
+                    ->icon(Heroicon::OutlinedInformationCircle)
+                    ->description(static::telematicsSyncInfoDescription()),
                 Section::make(__('ClickHouse → PostgreSQL'))
                     ->description(__('Choose the same kind of target as on the Heatmap page: campaign, one vehicle, or a group. Then incremental (cursor) or historical window.'))
                     ->schema([
                         Form::make([EmbeddedSchema::make('form')])
                             ->id('clickhouse-sync-form')
+                            // Required so <form wire:submit="..."> calls the page method (see scheduler form below).
+                            ->livewireSubmitHandler('queueClickhouseSync')
                             ->footer([
                                 SchemaActions::make([
                                     Action::make('queueClickhouseSync')
