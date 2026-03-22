@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Admin\AdminTelemetryHeatmapController;
 use App\Models\Campaign;
 use App\Models\CampaignVehicle;
 use App\Models\DeviceLocation;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Telemetry\AdminHeatmapDataService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Tests\TestCase;
 
 class AdminTelemetryHeatmapTest extends TestCase
@@ -167,5 +171,48 @@ class AdminTelemetryHeatmapTest extends TestCase
         $this->getJson('/internal/admin/telemetry/heatmap-data?scope=campaign&campaign_id='.$campaign->id.'&motion=both')
             ->assertOk()
             ->assertJsonPath('vehicles.0.id', $v->id);
+    }
+
+    public function test_internal_request_with_carbon_dates_applies_date_filter(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $mo = User::factory()->mediaOwner()->create();
+        $vehicle = Vehicle::query()->create([
+            'media_owner_id' => $mo->id,
+            'brand' => 'T',
+            'model' => 'M',
+            'year' => 2024,
+            'color_key' => 'black',
+            'quantity' => 1,
+            'imei' => '444444444444444',
+            'status' => 'active',
+        ]);
+
+        DeviceLocation::query()->create([
+            'device_id' => $vehicle->imei,
+            'event_at' => '2026-03-10 12:00:00',
+            'latitude' => 54.5,
+            'longitude' => 25.5,
+            'speed' => 40,
+            'battery' => null,
+            'gsm_signal' => null,
+            'odometer' => null,
+            'ignition' => true,
+            'extra_json' => null,
+        ]);
+
+        $req = Request::create(route('internal.admin.telemetry.heatmap-data'), 'GET', [
+            'scope' => 'vehicle',
+            'vehicle_id' => $vehicle->id,
+            'date_from' => Carbon::parse('2026-03-01'),
+            'date_to' => Carbon::parse('2026-03-31'),
+            'motion' => 'both',
+        ]);
+        $req->setUserResolver(fn () => $admin);
+
+        $response = app(AdminTelemetryHeatmapController::class)->data($req, app(AdminHeatmapDataService::class));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertGreaterThan(0, count($response->getData(true)['heatmap']['points'] ?? []));
     }
 }

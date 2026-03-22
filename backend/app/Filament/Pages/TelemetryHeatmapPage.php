@@ -5,7 +5,9 @@ namespace App\Filament\Pages;
 use App\Http\Controllers\Admin\AdminTelemetryHeatmapController;
 use App\Models\Campaign;
 use App\Models\Vehicle;
+use App\Services\Telemetry\AdminHeatmapDataService;
 use BackedEnum;
+use DateTimeInterface;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -137,17 +139,41 @@ class TelemetryHeatmapPage extends Page
     }
 
     /**
+     * EmbeddedSchema::make('form') can nest field state under `form` depending on Filament version.
+     *
+     * @return array<string, mixed>
+     */
+    private function heatmapFormState(): array
+    {
+        $s = $this->form->getState();
+        if (isset($s['form']) && is_array($s['form']) && array_key_exists('map_scope', $s['form'])) {
+            return $s['form'];
+        }
+
+        return $s;
+    }
+
+    private function scalarForHttpQuery(mixed $value): mixed
+    {
+        if ($value instanceof DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        return $value;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function heatmapQueryParams(): array
     {
-        $s = $this->form->getState();
+        $s = $this->heatmapFormState();
 
         $params = [
             'scope' => $s['map_scope'] ?? 'vehicle',
             'motion' => $s['motion'] ?? 'both',
-            'date_from' => $s['date_from'] ?? null,
-            'date_to' => $s['date_to'] ?? null,
+            'date_from' => array_key_exists('date_from', $s) ? $this->scalarForHttpQuery($s['date_from']) : null,
+            'date_to' => array_key_exists('date_to', $s) ? $this->scalarForHttpQuery($s['date_to']) : null,
         ];
 
         if ($params['scope'] === 'campaign') {
@@ -184,18 +210,22 @@ class TelemetryHeatmapPage extends Page
 
     public function loadHeatmap(): void
     {
-        $s = $this->form->getState();
+        $s = $this->heatmapFormState();
         if ($msg = $this->validateObjectScope($s)) {
             Notification::make()->title($msg)->danger()->send();
 
             return;
         }
 
+        // Never use http_build_query() here: it drops DateTime/Carbon values, so date filters were lost.
         $query = $this->heatmapQueryParams();
-        $sub = Request::create(route('internal.admin.telemetry.heatmap-data').'?'.http_build_query($query), 'GET');
+        $sub = Request::create(route('internal.admin.telemetry.heatmap-data'), 'GET', $query);
         $sub->setUserResolver(fn () => auth()->user());
 
-        $response = app(AdminTelemetryHeatmapController::class)->data($sub);
+        $response = app(AdminTelemetryHeatmapController::class)->data(
+            $sub,
+            app(AdminHeatmapDataService::class),
+        );
         if ($response->getStatusCode() === 422) {
             $json = json_decode($response->getContent(), true);
             Notification::make()->title($json['error'] ?? __('Invalid request'))->danger()->send();
@@ -211,9 +241,10 @@ class TelemetryHeatmapPage extends Page
         }
 
         $count = count($payload['heatmap']['points'] ?? []);
+        $samples = (int) ($payload['heatmap']['metrics']['location_samples'] ?? 0);
         Notification::make()
             ->title(__('Heatmap updated'))
-            ->body(__('Clusters: :n', ['n' => $count]))
+            ->body(__('Clusters: :clusters · GPS samples in range: :samples', ['clusters' => $count, 'samples' => $samples]))
             ->success()
             ->send();
 

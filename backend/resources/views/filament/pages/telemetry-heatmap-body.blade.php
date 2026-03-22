@@ -86,7 +86,8 @@
     window.renderAdminTelemetryHeatmap = function (payload) {
         const pts = (payload.heatmap && payload.heatmap.points) ? payload.heatmap.points : [];
         const heatData = pts.map(function (p) {
-            return [p.lat, p.lng, Math.max(0.15, p.intensity || 0.5)];
+            const w = Math.max(0.2, Math.min(1, Number(p.intensity) || 0.45));
+            return [Number(p.lat), Number(p.lng), w];
         });
 
         const el = document.getElementById('admin-telemetry-map');
@@ -100,19 +101,31 @@
 
         const center = heatData.length ? [heatData[0][0], heatData[0][1]] : defaultCenter;
 
-        map.setView(center, heatData.length ? 11 : defaultZoom);
-
         if (heatLayer) {
             map.removeLayer(heatLayer);
             heatLayer = null;
         }
 
         if (heatData.length && typeof L.heatLayer === 'function') {
-            heatLayer = L.heatLayer(heatData, { radius: 28, blur: 22, maxZoom: 14 });
+            heatLayer = L.heatLayer(heatData, {
+                radius: 36,
+                blur: 22,
+                maxZoom: 17,
+                max: 1.0,
+                gradient: { 0.0: '#0d2818', 0.35: '#22c55e', 0.65: '#eab308', 1.0: '#ef4444' },
+            });
             heatLayer.addTo(map);
-            try {
-                map.fitBounds(heatLayer.getBounds(), { padding: [40, 40] });
-            } catch (e) { /* ignore */ }
+            if (heatData.length === 1) {
+                map.setView(center, 14);
+            } else {
+                try {
+                    map.fitBounds(heatLayer.getBounds(), { padding: [56, 56], maxZoom: 16 });
+                } catch (e) {
+                    map.setView(center, 11);
+                }
+            }
+        } else {
+            map.setView(defaultCenter, defaultZoom);
         }
 
         requestAnimationFrame(invalidateMapSize);
