@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    /*
+    | Optional: MapTiler raster tiles for "Positron" basemap (admin heatmap).
+    | If empty, CARTO Positron (light_all) is used — same style family, no key.
+    */
+    'maptiler' => [
+        'api_key' => env('MAPTILER_API_KEY'),
+    ],
+
 ];

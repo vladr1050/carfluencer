@@ -14,10 +14,19 @@ declare module 'leaflet' {
   function heatLayer(latlngs: [number, number, number][], options?: Record<string, unknown>): L.Layer;
 }
 
-/** Gray basemap (same family as admin Filament heatmap). */
-const HEATMAP_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
-const HEATMAP_TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const MAPTILER_KEY =
+  typeof import.meta.env.VITE_MAPTILER_API_KEY === 'string' ? import.meta.env.VITE_MAPTILER_API_KEY.trim() : '';
+
+/**
+ * Positron basemap (MapTiler preview style). With VITE_MAPTILER_API_KEY → MapTiler tiles + attribution;
+ * without key → CARTO `light_all` (same Positron family, no key). Matches admin Filament heatmap logic.
+ */
+const HEATMAP_TILE_URL = MAPTILER_KEY
+  ? `https://api.maptiler.com/maps/positron/{z}/{x}/{y}.png?key=${encodeURIComponent(MAPTILER_KEY)}`
+  : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
+const HEATMAP_TILE_ATTRIBUTION = MAPTILER_KEY
+  ? '<a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 /** Approx. geographic centre of Latvia */
 const HEATMAP_DEFAULT_CENTER: LatLngTuple = [56.88, 24.6];
@@ -87,7 +96,12 @@ function MapInvalidateOnResize() {
 function MapContent({ data, mode }: { data: [number, number, number][]; mode: string }) {
   return (
     <>
-      <TileLayer attribution={HEATMAP_TILE_ATTRIBUTION} url={HEATMAP_TILE_URL} maxZoom={20} />
+      <TileLayer
+        attribution={HEATMAP_TILE_ATTRIBUTION}
+        url={HEATMAP_TILE_URL}
+        maxZoom={20}
+        {...(MAPTILER_KEY ? {} : { subdomains: 'abcd' })}
+      />
       <MapInvalidateOnResize />
       <HeatmapLayer data={data} mode={mode} />
     </>
@@ -407,8 +421,8 @@ export function AdvertiserHeatmap() {
         <MapContainer
           center={center}
           zoom={hasData ? HEATMAP_DEFAULT_ZOOM_WITH_DATA : HEATMAP_DEFAULT_ZOOM_NO_DATA}
-          className="z-0 h-full w-full min-h-[280px] bg-[#d4d4d4]"
-          style={{ height: '100%', width: '100%', minHeight: '280px', background: '#d4d4d4' }}
+          className="z-0 h-full w-full min-h-[280px] bg-[#e8e8e8]"
+          style={{ height: '100%', width: '100%', minHeight: '280px', background: '#e8e8e8' }}
         >
           <MapContent data={heatmapData} mode={mode} />
         </MapContainer>

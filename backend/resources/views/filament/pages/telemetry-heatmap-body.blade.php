@@ -1,4 +1,11 @@
+@php
+    $maptilerKey = filled(config('services.maptiler.api_key')) ? (string) config('services.maptiler.api_key') : '';
+@endphp
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+    /* Positron-style land tone while tiles load */
+    #admin-telemetry-map .leaflet-container { background: #e8e8e8; }
+</style>
 <div class="space-y-4">
     <p class="text-sm text-gray-600 dark:text-gray-400">
         {{ __('Aggregated buckets from PostgreSQL `device_locations` for the filters above (campaign / vehicle(s), period, moving vs stopped).') }}
@@ -8,7 +15,7 @@
         id="admin-telemetry-map"
         wire:ignore
         class="z-0 w-full rounded-lg border border-gray-200 dark:border-gray-700"
-        style="height: min(560px, 55vh); min-height: 320px; background-color: #d4d4d4;"
+        style="height: min(560px, 55vh); min-height: 320px; background-color: #e8e8e8;"
     ></div>
 </div>
 
@@ -19,8 +26,15 @@
     let map = null;
     let heatLayer = null;
     let resizeObserver = null;
-    const defaultCenter = [54.6872, 25.2797];
+    const defaultCenter = [56.88, 24.6];
     const defaultZoom = 7;
+    const maptilerKey = {!! json_encode($maptilerKey) !!};
+    const positronTileUrl = maptilerKey
+        ? ('https://api.maptiler.com/maps/positron/{z}/{x}/{y}.png?key=' + encodeURIComponent(maptilerKey))
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
+    const positronAttribution = maptilerKey
+        ? '<a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
     function invalidateMapSize() {
         if (map) {
@@ -38,9 +52,13 @@
             return true;
         }
         map = L.map(el, { preferCanvas: true }).setView(defaultCenter, defaultZoom);
-        L.tileLayer(grayTileUrl, {
+        L.tileLayer(positronTileUrl, maptilerKey ? {
             maxZoom: 20,
-            attribution: grayTileAttribution,
+            attribution: positronAttribution,
+        } : {
+            subdomains: 'abcd',
+            maxZoom: 20,
+            attribution: positronAttribution,
         }).addTo(map);
         if (resizeObserver) {
             resizeObserver.disconnect();
