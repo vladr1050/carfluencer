@@ -14,19 +14,23 @@ declare module 'leaflet' {
   function heatLayer(latlngs: [number, number, number][], options?: Record<string, unknown>): L.Layer;
 }
 
-const MAPTILER_KEY =
-  typeof import.meta.env.VITE_MAPTILER_API_KEY === 'string' ? import.meta.env.VITE_MAPTILER_API_KEY.trim() : '';
+/** Same JSON as GET /api/advertiser/map-basemap (aligned with admin Filament heatmap blade). */
+type AdvertiserMapBasemap = {
+  provider: string;
+  url: string;
+  attribution: string;
+  subdomains: string | null;
+  max_zoom: number;
+};
 
-/**
- * Positron basemap (MapTiler preview style). With VITE_MAPTILER_API_KEY → MapTiler tiles + attribution;
- * without key → CARTO `light_all` (same Positron family, no key). Matches admin Filament heatmap logic.
- */
-const HEATMAP_TILE_URL = MAPTILER_KEY
-  ? `https://api.maptiler.com/maps/positron/{z}/{x}/{y}.png?key=${encodeURIComponent(MAPTILER_KEY)}`
-  : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
-const HEATMAP_TILE_ATTRIBUTION = MAPTILER_KEY
-  ? '<a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const CARTO_POSITRON_FALLBACK: AdvertiserMapBasemap = {
+  provider: 'carto',
+  url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+  attribution:
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: 'abcd',
+  max_zoom: 20,
+};
 
 /** Approx. geographic centre of Latvia */
 const HEATMAP_DEFAULT_CENTER: LatLngTuple = [56.88, 24.6];
@@ -93,14 +97,23 @@ function MapInvalidateOnResize() {
   return null;
 }
 
-function MapContent({ data, mode }: { data: [number, number, number][]; mode: string }) {
+function MapContent({
+  data,
+  mode,
+  basemap,
+}: {
+  data: [number, number, number][];
+  mode: string;
+  basemap: AdvertiserMapBasemap;
+}) {
   return (
     <>
       <TileLayer
-        attribution={HEATMAP_TILE_ATTRIBUTION}
-        url={HEATMAP_TILE_URL}
-        maxZoom={20}
-        {...(MAPTILER_KEY ? {} : { subdomains: 'abcd' })}
+        key={basemap.url}
+        attribution={basemap.attribution}
+        url={basemap.url}
+        maxZoom={basemap.max_zoom}
+        {...(basemap.subdomains ? { subdomains: basemap.subdomains } : {})}
       />
       <MapInvalidateOnResize />
       <HeatmapLayer data={data} mode={mode} />
@@ -177,6 +190,25 @@ export function AdvertiserHeatmap() {
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [heatmapPayload, setHeatmapPayload] = useState<HeatmapApi | null>(null);
+  const [mapBasemap, setMapBasemap] = useState<AdvertiserMapBasemap>(CARTO_POSITRON_FALLBACK);
+
+  useEffect(() => {
+    apiJson<AdvertiserMapBasemap>('/api/advertiser/map-basemap')
+      .then((cfg) => {
+        if (cfg && typeof cfg.url === 'string' && cfg.url.length > 0) {
+          setMapBasemap({
+            provider: typeof cfg.provider === 'string' ? cfg.provider : 'carto',
+            url: cfg.url,
+            attribution: typeof cfg.attribution === 'string' ? cfg.attribution : CARTO_POSITRON_FALLBACK.attribution,
+            subdomains: typeof cfg.subdomains === 'string' && cfg.subdomains.length > 0 ? cfg.subdomains : null,
+            max_zoom: typeof cfg.max_zoom === 'number' && cfg.max_zoom > 0 ? cfg.max_zoom : 20,
+          });
+        }
+      })
+      .catch(() => {
+        /* unauthenticated or offline — keep CARTO fallback (same as admin without MAPTILER_API_KEY) */
+      });
+  }, []);
 
   useEffect(() => {
     apiJson<{ data: { id: number; name: string }[] }>('/api/advertiser/campaigns')
@@ -424,7 +456,7 @@ export function AdvertiserHeatmap() {
           className="z-0 h-full w-full min-h-[280px] bg-[#e8e8e8]"
           style={{ height: '100%', width: '100%', minHeight: '280px', background: '#e8e8e8' }}
         >
-          <MapContent data={heatmapData} mode={mode} />
+          <MapContent data={heatmapData} mode={mode} basemap={mapBasemap} />
         </MapContainer>
 
         <div className="absolute top-4 right-4 bg-card border border-border rounded-lg p-4 shadow-lg z-[1000]">
