@@ -5,7 +5,7 @@
 | Файл | Назначение |
 |------|------------|
 | `.github/workflows/ci.yml` | **CI** — тесты Laravel (`backend/`), сборка `frontend/` |
-| `.github/workflows/deploy-production.yml` | **Deploy production** — SSH на VPS, `git pull`, `deploy/post-pull.sh` |
+| `.github/workflows/deploy-production.yml` | **Deploy production** — сборка **`frontend/dist`** на runner, SSH (`git` + `post-pull.sh`), **`rsync`** статики на VPS |
 
 ---
 
@@ -50,6 +50,7 @@
 | `DEPLOY_USER` | Пользователь Linux для SSH. У вас: **`root`** (в секрете GitHub буквально `root`). Рекомендуем для продакшена отдельного пользователя без полного sudo — но workflow с `root` работает. |
 | `DEPLOY_SSH_PRIVATE_KEY` | Полный текст приватного ключа (от `-----BEGIN` до `END-----`) |
 | `DEPLOY_PATH` | Абсолютный путь к **корню git** на сервере, например `/var/www/carfluencer` (рядом каталоги `backend/` и `deploy/`) |
+| `FRONTEND_VITE_API_URL` | **Необязательно.** Полный origin API для сборки SPA, если фронт открывается с **другого** домена, чем API. Если SPA и `/api` на одном хосте (типовой Nginx) — **не задавайте**: в бандле будет относительный `/api`. |
 
 На сервере **публичный** ключ (от этой пары) должен лежать в **`authorized_keys`**:
 
@@ -60,12 +61,14 @@
 
 Отдельно для **`git fetch`** на сервере нужен доступ к GitHub (deploy key read-only или другой способ) — см. `docs/DEPLOY/12_vps_production.md` §10.
 
-### Что делает деплой на сервере
+### Что делает workflow **Deploy production**
 
-1. `cd DEPLOY_PATH`
-2. `git fetch` + **`git clean -fd -- deploy/`** (убирает неотслеживаемые файлы только в `deploy/`, чтобы не конфликтовали с репо; **`backend/.env` не трогается**)
-3. **`git reset --hard origin/main`** (или `master`) — сбрасывает локальные правки в отслеживаемых файлах, как после ручного `scp` в `deploy/`
-4. `./deploy/post-pull.sh` — `composer install --no-dev`, `migrate`, **`php artisan telemetry:ensure-env`** (недостающие ключи из `deploy/telemetry.env.fragment` → `backend/.env`), кэши Laravel/Filament, **`queue:restart`**, при **`TELEMETRY_CLICKHOUSE_ENABLED=true`** — **`telemetry:test-clickhouse`**
+1. **Checkout** репозитория на runner.
+2. **`npm ci && npm run build`** в **`frontend/`** → свежий **`frontend/dist`** (Advertiser / Media owner SPA).
+3. **SSH:** `cd DEPLOY_PATH` → `git fetch` / **`git clean -fd -- deploy/`** → **`git reset --hard origin/main`** (или `master`) → **`./deploy/post-pull.sh`** (Composer, migrate, кэши Laravel и т.д.).
+4. **`ssh mkdir -p`** для **`$DEPLOY_PATH/frontend/dist`**, затем **`rsync`** туда содержимого **`frontend/dist/`** (нужны права на запись в `DEPLOY_PATH`).
+
+Так после **`git push`** в `main` при успешном CI на прод попадает и бэкенд, и актуальная статика порталов.
 
 ---
 
