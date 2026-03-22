@@ -77,6 +77,28 @@ class VehiclesTable
                         default => 'gray',
                     })
                     ->searchable(),
+                TextColumn::make('campaign_names')
+                    ->label(__('Campaign'))
+                    ->getStateUsing(function (Vehicle $record): string {
+                        $names = $record->campaigns
+                            ->pluck('name')
+                            ->filter()
+                            ->unique()
+                            ->values();
+
+                        return $names->isEmpty() ? '—' : $names->implode(', ');
+                    })
+                    ->placeholder('—')
+                    ->limit(60)
+                    ->tooltip(function (Vehicle $record): ?string {
+                        $full = $record->campaigns
+                            ->pluck('name')
+                            ->filter()
+                            ->unique()
+                            ->implode(', ');
+
+                        return strlen($full) > 60 ? $full : null;
+                    }),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
