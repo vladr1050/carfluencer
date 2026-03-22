@@ -37,8 +37,12 @@ const HEATMAP_DEFAULT_CENTER: LatLngTuple = [56.88, 24.6];
 const HEATMAP_DEFAULT_ZOOM_NO_DATA = 7;
 const HEATMAP_DEFAULT_ZOOM_WITH_DATA = 11;
 
-/** leaflet.heat: lower `max` → hotter colors; 1/1.2 ≈ +20% intensity vs previous baseline. */
-const HEATMAP_INTENSITY_BOOST = 1.2;
+/**
+ * leaflet.heat (simpleheat): each stamp uses globalAlpha = max(intensity/max, minOpacity).
+ * Defaults are very faint on light basemaps — raise minOpacity and lower max for readable color.
+ */
+const HEATMAP_MAX_DENOMINATOR = 2.35;
+const HEATMAP_MIN_OPACITY = 0.14;
 
 function HeatmapLayer({ data, mode }: { data: [number, number, number][]; mode: string }) {
   const map = useMap();
@@ -55,16 +59,24 @@ function HeatmapLayer({ data, mode }: { data: [number, number, number][]; mode: 
 
       const gradient =
         mode === 'parking'
-          ? { 0.0: '#000000', 0.3: '#F10DBF', 0.6: '#F10DBF', 1.0: '#FFFFFF' }
+          ? { 0.0: '#140010', 0.18: '#F10DBF', 0.45: '#F10DBF', 0.85: '#FF8AE8', 1.0: '#FFFFFF' }
           : mode === 'driving'
-            ? { 0.0: '#000000', 0.3: '#C1F60D', 0.6: '#C1F60D', 1.0: '#FFFFFF' }
-            : { 0.0: '#000000', 0.3: '#C1F60D', 0.5: '#F10DBF', 0.7: '#C1F60D', 1.0: '#FFFFFF' };
+            ? { 0.0: '#101400', 0.18: '#C1F60D', 0.45: '#C1F60D', 0.85: '#E8FF7A', 1.0: '#FFFFFF' }
+            : {
+                0.0: '#0a0a0a',
+                0.15: '#C1F60D',
+                0.4: '#F10DBF',
+                0.65: '#C1F60D',
+                0.85: '#FFFFFF',
+                1.0: '#FFFFFF',
+              };
 
       const heatLayer = L.heatLayer(data, {
         radius: 25,
-        blur: 15,
+        blur: 12,
         maxZoom: 17,
-        max: 1.0 / HEATMAP_INTENSITY_BOOST,
+        minOpacity: HEATMAP_MIN_OPACITY,
+        max: 1.0 / HEATMAP_MAX_DENOMINATOR,
         gradient,
       });
 
@@ -285,10 +297,10 @@ export function AdvertiserHeatmap() {
 
   const legendGradient =
     mode === 'parking'
-      ? 'linear-gradient(to right, #000000, #F10DBF, #FFFFFF)'
+      ? 'linear-gradient(to right, #140010, #F10DBF, #FF8AE8, #FFFFFF)'
       : mode === 'driving'
-        ? 'linear-gradient(to right, #000000, #C1F60D, #FFFFFF)'
-        : 'linear-gradient(to right, #000000, #C1F60D, #F10DBF, #FFFFFF)';
+        ? 'linear-gradient(to right, #101400, #C1F60D, #E8FF7A, #FFFFFF)'
+        : 'linear-gradient(to right, #0a0a0a, #C1F60D, #F10DBF, #FFFFFF)';
 
   const center: LatLngTuple =
     heatmapData.length > 0 ? [heatmapData[0][0], heatmapData[0][1]] : HEATMAP_DEFAULT_CENTER;

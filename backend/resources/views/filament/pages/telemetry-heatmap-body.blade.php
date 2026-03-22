@@ -28,8 +28,9 @@
     let resizeObserver = null;
     const defaultCenter = [56.88, 24.6];
     const defaultZoom = 7;
-    /** leaflet.heat: lower max → hotter; +20% color intensity vs previous baseline */
-    const HEATMAP_INTENSITY_BOOST = 1.2;
+    /** leaflet.heat: higher minOpacity + lower max = readable on light basemaps (see frontend Heatmap.tsx) */
+    const HEATMAP_MAX_DENOMINATOR = 2.35;
+    const HEATMAP_MIN_OPACITY = 0.14;
     const maptilerKey = {!! json_encode($maptilerKey) !!};
     const positronTileUrl = maptilerKey
         ? ('https://api.maptiler.com/maps/positron/{z}/{x}/{y}.png?key=' + encodeURIComponent(maptilerKey))
@@ -109,13 +110,13 @@
      */
     function adminHeatGradientForMotion(motion) {
         if (motion === 'stopped') {
-            return { 0.0: '#000000', 0.3: '#F10DBF', 0.6: '#F10DBF', 1.0: '#FFFFFF' };
+            return { 0.0: '#140010', 0.18: '#F10DBF', 0.45: '#F10DBF', 0.85: '#FF8AE8', 1.0: '#FFFFFF' };
         }
         if (motion === 'moving') {
-            return { 0.0: '#000000', 0.3: '#C1F60D', 0.6: '#C1F60D', 1.0: '#FFFFFF' };
+            return { 0.0: '#101400', 0.18: '#C1F60D', 0.45: '#C1F60D', 0.85: '#E8FF7A', 1.0: '#FFFFFF' };
         }
 
-        return { 0.0: '#000000', 0.3: '#C1F60D', 0.5: '#F10DBF', 0.7: '#C1F60D', 1.0: '#FFFFFF' };
+        return { 0.0: '#0a0a0a', 0.15: '#C1F60D', 0.4: '#F10DBF', 0.65: '#C1F60D', 0.85: '#FFFFFF', 1.0: '#FFFFFF' };
     }
 
     window.renderAdminTelemetryHeatmap = function (payload) {
@@ -146,9 +147,10 @@
         if (heatData.length && typeof L.heatLayer === 'function') {
             heatLayer = L.heatLayer(heatData, {
                 radius: 25,
-                blur: 15,
+                blur: 12,
                 maxZoom: 17,
-                max: 1.0 / HEATMAP_INTENSITY_BOOST,
+                minOpacity: HEATMAP_MIN_OPACITY,
+                max: 1.0 / HEATMAP_MAX_DENOMINATOR,
                 gradient: adminHeatGradientForMotion(motion),
             });
             heatLayer.addTo(map);
