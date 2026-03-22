@@ -80,7 +80,13 @@ sudo -u www-data php artisan view:cache
 
 Подробнее: **`docs/DEPLOY/15_github_actions.md`**.
 
-## 6. Проверка
+## 6. Favicon во вкладке браузера
+
+В **`deploy/nginx-carfluencer.conf.example`** для **`/favicon.ico`** настроена отдача **`/favicon.svg`** из **`backend/public`** (раньше был **`return 204`**, из‑за этого Safari мог показывать чужую закэшированную иконку, например Shopify).
+
+После обновления Nginx на сервере: скопируйте актуальный фрагмент из репозитория или вручную замените блок `location = /favicon.ico` на `rewrite ^ /favicon.svg break;`.
+
+## 7. Проверка
 
 - Открыть **`https://www.carplace.lv`** — логин SPA.
 - **`https://www.carplace.lv/admin`** — Filament.

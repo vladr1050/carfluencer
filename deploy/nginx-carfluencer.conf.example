@@ -61,10 +61,11 @@ server {
         try_files /index.html =404;
     }
 
+    # Браузеры запрашивают /favicon.ico — отдаём SVG (иначе 204 → Safari может показать чужой кэш-иконки).
     location = /favicon.ico {
         access_log off;
         log_not_found off;
-        return 204;
+        rewrite ^ /favicon.svg break;
     }
 
     location = /robots.txt {
