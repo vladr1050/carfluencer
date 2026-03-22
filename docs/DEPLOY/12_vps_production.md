@@ -260,7 +260,8 @@ Nginx: **`deploy/nginx-carfluencer.conf.example`** — раздаёт **`/`**, *
 
 После смены домена / HTTPS: пересобери фронт с новым **`API_URL`** и снова залей **`dist`**. В **`backend/.env`** обнови **`APP_URL`**, **`FRONTEND_URL`**, при необходимости **`CORS_ALLOWED_ORIGINS`**.
 
-Прототип в **`design/Files/`** в прод не входит — только **`frontend/`**.
+Прототип в **`design/Files/`** в прод не входит — только **`frontend/`**.  
+GitHub **CI** собирает `frontend/` при каждом push; **в репозиторий `dist` не коммитится** — на VPS после `git pull` нужно либо заново выполнить **`deploy/frontend-build-production.sh`** и залить **`frontend/dist`**, либо включить на сервере **`CARFLUENCER_FRONTEND_BUILD=1`** (см. `deploy/post-pull.sh`, нужны **Node.js + npm**).
 
 ---
 

@@ -29,4 +29,14 @@ if grep -qE '^TELEMETRY_CLICKHOUSE_ENABLED=(true|1)$' .env 2>/dev/null; then
   php artisan telemetry:test-clickhouse --no-interaction || echo "[post-pull] Warning: telemetry:test-clickhouse failed (check CH URL / firewall)."
 fi
 
+# Optional: rebuild advertiser / media-owner SPA (requires Node + npm on the server).
+# export CARFLUENCER_FRONTEND_BUILD=1 before post-pull, or set in the SSH deploy script.
+if [[ "${CARFLUENCER_FRONTEND_BUILD:-0}" == "1" ]] && command -v npm >/dev/null 2>&1; then
+  echo "[post-pull] Building frontend (CARFLUENCER_FRONTEND_BUILD=1)..."
+  cd "$ROOT/frontend"
+  npm ci --no-audit --no-fund
+  npm run build
+  echo "[post-pull] frontend/dist updated."
+fi
+
 echo "Deploy script finished OK."

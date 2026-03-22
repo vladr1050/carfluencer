@@ -5,7 +5,7 @@ const TOKEN_KEY = 'carfluencer_token';
  * - If `VITE_API_URL` is set → use it (direct to Laravel).
  * - In dev, if unset → `''` so requests go to the Vite dev server and are **proxied** to Laravel
  *   (avoids Safari "Load failed" when the page is `localhost:5174` but API was `127.0.0.1:8000`).
- * - Production build without env → fallback (set VITE_API_URL for real deploys).
+ * - Production build without env → same origin (`''`) when SPA and `/api` share the host.
  */
 export function getApiBase(): string {
   const raw = import.meta.env.VITE_API_URL;
@@ -15,7 +15,7 @@ export function getApiBase(): string {
   if (import.meta.env.DEV) {
     return '';
   }
-  return 'http://127.0.0.1:8000';
+  return '';
 }
 
 export function getToken(): string | null {
