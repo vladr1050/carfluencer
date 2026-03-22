@@ -19,6 +19,7 @@ use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
@@ -26,6 +27,7 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Js;
 use Livewire\Attributes\Url;
 use UnitEnum;
@@ -81,6 +83,7 @@ class TelemetryHeatmapPage extends Page
         ];
 
         $defaults = $this->mergeHeatmapDefaultsFromRequest($defaults);
+        $defaults = $this->normalizeHeatmapScopeFields($defaults);
 
         // PHP parses form.x=y as query key form_x=y (underscore). That coexists with form[key]=… and confuses
         // browsers/bookmarks. Strip legacy aliases once by redirecting to canonical ?form[...]= only.
@@ -95,6 +98,7 @@ class TelemetryHeatmapPage extends Page
             $this->data,
             static fn (mixed $v): bool => $v !== null && $v !== '' && (! is_array($v) || $v !== [])
         ));
+        $this->data = $this->normalizeHeatmapScopeFields($this->data);
 
         $this->form->fill($this->data);
 
@@ -103,8 +107,24 @@ class TelemetryHeatmapPage extends Page
         }
 
         // Use $this->data, not getState(): full form validation can throw when e.g. campaign_id is empty.
-        if ($this->validateHeatmapFilters($this->data) === null) {
+        $heatmapFilterError = $this->validateHeatmapFilters($this->data);
+        if ($heatmapFilterError === null) {
             $this->loadHeatmap();
+        } else {
+            Log::warning('telemetry_heatmap_autoload_skipped', [
+                'reason' => $heatmapFilterError,
+                'map_scope' => $this->data['map_scope'] ?? null,
+                'has_campaign_id' => ! empty($this->data['campaign_id']),
+                'has_vehicle_id' => ! empty($this->data['vehicle_id']),
+            ]);
+
+            if (($this->data['map_scope'] ?? '') === 'campaign' && empty($this->data['campaign_id'])) {
+                Notification::make()
+                    ->title(__('Choose a campaign'))
+                    ->body(__('Campaign is selected but no campaign is chosen. Pick a campaign in the form or add form[campaign_id]=… to the URL, then use “Load / refresh”. A leftover vehicle_id in the link is ignored in campaign mode.'))
+                    ->warning()
+                    ->send();
+            }
         }
     }
 
@@ -162,6 +182,30 @@ class TelemetryHeatmapPage extends Page
         }
 
         return $defaults;
+    }
+
+    /**
+     * Drop IDs that do not apply to the current map_scope (stale URL/bookmark fields).
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function normalizeHeatmapScopeFields(array $row): array
+    {
+        $scope = $row['map_scope'] ?? '';
+
+        if ($scope === 'campaign') {
+            $row['vehicle_id'] = null;
+            $row['vehicle_ids'] = [];
+        } elseif ($scope === 'vehicle') {
+            $row['campaign_id'] = null;
+            $row['vehicle_ids'] = [];
+        } elseif ($scope === 'vehicles') {
+            $row['campaign_id'] = null;
+            $row['vehicle_id'] = null;
+        }
+
+        return $row;
     }
 
     /**
@@ -313,7 +357,19 @@ class TelemetryHeatmapPage extends Page
                     ])
                     ->inline()
                     ->required()
-                    ->live(),
+                    ->live()
+                    ->afterStateUpdated(function (mixed $state, Set $set): void {
+                        if ($state === 'campaign') {
+                            $set('vehicle_id', null);
+                            $set('vehicle_ids', []);
+                        } elseif ($state === 'vehicle') {
+                            $set('campaign_id', null);
+                            $set('vehicle_ids', []);
+                        } elseif ($state === 'vehicles') {
+                            $set('campaign_id', null);
+                            $set('vehicle_id', null);
+                        }
+                    }),
                 Select::make('campaign_id')
                     ->label(__('Campaign'))
                     ->options(fn () => Campaign::query()->orderBy('name')->limit(500)->pluck('name', 'id')->all())
