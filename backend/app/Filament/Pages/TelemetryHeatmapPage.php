@@ -25,6 +25,7 @@ use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Js;
 use Livewire\Attributes\Url;
 use UnitEnum;
@@ -108,7 +109,9 @@ class TelemetryHeatmapPage extends Page
     private function mergeHeatmapDefaultsFromRequest(array $defaults): array
     {
         $formNested = request()->query('form');
-        if (is_array($formNested)) {
+        $hasBracketForm = is_array($formNested);
+
+        if ($hasBracketForm) {
             $defaults = $this->applyHeatmapKeyValuePairsToDefaults($defaults, $formNested);
         }
 
@@ -117,23 +120,27 @@ class TelemetryHeatmapPage extends Page
             $defaults = $this->applyHeatmapKeyValuePairsToDefaults($defaults, $data);
         }
 
-        $flatAliases = [
-            'form.map_scope' => 'map_scope',
-            'form.motion' => 'motion',
-            'form.campaign_id' => 'campaign_id',
-            'form.vehicle_id' => 'vehicle_id',
-            'form.date_from' => 'date_from',
-            'form.date_to' => 'date_to',
-        ];
-        foreach ($flatAliases as $queryKey => $field) {
-            if (! request()->has($queryKey)) {
-                continue;
-            }
-            $v = request()->query($queryKey);
-            if ($field === 'campaign_id' || $field === 'vehicle_id') {
-                $defaults[$field] = $v === null || $v === '' ? null : (int) $v;
-            } else {
-                $defaults[$field] = $v;
+        // Do NOT merge flat form.map_scope / form.motion when form[...] exists: PHP keeps them as separate
+        // keys, and applying both produced campaign scope without campaign_id while vehicle_id stayed set.
+        if (! $hasBracketForm) {
+            $flatAliases = [
+                'form.map_scope' => 'map_scope',
+                'form.motion' => 'motion',
+                'form.campaign_id' => 'campaign_id',
+                'form.vehicle_id' => 'vehicle_id',
+                'form.date_from' => 'date_from',
+                'form.date_to' => 'date_to',
+            ];
+            foreach ($flatAliases as $queryKey => $field) {
+                if (! request()->has($queryKey)) {
+                    continue;
+                }
+                $v = request()->query($queryKey);
+                if ($field === 'campaign_id' || $field === 'vehicle_id') {
+                    $defaults[$field] = $v === null || $v === '' ? null : (int) $v;
+                } else {
+                    $defaults[$field] = $v;
+                }
             }
         }
 
@@ -166,12 +173,33 @@ class TelemetryHeatmapPage extends Page
                 $defaults[$key] = is_array($v)
                     ? array_values(array_filter(array_map('intval', $v)))
                     : array_values(array_filter([(int) $v]));
+            } elseif ($key === 'date_from' || $key === 'date_to') {
+                $defaults[$key] = $this->normalizeHeatmapDateInput($v);
             } else {
                 $defaults[$key] = $v;
             }
         }
 
         return $defaults;
+    }
+
+    private function normalizeHeatmapDateInput(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if ($value instanceof DateTimeInterface) {
+            return Carbon::instance($value)->toDateString();
+        }
+        if (is_string($value)) {
+            try {
+                return Carbon::parse($value)->toDateString();
+            } catch (\Throwable) {
+                return strlen($value) >= 10 ? substr($value, 0, 10) : $value;
+            }
+        }
+
+        return null;
     }
 
     public function defaultForm(Schema $schema): Schema
@@ -203,12 +231,14 @@ class TelemetryHeatmapPage extends Page
                     ->label(__('Campaign'))
                     ->options(fn () => Campaign::query()->orderBy('name')->limit(500)->pluck('name', 'id')->all())
                     ->searchable()
+                    ->live()
                     ->visible(fn (Get $get): bool => $get('map_scope') === 'campaign')
                     ->required(fn (Get $get): bool => $get('map_scope') === 'campaign'),
                 Select::make('vehicle_id')
                     ->label(__('Vehicle'))
                     ->options($vehicleOptions)
                     ->searchable()
+                    ->live()
                     ->visible(fn (Get $get): bool => $get('map_scope') === 'vehicle')
                     ->required(fn (Get $get): bool => $get('map_scope') === 'vehicle'),
                 Select::make('vehicle_ids')
@@ -365,7 +395,7 @@ class TelemetryHeatmapPage extends Page
         return $schema
             ->components([
                 Section::make(__('Heatmap & ClickHouse'))
-                    ->description(__('Choose campaign, one vehicle, or a group; period and point type (moving / stopped / both). Data comes from PostgreSQL device_locations after ClickHouse import. OSM base map loads immediately; the coloured heat layer loads after "Load / refresh", or automatically on page open when filters are complete. Campaign mode requires a selected campaign or URL data[campaign_id]=ID. Example: ?data[map_scope]=vehicle&data[vehicle_id]=1&data[motion]=both (using only form.map_scope=campaign without campaign_id shows no heat).'))
+                    ->description(__('Choose campaign, one vehicle, or a group; period and point type (moving / stopped / both). Data comes from PostgreSQL device_locations after ClickHouse import. OSM base map loads immediately; the coloured heat layer loads after "Load / refresh", or automatically on page open when filters are complete. Use one style of URL params: form[map_scope]=…&form[campaign_id]=… — do not mix with legacy form.map_scope=… (they conflict). Campaign mode needs form[campaign_id] or a picked campaign in the form.'))
                     ->schema([
                         Form::make([EmbeddedSchema::make('form')])
                             ->id('heatmap-main-form')
