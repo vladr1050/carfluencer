@@ -84,43 +84,28 @@
     });
 
     /**
-     * Admin-only heat styling: one dominant bucket (e.g. city centre) no longer eats the whole scale;
-     * sparse / parking-like buckets get a higher relative weight and a gradient with more colour in the low–mid range.
+     * Same leaflet.heat options as Advertiser portal (design/Files/.../Heatmap.tsx HeatmapLayer).
+     * motion: moving → driving gradient, stopped → parking, both → combined.
      */
-    function buildAdminHeatmapPoints(pts) {
-        if (!pts.length) {
-            return [];
+    function adminHeatGradientForMotion(motion) {
+        if (motion === 'stopped') {
+            return { 0.0: '#000000', 0.3: '#F10DBF', 0.6: '#F10DBF', 1.0: '#FFFFFF' };
         }
-        const vals = pts.map(function (p) {
-            return Math.max(0, Number(p.intensity) || 0);
-        });
-        const positive = vals.filter(function (v) {
-            return v > 0;
-        });
-        let clip;
-        if (positive.length >= 8) {
-            const sorted = positive.slice().sort(function (a, b) {
-                return a - b;
-            });
-            const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.86));
-            clip = sorted[idx];
-        } else {
-            clip = Math.max.apply(null, positive.concat([1e-6]));
+        if (motion === 'moving') {
+            return { 0.0: '#000000', 0.3: '#C1F60D', 0.6: '#C1F60D', 1.0: '#FFFFFF' };
         }
-        clip = Math.max(clip, 1e-6);
 
-        return pts.map(function (p) {
-            const raw = Math.min(1, (Number(p.intensity) || 0) / clip);
-            const curved = Math.pow(raw, 0.48);
-            const w = 0.15 + 0.85 * curved;
-
-            return [Number(p.lat), Number(p.lng), Math.min(1, Math.max(0.14, w))];
-        });
+        return { 0.0: '#000000', 0.3: '#C1F60D', 0.5: '#F10DBF', 0.7: '#C1F60D', 1.0: '#FFFFFF' };
     }
 
     window.renderAdminTelemetryHeatmap = function (payload) {
         const pts = (payload.heatmap && payload.heatmap.points) ? payload.heatmap.points : [];
-        const heatData = buildAdminHeatmapPoints(pts);
+        const motion = (payload.filter && payload.filter.motion) ? payload.filter.motion : 'both';
+        const heatData = pts.map(function (p) {
+            const w = Number(p.intensity);
+
+            return [Number(p.lat), Number(p.lng), Number.isFinite(w) ? w : 0];
+        });
 
         const el = document.getElementById('admin-telemetry-map');
         if (!el) {
@@ -140,22 +125,11 @@
 
         if (heatData.length && typeof L.heatLayer === 'function') {
             heatLayer = L.heatLayer(heatData, {
-                radius: 28,
-                blur: 16,
+                radius: 25,
+                blur: 15,
                 maxZoom: 17,
-                max: 0.78,
-                minOpacity: 0.09,
-                gradient: {
-                    0.0: '#0f2942',
-                    0.15: '#1c5f8f',
-                    0.28: '#2a8f84',
-                    0.42: '#4caf6a',
-                    0.55: '#9cbd3e',
-                    0.68: '#d4a84b',
-                    0.8: '#e0783a',
-                    0.9: '#d94a3d',
-                    1.0: '#a31b2d',
-                },
+                max: 1.0,
+                gradient: adminHeatGradientForMotion(motion),
             });
             heatLayer.addTo(map);
             if (heatData.length === 1) {
