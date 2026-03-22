@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\CampaignVehicle;
 use App\Observers\CampaignVehicleObserver;
 use App\Services\Telemetry\DashboardMetricsServiceInterface;
+use App\Services\Telemetry\DatabaseDashboardMetricsService;
 use App\Services\Telemetry\DatabaseHeatmapDataService;
 use App\Services\Telemetry\HeatmapDataServiceInterface;
 use App\Services\Telemetry\HttpDashboardMetricsService;
@@ -32,7 +33,13 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(
             DashboardMetricsServiceInterface::class,
-            HttpDashboardMetricsService::class
+            function ($app) {
+                $url = config('telemetry.metrics_url');
+
+                return is_string($url) && $url !== ''
+                    ? $app->make(HttpDashboardMetricsService::class)
+                    : $app->make(DatabaseDashboardMetricsService::class);
+            }
         );
     }
 

@@ -17,15 +17,36 @@ git pull
 sudo bash deploy/apply-carplace-lv-on-server.sh
 ```
 
-Скрипт **`deploy/apply-carplace-lv-on-server.sh`** выставит в **`backend/.env`** URL/CORS/Sanctum/cookies под **carplace.lv**, скопирует Nginx с подстановкой реального пути к репозиторию, проверит конфиг и сделает **`php artisan config:cache`**.
+Скрипт **`deploy/apply-carplace-lv-on-server.sh`** выставит в **`backend/.env`** URL/CORS/Sanctum/cookies под **carplace.lv**, при необходимости скопирует HTTP-шаблон Nginx, проверит конфиг и сделает **`php artisan config:cache`**.
+
+> **Важно:** если вы уже запускали **Certbot**, повторный запуск скрипта **не перезаписывает** `sites-available/carfluencer`, если в нём есть **`listen 443`** / **`ssl_certificate`** (иначе слетает HTTPS). Если вы как раз затёрли SSL шаблоном — снова выполните **`certbot --nginx`** (пункт **1 — reinstall**).
 
 ### TLS (Certbot)
 
-Если ещё нет HTTPS:
+Сначала поставьте **плагин Nginx** (без него будет ошибка вроде *«The requested nginx plugin does not appear to be…»*):
+
+```bash
+sudo apt update
+sudo apt install -y certbot python3-certbot-nginx
+```
+
+Затем выпуск сертификата и правка конфига Nginx:
 
 ```bash
 sudo certbot --nginx -d www.carplace.lv -d carplace.lv
 ```
+
+После успешного HTTPS снова примените прод-настройки (secure cookie):
+
+```bash
+sudo bash deploy/apply-carplace-lv-on-server.sh
+```
+
+(По умолчанию скрипт ставит `SESSION_SECURE_COOKIE=true` — так и нужно при работе по **https://**.)
+
+#### Если плагин Nginx использовать нельзя
+
+Вариант **webroot** (Nginx уже отдаёт `/.well-known/acme-challenge/` — при необходимости добавьте `location` вручную) или **`certbot certonly --standalone`** на время остановки Nginx — см. [Certbot](https://certbot.eff.org/instructions).
 
 ## 3. Nginx вручную (если без скрипта)
 

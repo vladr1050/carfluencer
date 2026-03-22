@@ -20,6 +20,14 @@ type CampaignRow = {
   campaign_vehicles?: unknown[];
 };
 
+function dashboardSourceLabel(source?: string): string {
+  if (!source) return '—';
+  if (source === 'database') return 'PostgreSQL';
+  if (source === 'http') return 'External API';
+  if (source === 'mock' || source === 'mock_fallback') return 'Mock';
+  return source;
+}
+
 export function AdvertiserDashboard() {
   const [dash, setDash] = useState<DashboardPayload | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
@@ -83,10 +91,10 @@ export function AdvertiserDashboard() {
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl mb-2">Dashboard</h1>
-          <p className="text-muted-foreground">Live metrics from the Laravel API.</p>
+          <p className="text-muted-foreground">Campaign stats and telemetry aggregates from the API.</p>
         </div>
         <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-          Source: {dash.source ?? '—'}
+          Source: {dashboardSourceLabel(dash.source)}
         </span>
       </div>
 

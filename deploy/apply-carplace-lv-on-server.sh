@@ -8,12 +8,14 @@
 #
 # Что делает:
 #   • подставляет в backend/.env: APP_URL, FRONTEND_URL, CORS, Sanctum, SESSION_* под carplace.lv
-#   • копирует deploy/nginx-carfluencer.conf.example → /etc/nginx/sites-available/carfluencer
-#     с заменой /var/www/carfluencer на фактический путь к репозиторию
+#   • копирует deploy/nginx-carfluencer.conf.example → sites-available/carfluencer
+#     (только HTTP-шаблон) — НО если в текущем сайте уже есть SSL (Certbot), конфиг Nginx
+#     НЕ перезаписывается, чтобы не убрать listen 443.
 #   • nginx -t && reload
 #   • php artisan config:cache (от www-data)
 #
-# TLS: если ещё только HTTP, после скрипта выполните:
+# TLS: установите плагин, иначе certbot ругнётся на nginx:
+#   sudo apt install -y certbot python3-certbot-nginx
 #   sudo certbot --nginx -d www.carplace.lv -d carplace.lv
 #
 # Пока нет HTTPS, сессии в браузере не заработают с secure-cookie. Временно:
@@ -92,14 +94,21 @@ for k in vals:
     print(f"  {k}={vals[k]}")
 PY
 
-TMP_NGINX="$(mktemp)"
-sed "s|/var/www/carfluencer|${ROOT}|g" "$NGINX_SRC" > "$TMP_NGINX"
-install -m 0644 "$TMP_NGINX" "$NGINX_DST"
-rm -f "$TMP_NGINX"
+SKIP_NGINX_COPY=0
+if [[ -f "$NGINX_DST" ]] && grep -qE 'listen[[:space:]]+443|ssl_certificate' "$NGINX_DST"; then
+  echo "=== Nginx: пропуск копирования шаблона (в $NGINX_DST уже есть SSL — не затираем Certbot). ==="
+  SKIP_NGINX_COPY=1
+fi
+
+if [[ "$SKIP_NGINX_COPY" -eq 0 ]]; then
+  TMP_NGINX="$(mktemp)"
+  sed "s|/var/www/carfluencer|${ROOT}|g" "$NGINX_SRC" > "$TMP_NGINX"
+  install -m 0644 "$TMP_NGINX" "$NGINX_DST"
+  rm -f "$TMP_NGINX"
+fi
 
 ln -sf "$NGINX_DST" /etc/nginx/sites-enabled/carfluencer
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
-
 nginx -t
 systemctl reload nginx
 

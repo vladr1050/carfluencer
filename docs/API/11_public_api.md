@@ -70,7 +70,7 @@ Implemented in Laravel; data lands in PostgreSQL after ClickHouse sync (see `doc
 | GET | `/api/telemetry/vehicles` | IMEI list for telemetry: advertiser → vehicles on own campaigns; media owner → own fleet. |
 | GET | `/api/telemetry/campaigns` | Advertiser → own campaigns; media owner → campaigns involving their vehicles. |
 
-**Dashboard (optional remote metrics):** `TELEMETRY_METRICS_URL`, `TELEMETRY_METRICS_TOKEN` (see `backend/config/telemetry.php`).
+**Advertiser dashboard:** по умолчанию метрики из БД (`daily_impressions`, при отсутствии строк — оценка impressions по `device_locations` × `TELEMETRY_IMPRESSION_MULTIPLIER`). Внешний API (опционально): `TELEMETRY_METRICS_URL`, `TELEMETRY_METRICS_TOKEN` — при ошибке HTTP используется mock-fallback (см. `backend/config/telemetry.php`).
 
 **ClickHouse collector:** `TELEMETRY_CLICKHOUSE_ENABLED`, `TELEMETRY_CLICKHOUSE_URL`, `TELEMETRY_CLICKHOUSE_DATABASE`, `TELEMETRY_CLICKHOUSE_USER`, `TELEMETRY_CLICKHOUSE_PASSWORD`, `TELEMETRY_CLICKHOUSE_LOCATIONS_TABLE`.
 

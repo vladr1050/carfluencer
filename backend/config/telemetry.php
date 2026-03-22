@@ -7,10 +7,12 @@ return [
     | Remote metrics endpoint (optional)
     |--------------------------------------------------------------------------
     |
-    | When set, the advertiser dashboard will try to GET this URL with optional
-    | bearer token. Expected JSON keys: impressions, driving_distance_km,
-    | driving_time_hours, parking_time_hours (all optional). On failure, mock
-    | data is used.
+    | When set, the advertiser dashboard GETs this URL (optional bearer token).
+    | Expected JSON: impressions, driving_distance_km, driving_time_hours,
+    | parking_time_hours (optional). On HTTP failure → mock fallback.
+    |
+    | When unset, metrics come from PostgreSQL (daily_impressions + device_locations),
+    | same logic as the heatmap database driver — not random mock data.
     |
     */
     'metrics_url' => env('TELEMETRY_METRICS_URL'),
