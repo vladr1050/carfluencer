@@ -15,7 +15,8 @@ class SyncVehicleTelemetryFromClickHouseJob implements ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 600;
+    /** Historical backfill pages until the window is exhausted. */
+    public int $timeout = 7200;
 
     public function __construct(
         public int $vehicleId,

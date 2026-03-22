@@ -111,13 +111,11 @@ class ClickHouseLocationCollector
         }
 
         $limit ??= (int) config('telemetry.clickhouse.historical_rows_per_chunk', 80_000);
-        $limit = max(1_000, min(2_000_000, $limit));
+        $limit = max(1, min(2_000_000, $limit));
 
         $where = $this->buildTimeWhereRange($from, $to);
-        $sql = $this->buildSelectSql($where, $limit);
-        $rows = $this->client->queryJsonEachRow($sql);
 
-        return $this->importer->import($rows);
+        return $this->runHistoricalPagedImport($where, $limit);
     }
 
     /**
@@ -132,15 +130,13 @@ class ClickHouseLocationCollector
         }
 
         $limit ??= (int) config('telemetry.clickhouse.historical_rows_per_chunk', 80_000);
-        $limit = max(1_000, min(2_000_000, $limit));
+        $limit = max(1, min(2_000_000, $limit));
 
         $imei = $this->sanitizeImei($imei);
         $where = $this->buildTimeWhereRange($from, $to);
         $where .= ' AND '.$this->deviceColumnSql()." = '{$imei}'";
-        $sql = $this->buildSelectSql($where, $limit);
-        $rows = $this->client->queryJsonEachRow($sql);
 
-        return $this->importer->import($rows);
+        return $this->runHistoricalPagedImport($where, $limit);
     }
 
     /**
@@ -207,7 +203,7 @@ class ClickHouseLocationCollector
         }
 
         $limitPerChunk ??= (int) config('telemetry.clickhouse.historical_rows_per_chunk', 80_000);
-        $limitPerChunk = max(1_000, min(2_000_000, $limitPerChunk));
+        $limitPerChunk = max(1, min(2_000_000, $limitPerChunk));
         $chunkSize ??= (int) config('telemetry.clickhouse.historical_imei_chunk_size', 40);
         $chunkSize = max(1, min(500, $chunkSize));
         $pauseUs = ((int) config('telemetry.clickhouse.pause_ms_between_historical_chunks', 500)) * 1000;
@@ -225,15 +221,151 @@ class ClickHouseLocationCollector
         foreach ($chunks as $idx => $chunk) {
             $inList = implode(',', array_map(fn (string $i): string => "'{$i}'", $chunk));
             $where = $baseWhere." AND {$devCol} IN ({$inList})";
-            $sql = $this->buildSelectSql($where, $limitPerChunk);
-            $rows = $this->client->queryJsonEachRow($sql);
-            $total += $this->importer->import($rows);
+            $total += $this->runHistoricalPagedImport($where, $limitPerChunk);
             if ($pauseUs > 0 && $idx < count($chunks) - 1) {
                 usleep($pauseUs);
             }
         }
 
         return $total;
+    }
+
+    /**
+     * Page through ClickHouse using keyset (timestamp, device, lat, lng) until the batch is smaller than $pageLimit.
+     *
+     * @param  non-empty-string  $baseWhere  Time range (+ optional IMEI filters), without keyset clause
+     */
+    private function runHistoricalPagedImport(string $baseWhere, int $pageLimit): int
+    {
+        $maxPages = (int) config('telemetry.clickhouse.historical_max_pages', 50_000);
+        $maxPages = max(100, min(500_000, $maxPages));
+
+        $total = 0;
+        $where = $baseWhere;
+
+        for ($page = 0; $page < $maxPages; $page++) {
+            $sql = $this->buildSelectSql($where, $pageLimit, true);
+            $rows = $this->client->queryJsonEachRow($sql);
+            if ($rows === []) {
+                break;
+            }
+
+            $total += $this->importer->import($rows);
+            $n = count($rows);
+            if ($n < $pageLimit) {
+                break;
+            }
+
+            if ($page === $maxPages - 1) {
+                Log::warning('ClickHouse historical: reached historical_max_pages; window may be incomplete', [
+                    'pages' => $maxPages,
+                    'page_limit' => $pageLimit,
+                ]);
+                break;
+            }
+
+            $last = $rows[array_key_last($rows)];
+            $keyset = $this->extractHistoricalKeysetFromLastRow($last);
+            if ($keyset === null) {
+                Log::warning('ClickHouse historical: cannot build keyset from last row, stopping pagination');
+
+                break;
+            }
+
+            $where = '('.$baseWhere.') AND '.$this->buildHistoricalKeysetWhere($keyset);
+        }
+
+        return $total;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row  Raw JSONEachRow from ClickHouse
+     * @return array{ts: int|string, device_id: string, lat: float, lng: float, unix: bool}|null
+     */
+    private function extractHistoricalKeysetFromLastRow(array $row): ?array
+    {
+        $deviceId = $row['device_id'] ?? null;
+        if (! is_string($deviceId) && ! is_numeric($deviceId)) {
+            return null;
+        }
+        $deviceId = (string) $deviceId;
+        if ($deviceId === '') {
+            return null;
+        }
+
+        $tRaw = $row['event_at'] ?? $row['timestamp'] ?? null;
+        if ($tRaw === null) {
+            return null;
+        }
+
+        $unix = $this->isUnixTimestamp();
+        if ($unix) {
+            if (is_numeric($tRaw)) {
+                $ts = (int) $tRaw;
+            } else {
+                try {
+                    $ts = Carbon::parse((string) $tRaw, 'UTC')->timestamp;
+                } catch (\Throwable) {
+                    return null;
+                }
+            }
+        } else {
+            try {
+                $ts = Carbon::parse((string) $tRaw, 'UTC')->format('Y-m-d H:i:s');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        if (! is_numeric($row['latitude'] ?? null) || ! is_numeric($row['longitude'] ?? null)) {
+            return null;
+        }
+
+        return [
+            'ts' => $ts,
+            'device_id' => $deviceId,
+            'lat' => (float) $row['latitude'],
+            'lng' => (float) $row['longitude'],
+            'unix' => $unix,
+        ];
+    }
+
+    /**
+     * Strictly-after predicate for the last row of the previous page (stable sort: time, device, lat, lng).
+     *
+     * @param  array{ts: int|string, device_id: string, lat: float, lng: float, unix: bool}  $ks
+     */
+    private function buildHistoricalKeysetWhere(array $ks): string
+    {
+        $tsCol = $this->timestampColumnSql();
+        $preset = (string) config('telemetry.clickhouse.schema_preset', 'location');
+        $devCol = $preset === 'legacy' ? 'device_id' : $this->deviceColumnSql();
+        $devExpr = "toString({$devCol})";
+        $d = $this->escapeClickHouseString($ks['device_id']);
+        $l = $this->formatKeysetFloat($ks['lat']);
+        $g = $this->formatKeysetFloat($ks['lng']);
+
+        if ($ks['unix']) {
+            $t = (int) $ks['ts'];
+
+            return "(({$tsCol} > {$t}) OR ({$tsCol} = {$t} AND {$devExpr} > '{$d}') OR ({$tsCol} = {$t} AND {$devExpr} = '{$d}' AND (latitude, longitude) > ({$l}, {$g})))";
+        }
+
+        $t = $this->escapeClickHouseString((string) $ks['ts']);
+
+        return "(({$tsCol} > '{$t}') OR ({$tsCol} = '{$t}' AND {$devExpr} > '{$d}') OR ({$tsCol} = '{$t}' AND {$devExpr} = '{$d}' AND (latitude, longitude) > ({$l}, {$g})))";
+    }
+
+    private function escapeClickHouseString(string $s): string
+    {
+        return str_replace("'", "''", $s);
+    }
+
+    private function formatKeysetFloat(float $v): string
+    {
+        $s = rtrim(rtrim(sprintf('%.9f', $v), '0'), '.');
+
+        return $s === '' || $s === '-' ? '0' : $s;
     }
 
     /**
@@ -346,8 +478,9 @@ class ClickHouseLocationCollector
 
     /**
      * @param  non-empty-string  $whereClause  SQL boolean expression (no user input except sanitized imei above)
+     * @param  bool  $historicalKeysetOrder  When true, append device + lat/lng to ORDER BY for stable keyset pagination
      */
-    private function buildSelectSql(string $whereClause, int $limit): string
+    private function buildSelectSql(string $whereClause, int $limit, bool $historicalKeysetOrder = false): string
     {
         $table = (string) config('telemetry.clickhouse.locations_table');
         if (! preg_match('/^[a-zA-Z0-9_.]+$/', $table)) {
@@ -356,7 +489,15 @@ class ClickHouseLocationCollector
         $suffix = trim((string) config('telemetry.clickhouse.select_sql_suffix', ''));
         $preset = (string) config('telemetry.clickhouse.schema_preset', 'location');
         $tsCol = $this->timestampColumnSql();
-        $orderCol = $tsCol;
+        $orderBy = $tsCol.' ASC';
+        if ($historicalKeysetOrder) {
+            if ($preset === 'legacy') {
+                $orderBy = "{$tsCol} ASC, toString(device_id) ASC, latitude ASC, longitude ASC";
+            } else {
+                $devCol = $this->deviceColumnSql();
+                $orderBy = "{$tsCol} ASC, toString({$devCol}) ASC, latitude ASC, longitude ASC";
+            }
+        }
 
         if ($preset === 'legacy') {
             $select = <<<SQL
@@ -372,7 +513,7 @@ class ClickHouseLocationCollector
                     ignition
                 FROM {$table}
                 WHERE {$whereClause}
-                ORDER BY {$orderCol} ASC
+                ORDER BY {$orderBy}
                 LIMIT {$limit}
                 FORMAT JSONEachRow
                 SQL;
@@ -393,7 +534,7 @@ class ClickHouseLocationCollector
                     io
                 FROM {$table}
                 WHERE {$whereClause}
-                ORDER BY {$orderCol} ASC
+                ORDER BY {$orderBy}
                 LIMIT {$limit}
                 FORMAT JSONEachRow
                 SQL;

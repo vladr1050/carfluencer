@@ -71,7 +71,7 @@ Two modes (Artisan):
 | Command | Purpose |
 |---------|---------|
 | `php artisan telemetry:sync-incremental` | Rows with CH `timestamp` **greater than** global cursor; batch size = `--limit` or `TELEMETRY_CH_GLOBAL_INCREMENTAL_ROWS` |
-| `php artisan telemetry:sync-historical --from=… --to=…` | Window backfill; does **not** rewind incremental cursor |
+| `php artisan telemetry:sync-historical --from=… --to=…` | Window backfill; does **not** rewind incremental cursor. Repeats ClickHouse queries with **keyset pagination** (timestamp → device → lat/lng) until the window is exhausted or `TELEMETRY_CH_HISTORICAL_MAX_PAGES` is hit (~`rows_per_chunk × max_pages` rows max). |
 
 Requires `TELEMETRY_CLICKHOUSE_ENABLED=true` and ClickHouse HTTP settings in `.env` / `config/telemetry.php`. На деплое **`deploy/post-pull.sh`** вызывает **`php artisan telemetry:ensure-env`**, чтобы в `backend/.env` появились недостающие ключи из **`deploy/telemetry.env.fragment`** (уже заданные значения не перезаписываются).
 

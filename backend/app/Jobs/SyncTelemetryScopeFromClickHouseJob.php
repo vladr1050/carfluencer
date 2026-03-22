@@ -19,7 +19,8 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 900;
+    /** Historical sync may page through ClickHouse for a long window; keep above worst-case runtime. */
+    public int $timeout = 7200;
 
     /**
      * @param  'incremental'|'historical'  $mode

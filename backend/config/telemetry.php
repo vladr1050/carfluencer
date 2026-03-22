@@ -56,6 +56,8 @@ return [
         /** telemetry:sync-incremental без --limit (глобальный курсор по всей таблице) */
         'global_incremental_rows' => max(1_000, min(2_000_000, (int) env('TELEMETRY_CH_GLOBAL_INCREMENTAL_ROWS', 25_000))),
         'historical_rows_per_chunk' => max(5_000, min(2_000_000, (int) env('TELEMETRY_CH_HISTORICAL_ROWS_PER_CHUNK', 80_000))),
+        /** Страховка от бесконечного цикла при keyset-пагинации истории (страниц × размер страницы). */
+        'historical_max_pages' => max(100, min(500_000, (int) env('TELEMETRY_CH_HISTORICAL_MAX_PAGES', 50_000))),
         'historical_imei_chunk_size' => max(1, min(500, (int) env('TELEMETRY_CH_HISTORICAL_IMEI_CHUNK', 40))),
         'pause_ms_between_historical_chunks' => max(0, min(120_000, (int) env('TELEMETRY_CH_PAUSE_MS_HISTORICAL_CHUNK', 500))),
         'http_timeout_seconds' => max(30, min(600, (int) env('TELEMETRY_CH_HTTP_TIMEOUT', 120))),
