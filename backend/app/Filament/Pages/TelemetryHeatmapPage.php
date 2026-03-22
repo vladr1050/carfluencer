@@ -82,6 +82,14 @@ class TelemetryHeatmapPage extends Page
 
         $defaults = $this->mergeHeatmapDefaultsFromRequest($defaults);
 
+        // PHP parses form.x=y as query key form_x=y (underscore). That coexists with form[key]=… and confuses
+        // browsers/bookmarks. Strip legacy aliases once by redirecting to canonical ?form[...]= only.
+        if ($this->shouldRedirectToCanonicalHeatmapQuery()) {
+            $this->redirectToCanonicalHeatmapQuery($defaults);
+
+            return;
+        }
+
         // #[Url] may have hydrated partial $this->data from ?form[...]= before mount; merge defaults then sync back.
         $this->data = array_replace($defaults, array_filter(
             $this->data,
@@ -123,13 +131,20 @@ class TelemetryHeatmapPage extends Page
         // Do NOT merge flat form.map_scope / form.motion when form[...] exists: PHP keeps them as separate
         // keys, and applying both produced campaign scope without campaign_id while vehicle_id stayed set.
         if (! $hasBracketForm) {
+            // Dotted form.* becomes form_* in PHP (see shouldRedirectToCanonicalHeatmapQuery).
             $flatAliases = [
                 'form.map_scope' => 'map_scope',
+                'form_map_scope' => 'map_scope',
                 'form.motion' => 'motion',
+                'form_motion' => 'motion',
                 'form.campaign_id' => 'campaign_id',
+                'form_campaign_id' => 'campaign_id',
                 'form.vehicle_id' => 'vehicle_id',
+                'form_vehicle_id' => 'vehicle_id',
                 'form.date_from' => 'date_from',
+                'form_date_from' => 'date_from',
                 'form.date_to' => 'date_to',
+                'form_date_to' => 'date_to',
             ];
             foreach ($flatAliases as $queryKey => $field) {
                 if (! request()->has($queryKey)) {
@@ -138,6 +153,8 @@ class TelemetryHeatmapPage extends Page
                 $v = request()->query($queryKey);
                 if ($field === 'campaign_id' || $field === 'vehicle_id') {
                     $defaults[$field] = $v === null || $v === '' ? null : (int) $v;
+                } elseif ($field === 'date_from' || $field === 'date_to') {
+                    $defaults[$field] = $this->normalizeHeatmapDateInput($v);
                 } else {
                     $defaults[$field] = $v;
                 }
@@ -145,6 +162,76 @@ class TelemetryHeatmapPage extends Page
         }
 
         return $defaults;
+    }
+
+    /**
+     * Detects form_map_scope / form_motion etc. alongside form[...] (PHP's encoding of form.scope).
+     */
+    private function shouldRedirectToCanonicalHeatmapQuery(): bool
+    {
+        if (! is_array(request()->query('form'))) {
+            return false;
+        }
+
+        return $this->requestHasLegacyPhpFormDotAliases();
+    }
+
+    private function requestHasLegacyPhpFormDotAliases(): bool
+    {
+        foreach (array_keys(request()->query()) as $key) {
+            $key = (string) $key;
+            if (preg_match('/^form_(map_scope|motion|campaign_id|vehicle_id|date_from|date_to)$/', $key) === 1) {
+                return true;
+            }
+            if ($key === 'form.map_scope' || $key === 'form.motion' || $key === 'form.campaign_id' || $key === 'form.vehicle_id' || $key === 'form.date_from' || $key === 'form.date_to') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $mergedDefaults
+     */
+    private function redirectToCanonicalHeatmapQuery(array $mergedDefaults): void
+    {
+        $form = $this->onlyHeatmapUrlPersistedKeys($mergedDefaults);
+        $url = request()->url();
+        if ($form !== []) {
+            $url .= '?'.http_build_query(['form' => $form]);
+        }
+
+        $this->redirect($url, navigate: false);
+    }
+
+    /**
+     * Keys persisted in #[Url] (except vehicle_ids).
+     *
+     * @param  array<string, mixed>  $merged
+     * @return array<string, mixed>
+     */
+    private function onlyHeatmapUrlPersistedKeys(array $merged): array
+    {
+        $out = [];
+        foreach (['map_scope', 'campaign_id', 'vehicle_id', 'date_from', 'date_to', 'motion'] as $k) {
+            if (! array_key_exists($k, $merged)) {
+                continue;
+            }
+            $v = $merged[$k];
+            if ($v === null || $v === '' || (is_array($v) && $v === [])) {
+                continue;
+            }
+            if ($k === 'date_from' || $k === 'date_to') {
+                $v = $this->normalizeHeatmapDateInput($v);
+            }
+            if ($v === null || $v === '') {
+                continue;
+            }
+            $out[$k] = $v;
+        }
+
+        return $out;
     }
 
     /**
@@ -395,7 +482,7 @@ class TelemetryHeatmapPage extends Page
         return $schema
             ->components([
                 Section::make(__('Heatmap & ClickHouse'))
-                    ->description(__('Choose campaign, one vehicle, or a group; period and point type (moving / stopped / both). Data comes from PostgreSQL device_locations after ClickHouse import. OSM base map loads immediately; the coloured heat layer loads after "Load / refresh", or automatically on page open when filters are complete. Use one style of URL params: form[map_scope]=…&form[campaign_id]=… — do not mix with legacy form.map_scope=… (they conflict). Campaign mode needs form[campaign_id] or a picked campaign in the form.'))
+                    ->description(__('Choose campaign, one vehicle, or a group; period and point type (moving / stopped / both). Data comes from PostgreSQL device_locations after ClickHouse import. OSM base map loads immediately; the coloured heat layer loads after "Load / refresh", or automatically on page open when filters are complete. URLs: use only form[…]=… . PHP rewrites form.map_scope into form_map_scope=…; mixing that with form[map_scope]=… breaks filters — the page will redirect once to a clean form[…] URL. Campaign mode needs form[campaign_id] or a selected campaign.'))
                     ->schema([
                         Form::make([EmbeddedSchema::make('form')])
                             ->id('heatmap-main-form')
