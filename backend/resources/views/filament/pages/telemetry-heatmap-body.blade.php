@@ -28,6 +28,8 @@
     let resizeObserver = null;
     const defaultCenter = [56.88, 24.6];
     const defaultZoom = 7;
+    /** leaflet.heat: lower max → hotter; +20% color intensity vs previous baseline */
+    const HEATMAP_INTENSITY_BOOST = 1.2;
     const maptilerKey = {!! json_encode($maptilerKey) !!};
     const positronTileUrl = maptilerKey
         ? ('https://api.maptiler.com/maps/positron/{z}/{x}/{y}.png?key=' + encodeURIComponent(maptilerKey))
@@ -102,7 +104,7 @@
     });
 
     /**
-     * Same leaflet.heat options as Advertiser portal (design/Files/.../Heatmap.tsx HeatmapLayer).
+     * Same leaflet.heat options as Advertiser portal (frontend/.../Heatmap.tsx HeatmapLayer).
      * motion: moving → driving gradient, stopped → parking, both → combined.
      */
     function adminHeatGradientForMotion(motion) {
@@ -146,7 +148,7 @@
                 radius: 25,
                 blur: 15,
                 maxZoom: 17,
-                max: 1.0,
+                max: 1.0 / HEATMAP_INTENSITY_BOOST,
                 gradient: adminHeatGradientForMotion(motion),
             });
             heatLayer.addTo(map);

@@ -37,6 +37,9 @@ const HEATMAP_DEFAULT_CENTER: LatLngTuple = [56.88, 24.6];
 const HEATMAP_DEFAULT_ZOOM_NO_DATA = 7;
 const HEATMAP_DEFAULT_ZOOM_WITH_DATA = 11;
 
+/** leaflet.heat: lower `max` → hotter colors; 1/1.2 ≈ +20% intensity vs previous baseline. */
+const HEATMAP_INTENSITY_BOOST = 1.2;
+
 function HeatmapLayer({ data, mode }: { data: [number, number, number][]; mode: string }) {
   const map = useMap();
 
@@ -61,7 +64,7 @@ function HeatmapLayer({ data, mode }: { data: [number, number, number][]; mode: 
         radius: 25,
         blur: 15,
         maxZoom: 17,
-        max: 1.0,
+        max: 1.0 / HEATMAP_INTENSITY_BOOST,
         gradient,
       });
 
