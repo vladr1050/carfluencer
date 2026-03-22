@@ -63,7 +63,7 @@ class TelemetryHeatmapPage extends Page
 
     public function mount(): void
     {
-        $this->form->fill([
+        $defaults = [
             'map_scope' => 'vehicle',
             'campaign_id' => null,
             'vehicle_id' => Vehicle::query()->orderByDesc('id')->value('id'),
@@ -71,7 +71,78 @@ class TelemetryHeatmapPage extends Page
             'date_from' => now()->subDays(7)->toDateString(),
             'date_to' => now()->toDateString(),
             'motion' => 'both',
-        ]);
+        ];
+
+        $defaults = $this->mergeHeatmapDefaultsFromRequest($defaults);
+
+        $this->form->fill($defaults);
+
+        if (request()->boolean('no_heatmap_autoload')) {
+            return;
+        }
+
+        // Use $this->data here, not getState(): full form validation can throw when e.g. campaign_id is empty.
+        if ($this->validateHeatmapFilters($this->data ?? []) === null) {
+            $this->loadHeatmap();
+        }
+    }
+
+    /**
+     * Merge ?data[...]= and legacy ?form.map_scope= style query keys into form defaults.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @return array<string, mixed>
+     */
+    private function mergeHeatmapDefaultsFromRequest(array $defaults): array
+    {
+        $data = request()->query('data');
+        if (is_array($data)) {
+            foreach ([
+                'map_scope',
+                'campaign_id',
+                'vehicle_id',
+                'vehicle_ids',
+                'date_from',
+                'date_to',
+                'motion',
+            ] as $key) {
+                if (! array_key_exists($key, $data)) {
+                    continue;
+                }
+                $v = $data[$key];
+                if ($key === 'campaign_id' || $key === 'vehicle_id') {
+                    $defaults[$key] = $v === null || $v === '' ? null : (int) $v;
+                } elseif ($key === 'vehicle_ids') {
+                    $defaults[$key] = is_array($v)
+                        ? array_values(array_filter(array_map('intval', $v)))
+                        : array_values(array_filter([(int) $v]));
+                } else {
+                    $defaults[$key] = $v;
+                }
+            }
+        }
+
+        $flatAliases = [
+            'form.map_scope' => 'map_scope',
+            'form.motion' => 'motion',
+            'form.campaign_id' => 'campaign_id',
+            'form.vehicle_id' => 'vehicle_id',
+            'form.date_from' => 'date_from',
+            'form.date_to' => 'date_to',
+        ];
+        foreach ($flatAliases as $queryKey => $field) {
+            if (! request()->has($queryKey)) {
+                continue;
+            }
+            $v = request()->query($queryKey);
+            if ($field === 'campaign_id' || $field === 'vehicle_id') {
+                $defaults[$field] = $v === null || $v === '' ? null : (int) $v;
+            } else {
+                $defaults[$field] = $v;
+            }
+        }
+
+        return $defaults;
     }
 
     public function defaultForm(Schema $schema): Schema
@@ -189,8 +260,17 @@ class TelemetryHeatmapPage extends Page
         return array_filter($params, fn ($v) => $v !== null && $v !== '' && $v !== []);
     }
 
-    private function validateObjectScope(array $s): ?string
+    /**
+     * Lightweight checks (no full Filament getState / validate).
+     *
+     * @param  array<string, mixed>  $s
+     */
+    private function validateHeatmapFilters(array $s): ?string
     {
+        if (isset($s['form']) && is_array($s['form']) && array_key_exists('map_scope', $s['form'])) {
+            $s = $s['form'];
+        }
+
         $scope = $s['map_scope'] ?? '';
         if ($scope === 'campaign' && empty($s['campaign_id'])) {
             return __('Select a campaign.');
@@ -211,7 +291,7 @@ class TelemetryHeatmapPage extends Page
     public function loadHeatmap(): void
     {
         $s = $this->heatmapFormState();
-        if ($msg = $this->validateObjectScope($s)) {
+        if ($msg = $this->validateHeatmapFilters($s)) {
             Notification::make()->title($msg)->danger()->send();
 
             return;
@@ -256,7 +336,7 @@ class TelemetryHeatmapPage extends Page
         return $schema
             ->components([
                 Section::make(__('Heatmap & ClickHouse'))
-                    ->description(__('Choose campaign, one vehicle, or a group; period and point type (moving / stopped / both). Data comes from PostgreSQL `device_locations` after import from ClickHouse.'))
+                    ->description(__('Choose campaign, one vehicle, or a group; period and point type (moving / stopped / both). Data comes from PostgreSQL device_locations after ClickHouse import. OSM base map loads immediately; the coloured heat layer loads after "Load / refresh", or automatically on page open when filters are complete. Campaign mode requires a selected campaign or URL data[campaign_id]=ID. Example: ?data[map_scope]=vehicle&data[vehicle_id]=1&data[motion]=both (using only form.map_scope=campaign without campaign_id shows no heat).'))
                     ->schema([
                         Form::make([EmbeddedSchema::make('form')])
                             ->id('heatmap-main-form')
