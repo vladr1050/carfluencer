@@ -16,7 +16,13 @@
 # TLS: если ещё только HTTP, после скрипта выполните:
 #   sudo certbot --nginx -d www.carplace.lv -d carplace.lv
 #
+# Пока нет HTTPS, сессии в браузере не заработают с secure-cookie. Временно:
+#   sudo CARPLACE_SESSION_SECURE=false bash deploy/apply-carplace-lv-on-server.sh
+# После certbot снова запустите без переменной (или CARPLACE_SESSION_SECURE=true).
+#
 set -euo pipefail
+
+SESSION_SECURE_VALUE="${CARPLACE_SESSION_SECURE:-true}"
 
 if [[ "${EUID:-0}" -ne 0 ]]; then
   echo "Нужен root: sudo bash $0"
@@ -40,18 +46,19 @@ fi
 
 echo "=== Репозиторий: $ROOT ==="
 
-python3 - "$ENV_FILE" <<'PY'
+python3 - "$ENV_FILE" "$SESSION_SECURE_VALUE" <<'PY'
 import re
 import sys
 
 path = sys.argv[1]
+secure = sys.argv[2]
 vals = {
     "APP_URL": "https://www.carplace.lv",
     "FRONTEND_URL": "https://www.carplace.lv",
     "CORS_ALLOWED_ORIGINS": "https://www.carplace.lv,https://carplace.lv",
     "SANCTUM_STATEFUL_DOMAINS": "www.carplace.lv,carplace.lv",
     "SESSION_DOMAIN": ".carplace.lv",
-    "SESSION_SECURE_COOKIE": "true",
+    "SESSION_SECURE_COOKIE": secure,
     "SESSION_SAME_SITE": "lax",
 }
 
