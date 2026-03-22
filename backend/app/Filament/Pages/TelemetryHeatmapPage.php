@@ -106,19 +106,21 @@ class TelemetryHeatmapPage extends Page
             return;
         }
 
-        // Use $this->data, not getState(): full form validation can throw when e.g. campaign_id is empty.
-        $heatmapFilterError = $this->validateHeatmapFilters($this->data);
+        // Use heatmapFormState(), not $this->form->getState(): getState() runs full Filament validate()
+        // and can block or throw on hidden/required/date rules while the API only needs a few fields.
+        $heatmapState = $this->heatmapFormState();
+        $heatmapFilterError = $this->validateHeatmapFilters($heatmapState);
         if ($heatmapFilterError === null) {
             $this->loadHeatmap();
         } else {
             Log::warning('telemetry_heatmap_autoload_skipped', [
                 'reason' => $heatmapFilterError,
-                'map_scope' => $this->data['map_scope'] ?? null,
-                'has_campaign_id' => ! empty($this->data['campaign_id']),
-                'has_vehicle_id' => ! empty($this->data['vehicle_id']),
+                'map_scope' => $heatmapState['map_scope'] ?? null,
+                'has_campaign_id' => ! empty($heatmapState['campaign_id']),
+                'has_vehicle_id' => ! empty($heatmapState['vehicle_id']),
             ]);
 
-            if (($this->data['map_scope'] ?? '') === 'campaign' && empty($this->data['campaign_id'])) {
+            if (($heatmapState['map_scope'] ?? '') === 'campaign' && empty($heatmapState['campaign_id'])) {
                 Notification::make()
                     ->title(__('Choose a campaign'))
                     ->body(__('Campaign is selected but no campaign is chosen. Pick a campaign in the form or add form[campaign_id]=… to the URL, then use “Load / refresh”. A leftover vehicle_id in the link is ignored in campaign mode.'))
@@ -412,18 +414,21 @@ class TelemetryHeatmapPage extends Page
     }
 
     /**
-     * EmbeddedSchema::make('form') can nest field state under `form` depending on Filament version.
+     * Heatmap filters for API calls: read Livewire `data` directly (statePath is `data`).
+     *
+     * Do not use {@see Schema::getState()}: it runs full schema validation and can fail or omit values
+     * when fields are hidden — advertiser JSON API does not have that layer.
      *
      * @return array<string, mixed>
      */
     private function heatmapFormState(): array
     {
-        $s = $this->form->getState();
-        if (isset($s['form']) && is_array($s['form']) && array_key_exists('map_scope', $s['form'])) {
-            return $s['form'];
+        $raw = is_array($this->data) ? $this->data : [];
+        if (isset($raw['form']) && is_array($raw['form']) && array_key_exists('map_scope', $raw['form'])) {
+            return $this->normalizeHeatmapScopeFields($raw['form']);
         }
 
-        return $s;
+        return $this->normalizeHeatmapScopeFields($raw);
     }
 
     private function scalarForHttpQuery(mixed $value): mixed
@@ -546,7 +551,7 @@ class TelemetryHeatmapPage extends Page
                                 SchemaActions::make([
                                     Action::make('load')
                                         ->label(__('Load / refresh heatmap'))
-                                        ->submit('loadHeatmap')
+                                        ->action('loadHeatmap')
                                         ->color('primary'),
                                 ])->alignment(Alignment::Start),
                             ]),
