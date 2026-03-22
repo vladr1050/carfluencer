@@ -7,6 +7,14 @@ use App\Models\User;
 
 class CampaignPolicy
 {
+    /**
+     * Filament admin: full access. Portal rules below for advertisers / media owners.
+     */
+    public function before(User $user, string $ability, mixed ...$arguments): ?bool
+    {
+        return $user->isAdmin() ? true : null;
+    }
+
     public function view(User $user, Campaign $campaign): bool
     {
         if ($user->isAdvertiser()) {

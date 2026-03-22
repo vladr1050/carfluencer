@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Vehicles\RelationManagers;
 
+use App\Models\Campaign;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -38,6 +39,7 @@ class VehicleCampaignsRelationManager extends RelationManager
                 TextColumn::make('start_date')->date()->placeholder('—'),
                 TextColumn::make('end_date')->date()->placeholder('—'),
             ])
-            ->defaultSort('id', 'desc');
+            // Unqualified "id" is ambiguous on PostgreSQL (campaigns.id vs campaign_vehicles.id).
+            ->defaultSort((new Campaign)->getQualifiedKeyName(), 'desc');
     }
 }
