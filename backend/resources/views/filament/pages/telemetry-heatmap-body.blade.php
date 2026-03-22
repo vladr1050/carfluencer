@@ -8,7 +8,7 @@
         id="admin-telemetry-map"
         wire:ignore
         class="z-0 w-full rounded-lg border border-gray-200 dark:border-gray-700"
-        style="height: min(560px, 55vh); min-height: 320px;"
+        style="height: min(560px, 55vh); min-height: 320px; background-color: #d4d4d4;"
     ></div>
 </div>
 
@@ -38,9 +38,9 @@
             return true;
         }
         map = L.map(el, { preferCanvas: true }).setView(defaultCenter, defaultZoom);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; OpenStreetMap',
+        L.tileLayer(grayTileUrl, {
+            maxZoom: 20,
+            attribution: grayTileAttribution,
         }).addTo(map);
         if (resizeObserver) {
             resizeObserver.disconnect();

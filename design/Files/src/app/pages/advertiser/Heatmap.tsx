@@ -14,6 +14,16 @@ declare module 'leaflet' {
   function heatLayer(latlngs: [number, number, number][], options?: Record<string, unknown>): L.Layer;
 }
 
+/** Gray basemap (same family as admin Filament heatmap). */
+const HEATMAP_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
+const HEATMAP_TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+/** Approx. geographic centre of Latvia */
+const HEATMAP_DEFAULT_CENTER: LatLngTuple = [56.88, 24.6];
+const HEATMAP_DEFAULT_ZOOM_NO_DATA = 7;
+const HEATMAP_DEFAULT_ZOOM_WITH_DATA = 11;
+
 function HeatmapLayer({ data, mode }: { data: [number, number, number][]; mode: string }) {
   const map = useMap();
 
@@ -77,10 +87,7 @@ function MapInvalidateOnResize() {
 function MapContent({ data, mode }: { data: [number, number, number][]; mode: string }) {
   return (
     <>
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <TileLayer attribution={HEATMAP_TILE_ATTRIBUTION} url={HEATMAP_TILE_URL} maxZoom={20} />
       <MapInvalidateOnResize />
       <HeatmapLayer data={data} mode={mode} />
     </>
@@ -235,7 +242,7 @@ export function AdvertiserHeatmap() {
         : 'linear-gradient(to right, #000000, #C1F60D, #F10DBF, #FFFFFF)';
 
   const center: LatLngTuple =
-    heatmapData.length > 0 ? [heatmapData[0][0], heatmapData[0][1]] : [51.505, -0.09];
+    heatmapData.length > 0 ? [heatmapData[0][0], heatmapData[0][1]] : HEATMAP_DEFAULT_CENTER;
 
   return (
     <div className="flex h-dvh min-h-0 flex-col bg-background">
@@ -399,9 +406,9 @@ export function AdvertiserHeatmap() {
 
         <MapContainer
           center={center}
-          zoom={hasData ? 11 : 13}
-          className="z-0 h-full w-full min-h-[280px]"
-          style={{ height: '100%', width: '100%', minHeight: '280px' }}
+          zoom={hasData ? HEATMAP_DEFAULT_ZOOM_WITH_DATA : HEATMAP_DEFAULT_ZOOM_NO_DATA}
+          className="z-0 h-full w-full min-h-[280px] bg-[#d4d4d4]"
+          style={{ height: '100%', width: '100%', minHeight: '280px', background: '#d4d4d4' }}
         >
           <MapContent data={heatmapData} mode={mode} />
         </MapContainer>
