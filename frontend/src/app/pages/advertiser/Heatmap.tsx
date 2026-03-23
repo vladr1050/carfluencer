@@ -177,6 +177,8 @@ type HeatmapApi = {
       driving_time_hours: number;
       parking_time_hours: number;
       mode: string;
+      /** stopped | moving | both — same filter semantics as admin heatmap */
+      heatmap_motion?: string;
     };
   };
 };

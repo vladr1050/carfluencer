@@ -5,7 +5,6 @@ namespace App\Services\Telemetry;
 use App\Models\Campaign;
 use App\Models\DeviceLocation;
 use App\Models\Vehicle;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -52,7 +51,7 @@ class AdminHeatmapDataService
             $q->whereDate('event_at', '<=', $filters['date_to']);
         }
 
-        $this->applyMotionFilter($q, $motion);
+        DeviceLocationMotionScope::apply($q, $motion);
 
         $samples = (int) $q->clone()->count();
 
@@ -152,37 +151,5 @@ class AdminHeatmapDataService
         }
 
         return [];
-    }
-
-    private function applyMotionFilter(Builder $q, string $motion): void
-    {
-        if ($motion === 'both') {
-            return;
-        }
-
-        $t = (float) config('telemetry.parking_speed_kmh_max');
-
-        if ($motion === 'stopped') {
-            // Same idea as StopSessionBuilderService::isParking()
-            $q->where(function ($w) use ($t): void {
-                $w->where('ignition', false)
-                    ->orWhere(function ($w2) use ($t): void {
-                        $w2->whereNotNull('speed')->where('speed', '<=', $t);
-                    });
-            });
-
-            return;
-        }
-
-        if ($motion === 'moving') {
-            // NOT (parking): ignition not false AND (speed null OR speed > threshold)
-            $q->where(function ($w) use ($t): void {
-                $w->where(function ($w2): void {
-                    $w2->whereNull('ignition')->orWhere('ignition', true);
-                })->where(function ($w2) use ($t): void {
-                    $w2->whereNull('speed')->orWhere('speed', '>', $t);
-                });
-            });
-        }
     }
 }

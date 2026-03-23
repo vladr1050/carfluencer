@@ -41,6 +41,8 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             $q->whereDate('event_at', '<=', $filters['date_to']);
         }
 
+        DeviceLocationMotionScope::applyAdvertiserMode($q, $mode);
+
         $driver = DB::getDriverName();
         if ($driver === 'pgsql') {
             $buckets = $q->clone()
@@ -63,6 +65,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
 
         $metrics = $this->resolveMetrics($campaignId, $filters);
         $metrics['mode'] = $mode;
+        $metrics['heatmap_motion'] = self::heatmapMotionLabel($mode);
         $metrics['campaign_id'] = $campaignId;
         $metrics['intensity_gamma'] = TelemetryHeatmapConfig::intensityGamma();
 
@@ -122,6 +125,8 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         if ($to) {
             $locQ->whereDate('event_at', '<=', $to);
         }
+        $mode = $filters['mode'] ?? 'both';
+        DeviceLocationMotionScope::applyAdvertiserMode($locQ, $mode);
         $rawCount = $locQ->count();
         $mult = (int) config('telemetry.impression_sample_multiplier');
 
@@ -146,9 +151,19 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             'driving_time_hours' => 0.0,
             'parking_time_hours' => 0.0,
             'mode' => $mode,
+            'heatmap_motion' => self::heatmapMotionLabel($mode),
             'campaign_id' => $campaignId,
             'data_source' => 'none',
             'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
         ];
+    }
+
+    private static function heatmapMotionLabel(string $mode): string
+    {
+        return match ($mode) {
+            'parking' => 'stopped',
+            'driving' => 'moving',
+            default => 'both',
+        };
     }
 }

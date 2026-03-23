@@ -177,6 +177,7 @@ type HeatmapApi = {
       driving_time_hours: number;
       parking_time_hours: number;
       mode: string;
+      heatmap_motion?: string;
     };
   };
 };
