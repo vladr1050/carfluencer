@@ -89,13 +89,17 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
     }
 
     /**
-     * Driving distance (km) from GPS segments in range; same speed rule as daily rollup (>5 km/h or unknown speed counts).
+     * One streaming pass per IMEI: driving km (same rule as daily rollup) + parking minutes (consecutive “stopped” segments).
      *
      * @param  list<string>  $imeis
+     * @return array{km: float, parking_minutes: float}
      */
-    private function estimateDrivingDistanceKmForDateRange(array $imeis, ?string $from, ?string $to): float
+    private function estimateDrivingAndParkingFromDeviceLocations(array $imeis, ?string $from, ?string $to): array
     {
-        $total = 0.0;
+        $maxGap = (int) config('telemetry.heatmap.max_parking_segment_seconds', 7200);
+        $totalKm = 0.0;
+        $totalParkMin = 0.0;
+
         foreach ($imeis as $imei) {
             $q = DeviceLocation::query()
                 ->where('device_id', $imei)
@@ -106,13 +110,20 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             if ($to) {
                 $q->whereDate('event_at', '<=', $to);
             }
-            // Stream rows — loading all points with get() OOMs production heatmap requests on large fleets/ranges.
+
             $prev = null;
-            foreach ($q->clone()->orderBy('id')->cursor(['id', 'latitude', 'longitude', 'speed']) as $p) {
+            foreach ($q->clone()->orderBy('id')->cursor(['id', 'latitude', 'longitude', 'speed', 'ignition']) as $p) {
                 if ($prev !== null) {
+                    $secs = max(0, $prev->event_at->diffInSeconds($p->event_at));
+                    if ($secs > 0 && $secs <= $maxGap
+                        && DeviceLocationMotionScope::isParkingState($prev->ignition, $prev->speed)
+                        && DeviceLocationMotionScope::isParkingState($p->ignition, $p->speed)) {
+                        $totalParkMin += $secs / 60.0;
+                    }
+
                     $sp = $p->speed !== null ? (float) $p->speed : null;
                     if ($sp === null || $sp > 5) {
-                        $total += GeoMath::haversineKm(
+                        $totalKm += GeoMath::haversineKm(
                             (float) $prev->latitude,
                             (float) $prev->longitude,
                             (float) $p->latitude,
@@ -124,7 +135,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             }
         }
 
-        return $total;
+        return ['km' => $totalKm, 'parking_minutes' => $totalParkMin];
     }
 
     /**
@@ -167,10 +178,22 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $parkMinSessions = $svc->sumCampaignStopSessionMinutes($campaignId, 'parking', $from, $to, $vehicleIdsArr);
 
         if ($impr > 0 || $dist > 0 || $parkMin > 0 || $driveMinSessions > 0 || $parkMinSessions > 0) {
+            $needsKmEst = $dist <= 0.0 && ($impr > 0 || $driveMinSessions > 0 || $parkMinSessions > 0);
+            $needsParkEst = $parkMin <= 0 && $parkMinSessions <= 0
+                && ($impr > 0 || $dist > 0 || $driveMinSessions > 0 || $parkMinSessions > 0 || $needsKmEst);
+
             $estimatedDist = 0.0;
-            if ($dist <= 0.0 && ($impr > 0 || $driveMinSessions > 0 || $parkMinSessions > 0)) {
-                $estimatedDist = $this->estimateDrivingDistanceKmForDateRange($imeis, $from, $to);
+            $estimatedParkMin = 0.0;
+            if ($needsKmEst || $needsParkEst) {
+                $est = $this->estimateDrivingAndParkingFromDeviceLocations($imeis, $from, $to);
+                if ($needsKmEst) {
+                    $estimatedDist = $est['km'];
+                }
+                if ($needsParkEst) {
+                    $estimatedParkMin = $est['parking_minutes'];
+                }
             }
+
             $effectiveDist = $dist > 0 ? $dist : $estimatedDist;
 
             $drivingHours = $driveMinSessions > 0
@@ -178,9 +201,13 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
                 : ($effectiveDist > 0 ? round($effectiveDist / 35, 1) : 0.0);
             $parkingHours = $parkMin > 0
                 ? round($parkMin / 60, 1)
-                : ($parkMinSessions > 0 ? round($parkMinSessions / 60, 1) : 0.0);
+                : ($parkMinSessions > 0
+                    ? round($parkMinSessions / 60, 1)
+                    : ($estimatedParkMin > 0 ? round($estimatedParkMin / 60, 1) : 0.0));
 
-            $dataSource = ($dist <= 0.0 && $estimatedDist > 0.0) ? 'daily_impressions_estimated' : 'daily_impressions';
+            $usedGpsEst = ($dist <= 0.0 && $estimatedDist > 0.0)
+                || ($parkMin <= 0 && $parkMinSessions <= 0 && $estimatedParkMin > 0.0);
+            $dataSource = $usedGpsEst ? 'daily_impressions_estimated' : 'daily_impressions';
 
             return [
                 'impressions' => $impr,
@@ -201,16 +228,20 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $rawCount = $locQ->count();
         $mult = (int) config('telemetry.impression_sample_multiplier');
 
-        $estDist = $this->estimateDrivingDistanceKmForDateRange($imeis, $from, $to);
+        $est = $this->estimateDrivingAndParkingFromDeviceLocations($imeis, $from, $to);
+        $estDist = $est['km'];
+        $estParkMin = $est['parking_minutes'];
         $driveMinSessionsFb = $svc->sumCampaignStopSessionMinutes($campaignId, 'driving', $from, $to, $vehicleIdsArr);
         $parkMinSessionsFb = $svc->sumCampaignStopSessionMinutes($campaignId, 'parking', $from, $to, $vehicleIdsArr);
 
         $drivingHoursFb = $driveMinSessionsFb > 0
             ? round($driveMinSessionsFb / 60, 1)
             : ($estDist > 0 ? round($estDist / 35, 1) : 0.0);
-        $parkingHoursFb = $parkMinSessionsFb > 0 ? round($parkMinSessionsFb / 60, 1) : 0.0;
+        $parkingHoursFb = $parkMinSessionsFb > 0
+            ? round($parkMinSessionsFb / 60, 1)
+            : ($estParkMin > 0 ? round($estParkMin / 60, 1) : 0.0);
 
-        $hasTelemetry = $estDist > 0.0 || $driveMinSessionsFb > 0 || $parkMinSessionsFb > 0;
+        $hasTelemetry = $estDist > 0.0 || $estParkMin > 0.0 || $driveMinSessionsFb > 0 || $parkMinSessionsFb > 0;
 
         return [
             'impressions' => $rawCount * $mult,

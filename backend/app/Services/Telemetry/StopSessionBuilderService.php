@@ -55,7 +55,6 @@ class StopSessionBuilderService
             return 0;
         }
 
-        $threshold = (float) config('telemetry.parking_speed_kmh_max');
         $minSec = (int) config('telemetry.min_session_seconds');
 
         $sessions = [];
@@ -64,7 +63,7 @@ class StopSessionBuilderService
         $bucket = [];
 
         foreach ($points as $p) {
-            $kind = $this->isParking($p, $threshold) ? 'parking' : 'driving';
+            $kind = DeviceLocationMotionScope::isParkingState($p->ignition, $p->speed) ? 'parking' : 'driving';
             if ($currentKind === null) {
                 $currentKind = $kind;
                 $bucket = [$p];
@@ -123,17 +122,5 @@ class StopSessionBuilderService
             'point_count' => count($bucket),
             'kind' => $currentKind,
         ];
-    }
-
-    private function isParking(DeviceLocation $p, float $threshold): bool
-    {
-        if ($p->ignition === false) {
-            return true;
-        }
-        if ($p->speed !== null && (float) $p->speed <= $threshold) {
-            return true;
-        }
-
-        return false;
     }
 }

@@ -10,6 +10,23 @@ use Illuminate\Database\Eloquent\Builder;
 final class DeviceLocationMotionScope
 {
     /**
+     * Same rules as {@see StopSessionBuilderService} session kind: parking when ignition off or speed known and ≤ threshold.
+     */
+    public static function isParkingState(?bool $ignition, mixed $speed): bool
+    {
+        if ($ignition === false) {
+            return true;
+        }
+
+        $t = (float) config('telemetry.parking_speed_kmh_max');
+        if ($speed !== null && $speed !== '' && (float) $speed <= $t) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * @param  string  $motion  admin API: both | moving | stopped
      */
     public static function apply(Builder $query, string $motion): void

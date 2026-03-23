@@ -81,6 +81,31 @@ class AdvertiserHeatmapMetricsEstimatedTest extends TestCase
             'ignition' => true,
             'extra_json' => null,
         ]);
+        // Stopped telemetry (speed ≤ parking threshold): 30 min → parking time estimate
+        DeviceLocation::query()->create([
+            'device_id' => $vehicle->imei,
+            'event_at' => '2026-03-10 14:00:00',
+            'latitude' => 54.7,
+            'longitude' => 25.5,
+            'speed' => 0,
+            'battery' => null,
+            'gsm_signal' => null,
+            'odometer' => null,
+            'ignition' => true,
+            'extra_json' => null,
+        ]);
+        DeviceLocation::query()->create([
+            'device_id' => $vehicle->imei,
+            'event_at' => '2026-03-10 14:30:00',
+            'latitude' => 54.7,
+            'longitude' => 25.5,
+            'speed' => 0,
+            'battery' => null,
+            'gsm_signal' => null,
+            'odometer' => null,
+            'ignition' => true,
+            'extra_json' => null,
+        ]);
 
         Sanctum::actingAs($advertiser);
 
@@ -93,5 +118,7 @@ class AdvertiserHeatmapMetricsEstimatedTest extends TestCase
         $this->assertGreaterThan(5.0, $km, 'Estimated driving distance should reflect GPS segment');
         $hours = (float) $res->json('heatmap.metrics.driving_time_hours');
         $this->assertGreaterThan(0.0, $hours, 'Driving time should derive from distance or sessions');
+        $parkH = (float) $res->json('heatmap.metrics.parking_time_hours');
+        $this->assertGreaterThanOrEqual(0.5, $parkH, 'Parking hours from consecutive low-speed GPS segment');
     }
 }

@@ -79,6 +79,10 @@ return [
          * 1.0 = linear; >1 (default) emphasizes peaks vs mid-density areas.
          */
         'intensity_gamma' => max(1.0, min(3.0, (float) env('TELEMETRY_HEATMAP_INTENSITY_GAMMA', 1.55))),
+        /**
+         * GPS fallback for parking hours: ignore gaps longer than this between consecutive points (device offline).
+         */
+        'max_parking_segment_seconds' => max(60, min(86400, (int) env('TELEMETRY_HEATMAP_MAX_PARKING_SEGMENT_SECONDS', 7200))),
     ],
 
     /*
