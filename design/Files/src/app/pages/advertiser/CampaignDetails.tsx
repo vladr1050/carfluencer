@@ -18,6 +18,15 @@ type CampaignVehicleRow = {
   agreed_price: string | null;
   vehicle?: VehicleRow;
 };
+type VehicleTelemetryRow = {
+  campaign_vehicle_id: number;
+  vehicle_id: number;
+  impressions: number;
+  driving_distance_km: number;
+  driving_time_hours: number;
+  parking_time_hours: number;
+  data_source: string;
+};
 type CampaignDetail = {
   id: number;
   name: string;
@@ -26,6 +35,7 @@ type CampaignDetail = {
   start_date: string | null;
   end_date: string | null;
   campaign_vehicles?: CampaignVehicleRow[];
+  vehicle_telemetry?: VehicleTelemetryRow[];
 };
 
 type ProofRow = {
@@ -171,6 +181,9 @@ export function AdvertiserCampaignDetails() {
   }
 
   const rows = campaign.campaign_vehicles ?? [];
+  const telemetryByVehicleId = new Map(
+    (campaign.vehicle_telemetry ?? []).map((t) => [t.vehicle_id, t] as const),
+  );
   const linkedIds = new Set(rows.map((r) => r.vehicle_id));
   const availableCatalog = catalog.filter((v) => !linkedIds.has(v.id));
 
@@ -247,11 +260,14 @@ export function AdvertiserCampaignDetails() {
       </div>
 
       <h2 className="text-xl mb-3">Vehicles on campaign</h2>
+      <p className="text-xs text-muted-foreground mb-3 max-w-3xl">
+        Telemetry uses campaign dates when set; drive time from GPS sessions when available; parking from daily rollups or sessions.
+      </p>
       {rows.length === 0 ? (
         <p className="text-muted-foreground mb-8">No vehicles yet. Attach from catalog above.</p>
       ) : (
-        <div className="mb-8 border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="mb-8 border border-border rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
             <thead className="bg-muted">
               <tr>
                 <th className="text-left p-3">Vehicle</th>
@@ -260,35 +276,46 @@ export function AdvertiserCampaignDetails() {
                 <th className="text-left p-3">Fleet</th>
                 <th className="text-left p-3">Placement</th>
                 <th className="text-left p-3">Agreed</th>
+                <th className="text-right p-3">Impr.</th>
+                <th className="text-right p-3">Km</th>
+                <th className="text-right p-3">Drive h</th>
+                <th className="text-right p-3">Park h</th>
                 <th className="p-3 w-24" />
               </tr>
             </thead>
             <tbody>
-              {rows.map((cv) => (
-                <tr key={cv.id} className="border-t border-border">
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <Car className="w-4 h-4 text-muted-foreground shrink-0" />
-                      {cv.vehicle ? `${cv.vehicle.brand} ${cv.vehicle.model}` : `#${cv.vehicle_id}`}
-                    </div>
-                  </td>
-                  <td className="p-3 font-mono text-xs">{cv.vehicle?.imei ?? '—'}</td>
-                  <td className="p-3">{cv.vehicle?.color_label ?? '—'}</td>
-                  <td className="p-3 text-xs">{cv.vehicle?.status_label ?? '—'}</td>
-                  <td className="p-3">{cv.placement_size_class}</td>
-                  <td className="p-3">{cv.agreed_price ?? '—'}</td>
-                  <td className="p-3">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void onDetach(cv.id)}
-                      className="text-sm text-destructive hover:underline disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((cv) => {
+                const tel = telemetryByVehicleId.get(cv.vehicle_id);
+                return (
+                  <tr key={cv.id} className="border-t border-border">
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <Car className="w-4 h-4 text-muted-foreground shrink-0" />
+                        {cv.vehicle ? `${cv.vehicle.brand} ${cv.vehicle.model}` : `#${cv.vehicle_id}`}
+                      </div>
+                    </td>
+                    <td className="p-3 font-mono text-xs">{cv.vehicle?.imei ?? '—'}</td>
+                    <td className="p-3">{cv.vehicle?.color_label ?? '—'}</td>
+                    <td className="p-3 text-xs">{cv.vehicle?.status_label ?? '—'}</td>
+                    <td className="p-3">{cv.placement_size_class}</td>
+                    <td className="p-3">{cv.agreed_price ?? '—'}</td>
+                    <td className="p-3 text-right tabular-nums">{tel ? Number(tel.impressions).toLocaleString() : '—'}</td>
+                    <td className="p-3 text-right tabular-nums">{tel ? Number(tel.driving_distance_km).toLocaleString() : '—'}</td>
+                    <td className="p-3 text-right tabular-nums">{tel ? Number(tel.driving_time_hours).toLocaleString() : '—'}</td>
+                    <td className="p-3 text-right tabular-nums">{tel ? Number(tel.parking_time_hours).toLocaleString() : '—'}</td>
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void onDetach(cv.id)}
+                        className="text-sm text-destructive hover:underline disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

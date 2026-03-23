@@ -30,12 +30,33 @@ class DatabaseDashboardMetricsService implements DashboardMetricsServiceInterfac
         $parkMin = (int) $q->sum('parking_minutes');
 
         if ($impr > 0 || $dist > 0 || $parkMin > 0) {
+            $vehicleIds = CampaignVehicle::query()
+                ->whereIn('campaign_id', $campaignIds)
+                ->pluck('vehicle_id');
+            $imeis = Vehicle::query()
+                ->whereIn('id', $vehicleIds)
+                ->pluck('imei')
+                ->filter()
+                ->values()
+                ->all();
+
+            $svc = app(CampaignVehicleTelemetryService::class);
+            $driveMinSessions = $svc->sumStopSessionMinutesForImeis($imeis, 'driving', null, null);
+            $parkMinSessions = $svc->sumStopSessionMinutesForImeis($imeis, 'parking', null, null);
+
+            $drivingHours = $driveMinSessions > 0
+                ? round($driveMinSessions / 60, 1)
+                : ($dist > 0 ? round($dist / 35, 1) : 0.0);
+            $parkingHours = $parkMin > 0
+                ? round($parkMin / 60, 1)
+                : ($parkMinSessions > 0 ? round($parkMinSessions / 60, 1) : 0.0);
+
             return $this->payload(
                 $active,
                 $impr,
                 round($dist, 2),
-                $dist > 0 ? round($dist / 35, 1) : 0.0,
-                $parkMin > 0 ? round($parkMin / 60, 1) : 0.0,
+                $drivingHours,
+                $parkingHours,
                 null,
             );
         }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Advertiser;
 use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\PlatformSetting;
+use App\Services\Telemetry\CampaignVehicleTelemetryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,12 +22,15 @@ class AdvertiserCampaignController extends Controller
         return response()->json(['data' => $campaigns]);
     }
 
-    public function show(Request $request, Campaign $campaign): JsonResponse
+    public function show(Request $request, Campaign $campaign, CampaignVehicleTelemetryService $telemetry): JsonResponse
     {
         $this->authorize('view', $campaign);
         $campaign->load(['campaignVehicles.vehicle', 'advertiser']);
 
-        return response()->json($campaign);
+        $payload = $campaign->toArray();
+        $payload['vehicle_telemetry'] = $telemetry->rollupForCampaign($campaign);
+
+        return response()->json($payload);
     }
 
     public function store(Request $request): JsonResponse
@@ -75,5 +79,4 @@ class AdvertiserCampaignController extends Controller
 
         return response()->json($campaign);
     }
-
 }

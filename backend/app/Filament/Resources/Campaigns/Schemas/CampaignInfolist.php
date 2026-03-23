@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Campaigns\Schemas;
 
 use App\Models\Campaign;
+use App\Services\Telemetry\CampaignVehicleTelemetryService;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
@@ -31,6 +32,10 @@ class CampaignInfolist
                 TextEntry::make('telemetry_linked_placeholder')
                     ->label(__('Telemetry sync (linked vehicles)'))
                     ->state(fn (Campaign $record): string => $record->telemetryLinkedVehiclesSummaryLine())
+                    ->columnSpanFull(),
+                TextEntry::make('telemetry_performance_summary')
+                    ->label(__('Telemetry performance (per vehicle rollups)'))
+                    ->state(fn (Campaign $record): string => app(CampaignVehicleTelemetryService::class)->summarizeForCampaign($record))
                     ->columnSpanFull(),
                 TextEntry::make('status'),
                 TextEntry::make('start_date')

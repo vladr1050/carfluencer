@@ -92,12 +92,23 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $dist = (float) $q->sum('driving_distance_km');
         $parkMin = (int) $q->sum('parking_minutes');
 
-        if ($impr > 0 || $dist > 0 || $parkMin > 0) {
+        $svc = app(CampaignVehicleTelemetryService::class);
+        $driveMinSessions = $svc->sumCampaignStopSessionMinutes($campaignId, 'driving', $from, $to);
+        $parkMinSessions = $svc->sumCampaignStopSessionMinutes($campaignId, 'parking', $from, $to);
+
+        if ($impr > 0 || $dist > 0 || $parkMin > 0 || $driveMinSessions > 0 || $parkMinSessions > 0) {
+            $drivingHours = $driveMinSessions > 0
+                ? round($driveMinSessions / 60, 1)
+                : ($dist > 0 ? round($dist / 35, 1) : 0.0);
+            $parkingHours = $parkMin > 0
+                ? round($parkMin / 60, 1)
+                : ($parkMinSessions > 0 ? round($parkMinSessions / 60, 1) : 0.0);
+
             return [
                 'impressions' => $impr,
                 'driving_distance_km' => round($dist, 2),
-                'driving_time_hours' => $dist > 0 ? round($dist / 35, 1) : 0.0,
-                'parking_time_hours' => $parkMin > 0 ? round($parkMin / 60, 1) : 0.0,
+                'driving_time_hours' => $drivingHours,
+                'parking_time_hours' => $parkingHours,
                 'data_source' => 'daily_impressions',
             ];
         }

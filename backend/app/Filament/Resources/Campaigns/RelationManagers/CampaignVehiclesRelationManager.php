@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Campaigns\RelationManagers;
 use App\Models\PlatformSetting;
 use App\Models\Vehicle;
 use App\Services\Pricing\PlacementPricingService;
+use App\Services\Telemetry\CampaignVehicleTelemetryService;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -52,7 +53,7 @@ class CampaignVehiclesRelationManager extends RelationManager
                     ->required(),
                 TextInput::make('agreed_price')
                     ->numeric()
-                    ->prefix(fn () => \App\Models\PlatformSetting::get('default_currency', 'EUR'))
+                    ->prefix(fn () => PlatformSetting::get('default_currency', 'EUR'))
                     ->helperText('Leave empty to fill from active pricing policy when saved (API/Filament).'),
                 Select::make('status')
                     ->options([
@@ -68,6 +69,10 @@ class CampaignVehiclesRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
+        $telemetryByVehicle = collect(
+            app(CampaignVehicleTelemetryService::class)->rollupForCampaign($this->getOwnerRecord())
+        )->keyBy('vehicle_id');
+
         return $table
             ->recordTitleAttribute('placement_size_class')
             ->columns([
@@ -107,6 +112,23 @@ class CampaignVehiclesRelationManager extends RelationManager
                     }),
                 TextColumn::make('status')
                     ->badge(),
+                TextColumn::make('telemetry_impressions')
+                    ->label(__('Impr.'))
+                    ->state(fn ($record) => number_format((int) ($telemetryByVehicle[$record->vehicle_id]['impressions'] ?? 0)))
+                    ->toggleable(),
+                TextColumn::make('telemetry_km')
+                    ->label(__('Km'))
+                    ->state(fn ($record) => number_format((float) ($telemetryByVehicle[$record->vehicle_id]['driving_distance_km'] ?? 0), 1))
+                    ->toggleable(),
+                TextColumn::make('telemetry_drive_h')
+                    ->label(__('Drive h'))
+                    ->state(fn ($record) => number_format((float) ($telemetryByVehicle[$record->vehicle_id]['driving_time_hours'] ?? 0), 1))
+                    ->description(__('From stop_sessions when available'))
+                    ->toggleable(),
+                TextColumn::make('telemetry_park_h')
+                    ->label(__('Park h'))
+                    ->state(fn ($record) => number_format((float) ($telemetryByVehicle[$record->vehicle_id]['parking_time_hours'] ?? 0), 1))
+                    ->toggleable(),
             ])
             ->filters([
                 //

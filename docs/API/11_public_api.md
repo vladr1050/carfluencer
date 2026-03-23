@@ -44,7 +44,7 @@ Sanctum cookie / bearer token as configured. Register and login under `/api/auth
 | GET | `/api/advertiser/dashboard` | Metrics payload includes `source` (`mock`, `http`, `mock_fallback`) when telemetry URL optional |
 | GET | `/api/advertiser/campaigns` | List with `campaign_vehicles.vehicle` |
 | POST | `/api/advertiser/campaigns` | |
-| GET | `/api/advertiser/campaigns/{campaign}` | Includes `campaign_vehicles` + nested `vehicle` |
+| GET | `/api/advertiser/campaigns/{campaign}` | Includes `campaign_vehicles` + nested `vehicle`, and **`vehicle_telemetry`** (per `vehicle_id`: impressions, km, drive/park hours; drive time from **`stop_sessions`** when available; window = campaign dates when set). |
 | PUT | `/api/advertiser/campaigns/{campaign}` | |
 | POST | `/api/advertiser/campaigns/{campaign}/vehicles` | JSON: `vehicle_id`, `placement_size_class` |
 | DELETE | `/api/advertiser/campaigns/{campaign}/vehicles/{campaignVehicle}` | Pivot id |
