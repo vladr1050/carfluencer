@@ -180,6 +180,9 @@ class CampaignVehicleTelemetryService
 
         $total = 0;
         foreach ($q->cursor() as $session) {
+            if ($session->started_at === null || $session->ended_at === null) {
+                continue;
+            }
             $total += (int) round($session->started_at->diffInSeconds($session->ended_at) / 60);
         }
 

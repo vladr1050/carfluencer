@@ -106,9 +106,9 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             if ($to) {
                 $q->whereDate('event_at', '<=', $to);
             }
-            $points = $q->get(['latitude', 'longitude', 'speed']);
+            // Stream rows — loading all points with get() OOMs production heatmap requests on large fleets/ranges.
             $prev = null;
-            foreach ($points as $p) {
+            foreach ($q->clone()->orderBy('id')->cursor(['id', 'latitude', 'longitude', 'speed']) as $p) {
                 if ($prev !== null) {
                     $sp = $p->speed !== null ? (float) $p->speed : null;
                     if ($sp === null || $sp > 5) {
