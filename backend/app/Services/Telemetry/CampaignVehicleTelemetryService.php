@@ -112,13 +112,21 @@ class CampaignVehicleTelemetryService
     }
 
     /**
-     * Sum driving or parking session length (minutes) for all vehicles on a campaign.
+     * Sum driving or parking session length (minutes) for vehicles on a campaign.
+     *
+     * @param  list<int>|null  $onlyVehicleIds  null = all vehicles on campaign; non-empty = subset; [] = none (0).
      */
-    public function sumCampaignStopSessionMinutes(int $campaignId, string $kind, ?string $from, ?string $to): int
+    public function sumCampaignStopSessionMinutes(int $campaignId, string $kind, ?string $from, ?string $to, ?array $onlyVehicleIds = null): int
     {
-        $vehicleIds = CampaignVehicle::query()
-            ->where('campaign_id', $campaignId)
-            ->pluck('vehicle_id');
+        if ($onlyVehicleIds !== null && $onlyVehicleIds === []) {
+            return 0;
+        }
+
+        $q = CampaignVehicle::query()->where('campaign_id', $campaignId);
+        if ($onlyVehicleIds !== null) {
+            $q->whereIn('vehicle_id', $onlyVehicleIds);
+        }
+        $vehicleIds = $q->pluck('vehicle_id');
 
         $imeis = Vehicle::query()
             ->whereIn('id', $vehicleIds)

@@ -52,7 +52,7 @@ Sanctum cookie / bearer token as configured. Register and login under `/api/auth
 | POST | `/api/advertiser/campaigns/{campaign}/proofs` | Multipart `file` + `vehicle_id` |
 | GET | `/api/advertiser/vehicles` | Query `per_page` (1–200) |
 | GET | `/api/advertiser/vehicles/{vehicle}` | |
-| GET | `/api/advertiser/heatmap` | Query: `campaign_id`, optional `vehicle_id`, `date_from`/`date_to`, **`mode`**: `driving` \| `parking` \| `both`. Points from `device_locations` (driver `database`); **`mode`** filters like admin heatmap: **parking** = stopped (`ignition=false` OR `speed ≤ TELEMETRY_PARKING_SPEED_MAX`), **driving** = moving (inverse). Response `heatmap.metrics.heatmap_motion` is `stopped` / `moving` / `both`. |
+| GET | `/api/advertiser/heatmap` | Query: `campaign_id`, optional `vehicle_id`, `date_from`/`date_to`, **`mode`**: `driving` \| `parking` \| `both`. Points from `device_locations` (driver `database`); **`mode`** filters like admin heatmap: **parking** = stopped (`ignition=false` OR `speed ≤ TELEMETRY_PARKING_SPEED_MAX`), **driving** = moving (inverse). Response `heatmap.metrics.heatmap_motion` is `stopped` / `moving` / `both`. **`heatmap.metrics`** (same period & vehicle scope as the query): `impressions`, `driving_distance_km`, `driving_time_hours`, `parking_time_hours`; `data_source`: `daily_impressions` \| `daily_impressions_estimated` (km from GPS when daily rollup has impressions but no stored km) \| `device_locations_estimated` \| `device_locations_raw` \| `none`. Summary km/time are for the full period (not reduced by **mode**); only the map points respect **mode**. |
 | GET | `/api/advertiser/pricing` | |
 | GET | `/api/advertiser/profile-discounts` | |
 
