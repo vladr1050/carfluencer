@@ -83,6 +83,13 @@ return [
          * GPS fallback for parking hours: ignore gaps longer than this between consecutive points (device offline).
          */
         'max_parking_segment_seconds' => max(60, min(86400, (int) env('TELEMETRY_HEATMAP_MAX_PARKING_SEGMENT_SECONDS', 7200))),
+        /**
+         * When set (e.g. 120), advertiser + admin heatmap reject ranges wider than this many calendar days (422).
+         * Null / unset = no limit (may still hit DB or PHP timeouts on very large raw aggregates).
+         */
+        'max_date_range_days' => ($raw = env('TELEMETRY_HEATMAP_MAX_DATE_RANGE_DAYS')) !== null && $raw !== ''
+            ? max(1, min(3660, (int) $raw))
+            : null,
     ],
 
     /*

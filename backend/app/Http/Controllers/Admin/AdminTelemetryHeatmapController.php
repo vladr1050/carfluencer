@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Vehicle;
 use App\Services\Telemetry\AdminHeatmapDataService;
+use App\Services\Telemetry\HeatmapRequestDateRange;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -29,6 +30,8 @@ class AdminTelemetryHeatmapController extends Controller
             'motion' => ['nullable', 'string', Rule::in(['moving', 'stopped', 'both'])],
             'normalization' => ['nullable', 'string', Rule::in(['max', 'p95', 'p99'])],
         ]);
+
+        HeatmapRequestDateRange::assertWithinConfiguredLimit($data['date_from'] ?? null, $data['date_to'] ?? null);
 
         if ($data['scope'] === 'vehicles') {
             $ids = array_values(array_filter(array_map('intval', $data['vehicle_ids'] ?? [])));

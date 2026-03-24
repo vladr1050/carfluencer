@@ -8,6 +8,7 @@ use App\Models\DailyImpression;
 use App\Models\StopSession;
 use App\Models\Vehicle;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 /**
  * Per-vehicle and campaign-level rollups: daily_impressions + stop_sessions (driving/parking time).
@@ -32,6 +33,16 @@ class CampaignVehicleTelemetryService
         $from = $campaign->start_date?->toDateString();
         $to = $campaign->end_date?->toDateString();
 
+        $allImeis = $campaign->campaignVehicles
+            ->map(fn (CampaignVehicle $cv) => $cv->vehicle?->imei)
+            ->filter(fn ($i) => is_string($i) && $i !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        $drivingByImei = $allImeis === [] ? [] : $this->sumStopSessionMinutesGroupedByDevice($allImeis, 'driving', $from, $to);
+        $parkingByImei = $allImeis === [] ? [] : $this->sumStopSessionMinutesGroupedByDevice($allImeis, 'parking', $from, $to);
+
         $out = [];
         foreach ($campaign->campaignVehicles as $cv) {
             $vehicle = $cv->vehicle;
@@ -47,10 +58,10 @@ class CampaignVehicleTelemetryService
             $parkMinDaily = (int) $q->sum('parking_minutes');
 
             $parkMinSessions = is_string($imei) && $imei !== ''
-                ? $this->sumStopSessionMinutes($imei, 'parking', $from, $to)
+                ? (int) ($parkingByImei[$imei] ?? 0)
                 : 0;
             $driveMinSessions = is_string($imei) && $imei !== ''
-                ? $this->sumStopSessionMinutes($imei, 'driving', $from, $to)
+                ? (int) ($drivingByImei[$imei] ?? 0)
                 : 0;
 
             $parkingHours = $parkMinDaily > 0
@@ -147,12 +158,82 @@ class CampaignVehicleTelemetryService
             return 0;
         }
 
+        $driver = StopSession::query()->getConnection()->getDriverName();
+        if (in_array($driver, ['pgsql', 'mysql'], true)) {
+            return $this->sumStopSessionMinutesSqlTotal($imeis, $kind, $from, $to, $driver);
+        }
+
         $total = 0;
         foreach ($imeis as $imei) {
             $total += $this->sumStopSessionMinutes($imei, $kind, $from, $to);
         }
 
         return $total;
+    }
+
+    /**
+     * Minutes per device_id (for campaign rollups): one GROUP BY query on pgsql/mysql.
+     *
+     * @param  list<string>  $imeis
+     * @return array<string, int>
+     */
+    public function sumStopSessionMinutesGroupedByDevice(array $imeis, string $kind, ?string $from, ?string $to): array
+    {
+        if ($imeis === []) {
+            return [];
+        }
+
+        $driver = StopSession::query()->getConnection()->getDriverName();
+        if (! in_array($driver, ['pgsql', 'mysql'], true)) {
+            $out = [];
+            foreach ($imeis as $imei) {
+                $out[$imei] = $this->sumStopSessionMinutes($imei, $kind, $from, $to);
+            }
+
+            return $out;
+        }
+
+        $q = StopSession::query()
+            ->whereIn('device_id', $imeis)
+            ->where('kind', $kind)
+            ->whereNotNull('started_at')
+            ->whereNotNull('ended_at');
+        $this->applyStopSessionStartedAtRange($q, $from, $to);
+
+        $expr = $driver === 'pgsql'
+            ? 'COALESCE(ROUND(SUM(GREATEST(0, EXTRACT(EPOCH FROM (ended_at - started_at))) / 60.0))::bigint, 0)'
+            : 'COALESCE(ROUND(SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, started_at, ended_at)) / 60.0)), 0)';
+
+        $rows = $q->clone()
+            ->selectRaw('device_id, '.$expr.' as mins')
+            ->groupBy('device_id')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(string) $row->device_id] = (int) $row->mins;
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  list<string>  $imeis
+     */
+    private function sumStopSessionMinutesSqlTotal(array $imeis, string $kind, ?string $from, ?string $to, string $driver): int
+    {
+        $q = StopSession::query()
+            ->whereIn('device_id', $imeis)
+            ->where('kind', $kind)
+            ->whereNotNull('started_at')
+            ->whereNotNull('ended_at');
+        $this->applyStopSessionStartedAtRange($q, $from, $to);
+
+        $expr = $driver === 'pgsql'
+            ? 'COALESCE(ROUND(SUM(GREATEST(0, EXTRACT(EPOCH FROM (ended_at - started_at))) / 60.0))::bigint, 0)'
+            : 'COALESCE(ROUND(SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, started_at, ended_at)) / 60.0)), 0)';
+
+        return (int) $q->clone()->selectRaw($expr.' as total')->value('total');
     }
 
     private function applyDateRange(Builder $query, string $column, ?string $from, ?string $to): void
@@ -169,23 +250,26 @@ class CampaignVehicleTelemetryService
     {
         $q = StopSession::query()
             ->where('device_id', $imei)
-            ->where('kind', $kind);
-
-        if ($from !== null && $from !== '') {
-            $q->whereDate('started_at', '>=', $from);
-        }
-        if ($to !== null && $to !== '') {
-            $q->whereDate('started_at', '<=', $to);
-        }
+            ->where('kind', $kind)
+            ->whereNotNull('started_at')
+            ->whereNotNull('ended_at');
+        $this->applyStopSessionStartedAtRange($q, $from, $to);
 
         $total = 0;
         foreach ($q->cursor() as $session) {
-            if ($session->started_at === null || $session->ended_at === null) {
-                continue;
-            }
             $total += (int) round($session->started_at->diffInSeconds($session->ended_at) / 60);
         }
 
         return $total;
+    }
+
+    private function applyStopSessionStartedAtRange(Builder $query, ?string $from, ?string $to): void
+    {
+        if ($from !== null && $from !== '') {
+            $query->where('started_at', '>=', Carbon::parse($from)->startOfDay());
+        }
+        if ($to !== null && $to !== '') {
+            $query->where('started_at', '<', Carbon::parse($to)->addDay()->startOfDay());
+        }
     }
 }
