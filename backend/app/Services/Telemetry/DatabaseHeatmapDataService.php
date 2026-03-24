@@ -32,12 +32,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         }
 
         $q = DeviceLocation::query()->whereIn('device_id', $imeis);
-        if (! empty($filters['date_from'])) {
-            $q->whereDate('event_at', '>=', $filters['date_from']);
-        }
-        if (! empty($filters['date_to'])) {
-            $q->whereDate('event_at', '<=', $filters['date_to']);
-        }
+        DeviceLocationEventAtRange::apply($q, $filters['date_from'] ?? null, $filters['date_to'] ?? null);
 
         $bucketsRaw = DeviceLocationHeatmapBuckets::groupedDualCounts($q->clone());
 
@@ -50,10 +45,13 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $capStopped = HeatmapIntensityNormalizer::capFromWeights($wStopped, $normalization);
         $capTotal = HeatmapIntensityNormalizer::capFromWeights($wTotals, $normalization);
 
+        $rankMovingBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($wMoving);
+        $rankStoppedBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($wStopped);
+
         $bucketsOut = [];
         $points = [];
 
-        foreach ($bucketsRaw as $r) {
+        foreach ($bucketsRaw as $idx => $r) {
             $lat = (float) $r->lat;
             $lng = (float) $r->lng;
             $wm = (int) $r->w_moving;
@@ -72,8 +70,8 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
                 'w_total' => $wt,
                 'intensity_moving' => $im,
                 'intensity_stopped' => $is,
-                'rank_moving_pct' => HeatmapIntensityNormalizer::rankPercentBelow($wm, $wMoving),
-                'rank_stopped_pct' => HeatmapIntensityNormalizer::rankPercentBelow($ws, $wStopped),
+                'rank_moving_pct' => $rankMovingBatch[$idx],
+                'rank_stopped_pct' => $rankStoppedBatch[$idx],
             ];
 
             if ($mode === 'driving') {
@@ -128,30 +126,30 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
     }
 
     /**
-     * One streaming pass per IMEI: driving km (same rule as daily rollup) + parking minutes (consecutive “stopped” segments).
+     * One streaming pass per IMEI: driving km + parking minutes (consecutive stopped segments).
+     * When $countRows is true, also returns total row count (same pass — avoids a separate COUNT(*) scan).
      *
      * @param  list<string>  $imeis
-     * @return array{km: float, parking_minutes: float}
+     * @return array{km: float, parking_minutes: float, row_count?: int}
      */
-    private function estimateDrivingAndParkingFromDeviceLocations(array $imeis, ?string $from, ?string $to): array
+    private function scanDeviceLocationsDrivingParkingMetrics(array $imeis, ?string $from, ?string $to, bool $countRows): array
     {
         $maxGap = (int) config('telemetry.heatmap.max_parking_segment_seconds', 7200);
         $totalKm = 0.0;
         $totalParkMin = 0.0;
+        $rows = 0;
 
         foreach ($imeis as $imei) {
             $q = DeviceLocation::query()
                 ->where('device_id', $imei)
                 ->orderBy('event_at');
-            if ($from) {
-                $q->whereDate('event_at', '>=', $from);
-            }
-            if ($to) {
-                $q->whereDate('event_at', '<=', $to);
-            }
+            DeviceLocationEventAtRange::apply($q, $from, $to);
 
             $prev = null;
-            foreach ($q->clone()->orderBy('id')->cursor(['id', 'latitude', 'longitude', 'speed', 'ignition']) as $p) {
+            foreach ($q->clone()->orderBy('id')->cursor(['id', 'latitude', 'longitude', 'speed', 'ignition', 'event_at']) as $p) {
+                if ($countRows) {
+                    $rows++;
+                }
                 if ($prev !== null) {
                     $secs = max(0, $prev->event_at->diffInSeconds($p->event_at));
                     if ($secs > 0 && $secs <= $maxGap
@@ -174,7 +172,23 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             }
         }
 
-        return ['km' => $totalKm, 'parking_minutes' => $totalParkMin];
+        $out = ['km' => $totalKm, 'parking_minutes' => $totalParkMin];
+        if ($countRows) {
+            $out['row_count'] = $rows;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<string>  $imeis
+     * @return array{km: float, parking_minutes: float}
+     */
+    private function estimateDrivingAndParkingFromDeviceLocations(array $imeis, ?string $from, ?string $to): array
+    {
+        $r = $this->scanDeviceLocationsDrivingParkingMetrics($imeis, $from, $to, false);
+
+        return ['km' => $r['km'], 'parking_minutes' => $r['parking_minutes']];
     }
 
     /**
@@ -257,19 +271,12 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             ];
         }
 
-        $locQ = DeviceLocation::query()->whereIn('device_id', $imeis);
-        if ($from) {
-            $locQ->whereDate('event_at', '>=', $from);
-        }
-        if ($to) {
-            $locQ->whereDate('event_at', '<=', $to);
-        }
-        $rawCount = $locQ->count();
         $mult = (int) config('telemetry.impression_sample_multiplier');
 
-        $est = $this->estimateDrivingAndParkingFromDeviceLocations($imeis, $from, $to);
-        $estDist = $est['km'];
-        $estParkMin = $est['parking_minutes'];
+        $scan = $this->scanDeviceLocationsDrivingParkingMetrics($imeis, $from, $to, true);
+        $rawCount = (int) ($scan['row_count'] ?? 0);
+        $estDist = $scan['km'];
+        $estParkMin = $scan['parking_minutes'];
         $driveMinSessionsFb = $svc->sumCampaignStopSessionMinutes($campaignId, 'driving', $from, $to, $vehicleIdsArr);
         $parkMinSessionsFb = $svc->sumCampaignStopSessionMinutes($campaignId, 'parking', $from, $to, $vehicleIdsArr);
 

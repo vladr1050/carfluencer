@@ -82,4 +82,37 @@ final class HeatmapIntensityNormalizer
 
         return round(100.0 * $below / $n, 1);
     }
+
+    /**
+     * Same semantics as {@see rankPercentBelow} for each entry, in O(n log n) total (one sort + binary search per bucket).
+     *
+     * @param  list<int>  $weightsPerBucket
+     * @return list<float>
+     */
+    public static function rankPercentBelowBatch(array $weightsPerBucket): array
+    {
+        $n = count($weightsPerBucket);
+        if ($n === 0) {
+            return [];
+        }
+        $sorted = array_map('intval', $weightsPerBucket);
+        sort($sorted);
+        $out = [];
+        foreach ($weightsPerBucket as $w) {
+            $w = (int) $w;
+            $lo = 0;
+            $hi = $n;
+            while ($lo < $hi) {
+                $mid = ($lo + $hi) >> 1;
+                if ($sorted[$mid] < $w) {
+                    $lo = $mid + 1;
+                } else {
+                    $hi = $mid;
+                }
+            }
+            $out[] = round(100.0 * $lo / $n, 1);
+        }
+
+        return $out;
+    }
 }

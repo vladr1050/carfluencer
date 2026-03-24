@@ -47,19 +47,13 @@ class AdminHeatmapDataService
         }
 
         $q = DeviceLocation::query()->whereIn('device_id', $imeis);
+        DeviceLocationEventAtRange::apply($q, $filters['date_from'] ?? null, $filters['date_to'] ?? null);
 
-        if (! empty($filters['date_from'])) {
-            $q->whereDate('event_at', '>=', $filters['date_from']);
-        }
-        if (! empty($filters['date_to'])) {
-            $q->whereDate('event_at', '<=', $filters['date_to']);
-        }
-
-        $samplesTotal = (int) $q->clone()->count();
         $buckets = DeviceLocationHeatmapBuckets::groupedDualCounts($q->clone());
 
         $samplesMoving = (int) $buckets->sum(fn ($r) => (int) $r->w_moving);
         $samplesStopped = (int) $buckets->sum(fn ($r) => (int) $r->w_stopped);
+        $samplesTotal = $samplesMoving + $samplesStopped;
 
         $gamma = TelemetryHeatmapConfig::intensityGamma();
 
@@ -69,10 +63,13 @@ class AdminHeatmapDataService
         $capMoving = HeatmapIntensityNormalizer::capFromWeights($wMoving, $normalization);
         $capStopped = HeatmapIntensityNormalizer::capFromWeights($wStopped, $normalization);
 
+        $rankMovingBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($wMoving);
+        $rankStoppedBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($wStopped);
+
         $bucketsOut = [];
         $points = [];
 
-        foreach ($buckets as $r) {
+        foreach ($buckets as $idx => $r) {
             $lat = (float) $r->lat;
             $lng = (float) $r->lng;
             $wm = (int) $r->w_moving;
@@ -82,8 +79,8 @@ class AdminHeatmapDataService
             $im = HeatmapIntensityNormalizer::normalize($wm, $capMoving, $gamma);
             $is = HeatmapIntensityNormalizer::normalizeStopped($ws, $capStopped);
 
-            $rankM = HeatmapIntensityNormalizer::rankPercentBelow($wm, $wMoving);
-            $rankS = HeatmapIntensityNormalizer::rankPercentBelow($ws, $wStopped);
+            $rankM = $rankMovingBatch[$idx];
+            $rankS = $rankStoppedBatch[$idx];
 
             $bucketsOut[] = [
                 'lat' => $lat,

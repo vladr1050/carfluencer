@@ -106,6 +106,8 @@ When `TELEMETRY_HEATMAP_DRIVER=database` (default in `config/telemetry.php`), `G
 
 Set `TELEMETRY_HEATMAP_DRIVER=mock` for fixed demo points (no DB data).
 
+**Heatmap performance (large date ranges):** bucket queries use **sargable** `event_at` bounds via `DeviceLocationEventAtRange` (plain range on the indexed column, not `WHERE DATE(event_at) …`). Per-cell **rank %** is computed in **O(n log n)** (`rankPercentBelowBatch`) instead of O(n²). Admin drops an extra **COUNT(\*)** when the same total is implied by summed bucket weights. When metrics fall back to raw `device_locations`, **one cursor pass** yields row count + km + parking minutes (no separate `COUNT` + estimate). Further gains: keep **`daily_impressions`** / **`stop_sessions`** populated so GPS streaming is skipped; optional composite index `(device_id, event_at)` if the planner still prefers a dedicated range index for multi-IMEI queries.
+
 ---
 
 ## HTTP API (authenticated)
