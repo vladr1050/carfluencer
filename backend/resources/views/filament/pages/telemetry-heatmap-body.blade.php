@@ -46,7 +46,7 @@
 </style>
 <div class="space-y-3">
     <p class="text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Aggregated buckets from PostgreSQL `device_locations`. Analytical palettes (Viridis-style moving, sequential oranges stopped). “Both” = two layers, not a blended gradient. Use Grid for precise cell comparison.') }}
+        {{ __('Moving = smooth flow heatmap; stopped/parking = tighter, posterized dwell hotspots (separate palette and blur). Optional contour rings for parking. Grid = discrete cells.') }}
     </p>
     <div id="admin-hm-toolbar" class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
         <label class="inline-flex items-center gap-2">
@@ -73,6 +73,10 @@
                 <span>{{ __('Stopped layer') }}</span>
             </label>
         </span>
+        <label id="admin-hm-contour-wrap" class="hidden inline-flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="admin-hm-parking-contours" class="rounded border-gray-300" />
+            <span>{{ __('Parking iso-rings (experimental)') }}</span>
+        </label>
     </div>
     <div id="admin-hm-map-wrap">
         <div
@@ -90,17 +94,53 @@
 <script>
 (function () {
     const GRADIENT_MOVING = { 0.0: '#440154', 0.25: '#3b528b', 0.5: '#21918c', 0.75: '#5ec962', 1.0: '#fde725' };
-    const GRADIENT_STOPPED = { 0.0: '#fff5eb', 0.25: '#fdc38d', 0.5: '#fc8d59', 0.75: '#d7301f', 1.0: '#7f0000' };
+    /** Parking: warm sequential, strong mids; matches posterized heat input (no white peak). */
+    const GRADIENT_STOPPED = { 0.0: '#fff4d6', 0.18: '#ffd166', 0.35: '#f79d65', 0.55: '#ef476f', 0.78: '#e63946', 1.0: '#b5179e' };
     const HEAT_RADIUS = 24;
     const HEAT_BLUR = 14;
     const HEAT_MIN_OPACITY = 0.16;
     const HEAT_MAX_DENOM_MOVING = 2.15;
-    const HEAT_MAX_DENOM_STOPPED = 2.35;
+    /** Parking heat: sharper blobs, stronger local contrast */
+    const PARKING_HEAT_RADIUS = 15;
+    const PARKING_HEAT_BLUR = 6;
+    const PARKING_HEAT_MIN_OPACITY = 0.24;
+    const PARKING_HEAT_MAX_DENOM = 1.58;
+    const PARKING_BAND_COLORS = ['#fff4d6', '#ffd166', '#f79d65', '#ef476f', '#e63946', '#b5179e'];
+
+    /** Quantize 0–1 stopped intensity into 6 dwell bands (heatmap + grid + contours). */
+    function parkingBandIndex(t) {
+        const x = Math.max(0, Math.min(1, Number(t)));
+        if (x <= 0.10) {
+            return 0;
+        }
+        if (x <= 0.22) {
+            return 1;
+        }
+        if (x <= 0.38) {
+            return 2;
+        }
+        if (x <= 0.58) {
+            return 3;
+        }
+        if (x <= 0.78) {
+            return 4;
+        }
+
+        return 5;
+    }
+
+    /** Representative heat weight per band so leaflet.heat snaps to stepped ramps. */
+    function posterizeParkingIntensity(t) {
+        const k = parkingBandIndex(t);
+
+        return [0.04, 0.15, 0.30, 0.48, 0.68, 0.92][k];
+    }
     const CELL_HALF = 0.0005;
 
     let map = null;
     let heatLayerMoving = null;
     let heatLayerStopped = null;
+    let parkingContourLayer = null;
     let gridLayer = null;
     let hitLayer = null;
     let resizeObserver = null;
@@ -168,6 +208,7 @@
     document.addEventListener('livewire:navigated', function () {
         heatLayerMoving = null;
         heatLayerStopped = null;
+        parkingContourLayer = null;
         gridLayer = null;
         hitLayer = null;
         toolbarBound = false;
@@ -222,7 +263,7 @@
     }
 
     const STOPS_MOVING = [[0, '#440154'], [0.25, '#3b528b'], [0.5, '#21918c'], [0.75, '#5ec962'], [1, '#fde725']];
-    const STOPS_STOPPED = [[0, '#fff5eb'], [0.25, '#fdc38d'], [0.5, '#fc8d59'], [0.75, '#d7301f'], [1, '#7f0000']];
+    const STOPS_STOPPED = [[0, '#fff4d6'], [0.18, '#ffd166'], [0.35, '#f79d65'], [0.55, '#ef476f'], [0.78, '#e63946'], [1, '#b5179e']];
 
     function clearHeatmapLayers() {
         if (heatLayerMoving && map) {
@@ -231,8 +272,12 @@
         if (heatLayerStopped && map) {
             map.removeLayer(heatLayerStopped);
         }
+        if (parkingContourLayer && map) {
+            map.removeLayer(parkingContourLayer);
+        }
         heatLayerMoving = null;
         heatLayerStopped = null;
+        parkingContourLayer = null;
         if (gridLayer && map) {
             map.removeLayer(gridLayer);
         }
@@ -257,22 +302,24 @@
         if (motion === 'moving') {
             title = '{{ __('Moving — sample density') }}';
         } else if (motion === 'stopped') {
-            title = '{{ __('Stopped — sample density') }}';
+            title = '{{ __('Parking — dwell hotspots (banded)') }}';
         } else {
-            title = '{{ __('Layers: moving (Viridis) + stopped (orange)') }}';
+            title = '{{ __('Layers: moving (flow) + parking (clustered)') }}';
         }
 
         const barMoving = 'linear-gradient(90deg, #440154 0%, #3b528b 25%, #21918c 50%, #5ec962 75%, #fde725 100%)';
-        const barStopped = 'linear-gradient(90deg, #fff5eb 0%, #fdc38d 25%, #fc8d59 50%, #d7301f 75%, #7f0000 100%)';
+        const barStopped = 'linear-gradient(90deg, #fff4d6 0%, #ffd166 18%, #f79d65 35%, #ef476f 55%, #e63946 78%, #b5179e 100%)';
 
         let bars = '';
         if (motion === 'both') {
             bars = '<div class="font-semibold mt-1">{{ __('Moving') }}</div><div class="hm-leg-bar" style="background:' + barMoving + ';"></div>'
                 + '<div class="text-[10px] opacity-80">{{ __('Low') }} → {{ __('Peak') }} (γ=' + (metrics.intensity_gamma ?? '—') + ')</div>'
-                + '<div class="font-semibold mt-2">{{ __('Stopped') }}</div><div class="hm-leg-bar" style="background:' + barStopped + ';"></div>';
+                + '<div class="font-semibold mt-2">{{ __('Parking / stopped') }}</div><div class="hm-leg-bar" style="background:' + barStopped + ';"></div>'
+                + '<div class="text-[10px] opacity-80">{{ __('Banded dwell scale (p95/p99 cap)') }}</div>';
         } else if (motion === 'stopped') {
             bars = '<div class="hm-leg-bar" style="background:' + barStopped + ';"></div>'
-                + '<div class="text-[10px] flex justify-between"><span>{{ __('Low') }}</span><span>{{ __('Medium') }}</span><span>{{ __('High') }}</span><span>{{ __('Peak') }}</span></div>';
+                + '<div class="text-[10px] flex flex-wrap gap-x-1 justify-between"><span>{{ __('Low') }}</span><span>{{ __('Mid') }}</span><span>{{ __('High') }}</span><span>{{ __('Peak') }}</span></div>'
+                + '<div class="text-[10px] opacity-75 mt-1">{{ __('Sharper heat + 6 dwell bands') }}</div>';
         } else {
             bars = '<div class="hm-leg-bar" style="background:' + barMoving + ';"></div>'
                 + '<div class="text-[10px] flex justify-between"><span>{{ __('Low') }}</span><span>{{ __('Medium') }}</span><span>{{ __('High') }}</span><span>{{ __('Peak') }}</span></div>';
@@ -302,7 +349,13 @@
             }
             const ratio = Math.min(1, w / cap);
             const inten = g <= 1 ? ratio : Math.min(1, Math.pow(ratio, g));
-            const fill = colorFromStops(inten, stops);
+            let fill;
+            if (metric === 'stopped') {
+                const serverIs = b.intensity_stopped != null ? Number(b.intensity_stopped) : inten;
+                fill = PARKING_BAND_COLORS[parkingBandIndex(serverIs)];
+            } else {
+                fill = colorFromStops(inten, stops);
+            }
             const lat = Number(b.lat);
             const lng = Number(b.lng);
             const bounds = [[lat - CELL_HALF, lng - CELL_HALF], [lat + CELL_HALF, lng + CELL_HALF]];
@@ -311,7 +364,7 @@
                 color: 'rgba(0,0,0,0.25)',
                 weight: 1,
                 fillColor: fill,
-                fillOpacity: 0.72,
+                fillOpacity: metric === 'stopped' ? 0.82 : 0.72,
             });
             const im = b.intensity_moving != null ? Number(b.intensity_moving).toFixed(3) : '—';
             const is = b.intensity_stopped != null ? Number(b.intensity_stopped).toFixed(3) : '—';
@@ -404,8 +457,17 @@
                 return [Number(b.lat), Number(b.lng), Number(b.intensity_moving) || 0];
             });
             const heatS = buckets.filter(function (b) { return (b.w_stopped || 0) > 0; }).map(function (b) {
-                return [Number(b.lat), Number(b.lng), Number(b.intensity_stopped) || 0];
+                return [Number(b.lat), Number(b.lng), posterizeParkingIntensity(Number(b.intensity_stopped) || 0)];
             });
+
+            const parkingHeatOpts = {
+                radius: PARKING_HEAT_RADIUS,
+                blur: PARKING_HEAT_BLUR,
+                maxZoom: 17,
+                minOpacity: PARKING_HEAT_MIN_OPACITY,
+                max: 1.0 / PARKING_HEAT_MAX_DENOM,
+                gradient: GRADIENT_STOPPED,
+            };
 
             if (motion === 'moving' && showM && heatM.length && typeof L.heatLayer === 'function') {
                 heatLayerMoving = L.heatLayer(heatM, {
@@ -418,14 +480,7 @@
                 });
                 heatLayerMoving.addTo(map);
             } else if (motion === 'stopped' && showS && heatS.length && typeof L.heatLayer === 'function') {
-                heatLayerStopped = L.heatLayer(heatS, {
-                    radius: HEAT_RADIUS + 2,
-                    blur: HEAT_BLUR + 2,
-                    maxZoom: 17,
-                    minOpacity: HEAT_MIN_OPACITY + 0.02,
-                    max: 1.0 / HEAT_MAX_DENOM_STOPPED,
-                    gradient: GRADIENT_STOPPED,
-                });
+                heatLayerStopped = L.heatLayer(heatS, parkingHeatOpts);
                 heatLayerStopped.addTo(map);
             } else if (motion === 'both') {
                 if (showM && heatM.length && typeof L.heatLayer === 'function') {
@@ -440,15 +495,39 @@
                     heatLayerMoving.addTo(map);
                 }
                 if (showS && heatS.length && typeof L.heatLayer === 'function') {
-                    heatLayerStopped = L.heatLayer(heatS, {
-                        radius: Math.round(HEAT_RADIUS * 0.82),
-                        blur: Math.round(HEAT_BLUR * 0.85),
-                        maxZoom: 17,
-                        minOpacity: HEAT_MIN_OPACITY + 0.04,
-                        max: 1.0 / HEAT_MAX_DENOM_STOPPED,
-                        gradient: GRADIENT_STOPPED,
-                    });
+                    heatLayerStopped = L.heatLayer(heatS, parkingHeatOpts);
                     heatLayerStopped.addTo(map);
+                }
+            }
+
+            var contourEl = document.getElementById('admin-hm-parking-contours');
+            var contourOn = contourEl && contourEl.checked;
+            if (contourOn && ((motion === 'stopped' && showS) || (motion === 'both' && showS))) {
+                parkingContourLayer = L.layerGroup();
+                buckets.forEach(function (b) {
+                    if ((b.w_stopped || 0) <= 0) {
+                        return;
+                    }
+                    var band = parkingBandIndex(Number(b.intensity_stopped) || 0);
+                    if (band < 2) {
+                        return;
+                    }
+                    var color = PARKING_BAND_COLORS[band];
+                    var c = L.circle([Number(b.lat), Number(b.lng)], {
+                        radius: 36 + band * 30,
+                        color: color,
+                        weight: 1.5,
+                        opacity: 0.45,
+                        fillColor: color,
+                        fillOpacity: 0.05 + band * 0.014,
+                        interactive: false,
+                    });
+                    parkingContourLayer.addLayer(c);
+                });
+                if (parkingContourLayer.getLayers().length) {
+                    parkingContourLayer.addTo(map);
+                } else {
+                    parkingContourLayer = null;
                 }
             }
 
@@ -487,7 +566,7 @@
             return;
         }
         toolbarBound = true;
-        ['admin-hm-view-mode', 'admin-hm-grid-metric', 'admin-hm-layer-moving', 'admin-hm-layer-stopped'].forEach(function (id) {
+        ['admin-hm-view-mode', 'admin-hm-grid-metric', 'admin-hm-layer-moving', 'admin-hm-layer-stopped', 'admin-hm-parking-contours'].forEach(function (id) {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', redrawFromState);
@@ -502,6 +581,10 @@
         const bothWrap = document.getElementById('admin-hm-both-wrap');
         if (bothWrap) {
             bothWrap.classList.toggle('hidden', motion !== 'both');
+        }
+        const contourWrap = document.getElementById('admin-hm-contour-wrap');
+        if (contourWrap) {
+            contourWrap.classList.toggle('hidden', motion !== 'stopped' && motion !== 'both');
         }
 
         if (!ensureBaseMap()) {

@@ -42,10 +42,14 @@ const HEATMAP_DEFAULT_ZOOM_WITH_DATA = 11;
  * Defaults are very faint on light basemaps — raise minOpacity and lower max for readable color.
  */
 const HEAT_MAX_DENOM_MOVING = 2.15;
-const HEAT_MAX_DENOM_STOPPED = 2.35;
 const HEAT_MIN_OPACITY = 0.16;
 const HEAT_RADIUS = 24;
 const HEAT_BLUR = 14;
+/** Parking heat: tighter stamps, less blur, stronger floor — hotspot blobs not red fog. */
+const PARKING_HEAT_RADIUS = 15;
+const PARKING_HEAT_BLUR = 6;
+const PARKING_HEAT_MIN_OPACITY = 0.24;
+const PARKING_HEAT_MAX_DENOM = 1.58;
 const CELL_HALF = 0.0005;
 
 const GRADIENT_MOVING: Record<number, string> = {
@@ -55,12 +59,14 @@ const GRADIENT_MOVING: Record<number, string> = {
   0.75: '#5ec962',
   1.0: '#fde725',
 };
+/** Warm sequential ramp aligned with posterized heat input (no white peak). */
 const GRADIENT_STOPPED: Record<number, string> = {
-  0.0: '#fff5eb',
-  0.25: '#fdc38d',
-  0.5: '#fc8d59',
-  0.75: '#d7301f',
-  1.0: '#7f0000',
+  0.0: '#fff4d6',
+  0.18: '#ffd166',
+  0.35: '#f79d65',
+  0.55: '#ef476f',
+  0.78: '#e63946',
+  1.0: '#b5179e',
 };
 
 const STOPS_MOVING: [number, string][] = [
@@ -70,13 +76,25 @@ const STOPS_MOVING: [number, string][] = [
   [0.75, '#5ec962'],
   [1, '#fde725'],
 ];
-const STOPS_STOPPED: [number, string][] = [
-  [0, '#fff5eb'],
-  [0.25, '#fdc38d'],
-  [0.5, '#fc8d59'],
-  [0.75, '#d7301f'],
-  [1, '#7f0000'],
-];
+
+const PARKING_BAND_COLORS = ['#fff4d6', '#ffd166', '#f79d65', '#ef476f', '#e63946', '#b5179e'] as const;
+
+/** Quantize 0–1 stopped intensity into 6 dwell bands (heatmap + grid + contours). */
+function parkingBandIndex(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  if (x <= 0.1) return 0;
+  if (x <= 0.22) return 1;
+  if (x <= 0.38) return 2;
+  if (x <= 0.58) return 3;
+  if (x <= 0.78) return 4;
+  return 5;
+}
+
+/** Representative heat weight per band so leaflet.heat snaps to stepped ramps. */
+function posterizeParkingIntensity(t: number): number {
+  const k = parkingBandIndex(t);
+  return [0.04, 0.15, 0.3, 0.48, 0.68, 0.92][k];
+}
 
 function parseHex(h: string): [number, number, number] {
   const s = h.replace('#', '');
@@ -143,6 +161,7 @@ function AnalyticsMapLayers({
   gridMetric,
   showMoving,
   showStopped,
+  showParkingContours,
 }: {
   buckets: HeatmapBucket[];
   mode: 'driving' | 'parking' | 'both';
@@ -150,6 +169,7 @@ function AnalyticsMapLayers({
   gridMetric: 'moving' | 'stopped';
   showMoving: boolean;
   showStopped: boolean;
+  showParkingContours: boolean;
 }) {
   const map = useMap();
 
@@ -176,7 +196,10 @@ function AnalyticsMapLayers({
           if (w <= 0) return;
           const cap = gridMetric === 'stopped' ? capS : capM;
           const inten = Math.min(1, w / cap);
-          const fill = colorFromStops(inten, gridMetric === 'stopped' ? STOPS_STOPPED : STOPS_MOVING);
+          const fill =
+            gridMetric === 'stopped'
+              ? PARKING_BAND_COLORS[parkingBandIndex(Number(b.intensity_stopped) || 0)]
+              : colorFromStops(inten, STOPS_MOVING);
           const bounds: L.LatLngBoundsExpression = [
             [b.lat - CELL_HALF, b.lng - CELL_HALF],
             [b.lat + CELL_HALF, b.lng + CELL_HALF],
@@ -186,7 +209,7 @@ function AnalyticsMapLayers({
             color: 'rgba(0,0,0,0.25)',
             weight: 1,
             fillColor: fill,
-            fillOpacity: 0.72,
+            fillOpacity: gridMetric === 'stopped' ? 0.82 : 0.72,
           });
           const tip =
             `<div style="min-width:160px;font-size:12px;line-height:1.35">` +
@@ -205,7 +228,7 @@ function AnalyticsMapLayers({
         .map((b) => [b.lat, b.lng, b.intensity_moving] as [number, number, number]);
       const heatS = buckets
         .filter((b) => b.w_stopped > 0)
-        .map((b) => [b.lat, b.lng, b.intensity_stopped] as [number, number, number]);
+        .map((b) => [b.lat, b.lng, posterizeParkingIntensity(Number(b.intensity_stopped) || 0)] as [number, number, number]);
 
       const addHeat = (triples: [number, number, number][], gradient: Record<number, string>, denom: number, r: number, blur: number) => {
         if (!triples.length || typeof L.heatLayer !== 'function') return;
@@ -220,14 +243,52 @@ function AnalyticsMapLayers({
         add(h);
       };
 
+      const addParkingHeat = (triples: [number, number, number][]) => {
+        if (!triples.length || typeof L.heatLayer !== 'function') return;
+        const h = L.heatLayer(triples, {
+          radius: PARKING_HEAT_RADIUS,
+          blur: PARKING_HEAT_BLUR,
+          maxZoom: 17,
+          minOpacity: PARKING_HEAT_MIN_OPACITY,
+          max: 1.0 / PARKING_HEAT_MAX_DENOM,
+          gradient: GRADIENT_STOPPED,
+        });
+        add(h);
+      };
+
       if (mode === 'driving' && showMoving) {
         addHeat(heatM, GRADIENT_MOVING, HEAT_MAX_DENOM_MOVING, HEAT_RADIUS, HEAT_BLUR);
       } else if (mode === 'parking' && showStopped) {
-        addHeat(heatS, GRADIENT_STOPPED, HEAT_MAX_DENOM_STOPPED, HEAT_RADIUS + 2, HEAT_BLUR + 2);
+        addParkingHeat(heatS);
       } else if (mode === 'both') {
         if (showMoving) addHeat(heatM, GRADIENT_MOVING, HEAT_MAX_DENOM_MOVING, HEAT_RADIUS, HEAT_BLUR);
-        if (showStopped)
-          addHeat(heatS, GRADIENT_STOPPED, HEAT_MAX_DENOM_STOPPED, Math.round(HEAT_RADIUS * 0.82), Math.round(HEAT_BLUR * 0.85));
+        if (showStopped) addParkingHeat(heatS);
+      }
+
+      if (
+        showParkingContours &&
+        viewMode === 'heatmap' &&
+        showStopped &&
+        (mode === 'parking' || mode === 'both')
+      ) {
+        const g = L.layerGroup();
+        buckets.forEach((b) => {
+          if (b.w_stopped <= 0) return;
+          const band = parkingBandIndex(Number(b.intensity_stopped) || 0);
+          if (band < 2) return;
+          const color = PARKING_BAND_COLORS[band];
+          const c = L.circle([b.lat, b.lng], {
+            radius: 36 + band * 30,
+            color,
+            weight: 1.5,
+            opacity: 0.45,
+            fillColor: color,
+            fillOpacity: 0.05 + band * 0.014,
+            interactive: false,
+          });
+          g.addLayer(c);
+        });
+        if (g.getLayers().length) add(g);
       }
 
       const heatShown =
@@ -273,7 +334,7 @@ function AnalyticsMapLayers({
         if (map.hasLayer(ly)) map.removeLayer(ly);
       });
     };
-  }, [map, buckets, mode, viewMode, gridMetric, showMoving, showStopped]);
+  }, [map, buckets, mode, viewMode, gridMetric, showMoving, showStopped, showParkingContours]);
 
   return null;
 }
@@ -302,6 +363,7 @@ function MapContent({
   gridMetric,
   showMoving,
   showStopped,
+  showParkingContours,
 }: {
   buckets: HeatmapBucket[];
   mode: 'driving' | 'parking' | 'both';
@@ -310,6 +372,7 @@ function MapContent({
   gridMetric: 'moving' | 'stopped';
   showMoving: boolean;
   showStopped: boolean;
+  showParkingContours: boolean;
 }) {
   return (
     <>
@@ -329,6 +392,7 @@ function MapContent({
         gridMetric={gridMetric}
         showMoving={showMoving}
         showStopped={showStopped}
+        showParkingContours={showParkingContours}
       />
     </>
   );
@@ -411,6 +475,7 @@ export function AdvertiserHeatmap() {
   const [gridMetric, setGridMetric] = useState<'moving' | 'stopped'>('moving');
   const [showLayerMoving, setShowLayerMoving] = useState(true);
   const [showLayerStopped, setShowLayerStopped] = useState(true);
+  const [showParkingContours, setShowParkingContours] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -507,12 +572,14 @@ export function AdvertiserHeatmap() {
     setGridMetric('moving');
     setShowLayerMoving(true);
     setShowLayerStopped(true);
+    setShowParkingContours(false);
     setSearchParams({});
   };
 
   const normLabel = metrics?.normalization ?? normalization;
   const legendGradientMoving = 'linear-gradient(to right, #440154, #3b528b, #21918c, #5ec962, #fde725)';
-  const legendGradientStopped = 'linear-gradient(to right, #fff5eb, #fdc38d, #fc8d59, #d7301f, #7f0000)';
+  const legendGradientStopped =
+    'linear-gradient(to right, #fff4d6 0%, #ffd166 18%, #f79d65 35%, #ef476f 55%, #e63946 78%, #b5179e 100%)';
 
   const center: LatLngTuple =
     buckets.length > 0 ? [buckets[0].lat, buckets[0].lng] : HEATMAP_DEFAULT_CENTER;
@@ -706,6 +773,17 @@ export function AdvertiserHeatmap() {
                   </label>
                 </div>
               )}
+              {(mode === 'parking' || mode === 'both') && mapView === 'heatmap' && (
+                <label className="inline-flex items-center gap-2 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={showParkingContours}
+                    onChange={(e) => setShowParkingContours(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  Parking iso-rings (experimental)
+                </label>
+              )}
             </div>
           </div>
         )}
@@ -751,6 +829,7 @@ export function AdvertiserHeatmap() {
             gridMetric={gridMetric}
             showMoving={mode === 'parking' ? false : showLayerMoving}
             showStopped={mode === 'driving' ? false : showLayerStopped}
+            showParkingContours={showParkingContours}
           />
         </MapContainer>
 
@@ -760,11 +839,14 @@ export function AdvertiserHeatmap() {
             <>
               <div className="font-medium mt-1">Moving</div>
               <div className="h-2.5 rounded mt-1 border border-border/50" style={{ background: legendGradientMoving }} />
-              <div className="font-medium mt-2">Stopped</div>
+              <div className="font-medium mt-2">Stopped (banded)</div>
               <div className="h-2.5 rounded mt-1 border border-border/50" style={{ background: legendGradientStopped }} />
             </>
           ) : mode === 'parking' ? (
-            <div className="h-3 rounded border border-border/50" style={{ background: legendGradientStopped }} />
+            <>
+              <div className="h-3 rounded border border-border/50" style={{ background: legendGradientStopped }} />
+              <div className="mt-1 text-muted-foreground text-[10px]">Banded dwell hotspots (6 levels)</div>
+            </>
           ) : (
             <div className="h-3 rounded border border-border/50" style={{ background: legendGradientMoving }} />
           )}
