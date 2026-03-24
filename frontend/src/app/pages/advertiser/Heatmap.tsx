@@ -216,13 +216,6 @@ function AnalyticsMapLayers({
             fillColor: fill,
             fillOpacity: gridMetric === 'stopped' ? 0.82 : 0.72,
           });
-          const tip =
-            `<div style="min-width:160px;font-size:12px;line-height:1.35">` +
-            `<b>Samples</b> moving: ${b.w_moving}, stopped: ${b.w_stopped}<br/>` +
-            `<b>Normalized</b> moving: ${b.intensity_moving?.toFixed(3) ?? '—'}, stopped: ${b.intensity_stopped?.toFixed(3) ?? '—'}<br/>` +
-            `<b>Rank % below</b> moving: ${b.rank_moving_pct ?? '—'}, stopped: ${b.rank_stopped_pct ?? '—'}` +
-            `</div>`;
-          rect.bindTooltip(tip, { sticky: true, direction: 'top' });
           add(rect);
         });
         return;
@@ -296,31 +289,6 @@ function AnalyticsMapLayers({
         if (g.getLayers().length) add(g);
       }
 
-      const heatShown =
-        mode === 'driving'
-          ? showMoving && heatM.length > 0
-          : mode === 'parking'
-            ? showStopped && heatS.length > 0
-            : (showMoving && heatM.length > 0) || (showStopped && heatS.length > 0);
-
-      if (viewMode === 'heatmap' && heatShown) {
-        const markers = L.layerGroup();
-        const maxH = 800;
-        const step = buckets.length > maxH ? Math.ceil(buckets.length / maxH) : 1;
-        buckets.forEach((b, i) => {
-          if (i % step !== 0) return;
-          if (b.w_moving + b.w_stopped <= 0) return;
-          const m = L.circleMarker([b.lat, b.lng], { radius: 8, fillOpacity: 0.001, opacity: 0, interactive: true });
-          const tip =
-            `<div style="min-width:170px;font-size:12px;line-height:1.35">` +
-            `<b>Samples</b> moving: ${b.w_moving}, stopped: ${b.w_stopped}<br/>` +
-            `<b>Intensity</b> moving: ${b.intensity_moving?.toFixed(3) ?? '—'}, stopped: ${b.intensity_stopped?.toFixed(3) ?? '—'}` +
-            `</div>`;
-          m.bindTooltip(tip, { sticky: true, direction: 'top' });
-          markers.addLayer(m);
-        });
-        add(markers);
-      }
     };
 
     let t: ReturnType<typeof setTimeout> | undefined;
@@ -806,7 +774,21 @@ export function AdvertiserHeatmap() {
           </div>
         )}
 
-        {!isLoading && !hasData && selectedCampaignId && (
+        {!isLoading && apiError && selectedCampaignId && (
+          <div className="absolute inset-0 bg-background/90 backdrop-blur-sm z-[1500] flex items-center justify-center px-4">
+            <div className="bg-card border border-destructive/40 rounded-lg p-8 max-w-md text-center shadow-lg">
+              <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
+              <h3 className="text-xl mb-2">Couldn&apos;t load heatmap</h3>
+              <p className="text-destructive text-sm whitespace-pre-wrap break-words">{apiError}</p>
+              <p className="text-muted-foreground text-xs mt-4 leading-relaxed">
+                Often this is a timeout or memory limit on the server for a very long date range. Try a shorter period, ensure daily rollups exist, or ask ops to check{' '}
+                <code className="text-[11px] bg-muted px-1 rounded">storage/logs/laravel.log</code> and PHP/DB timeouts.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !apiError && !hasData && selectedCampaignId && (
           <div className="absolute inset-0 bg-background/90 backdrop-blur-sm z-[1500] flex items-center justify-center">
             <div className="bg-card border border-border rounded-lg p-8 max-w-md text-center shadow-lg">
               <AlertCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
@@ -865,7 +847,7 @@ export function AdvertiserHeatmap() {
             {(mode === 'parking' || mode === 'both') ? ` · parking ^${metrics?.intensity_stopped_power ?? 0.7}` : ''}
           </div>
           <div className="mt-1 text-muted-foreground text-[10px]">
-            Parking boosts mid-density (capped ratio to power below 1). Hover cells for counts.
+            Parking boosts mid-density (capped ratio to power below 1).
           </div>
         </div>
       </div>

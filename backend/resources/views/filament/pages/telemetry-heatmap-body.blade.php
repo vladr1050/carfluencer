@@ -135,7 +135,6 @@
     let heatLayerStopped = null;
     let parkingContourLayer = null;
     let gridLayer = null;
-    let hitLayer = null;
     let resizeObserver = null;
     let toolbarBound = false;
     const defaultCenter = [56.88, 24.6];
@@ -203,7 +202,6 @@
         heatLayerStopped = null;
         parkingContourLayer = null;
         gridLayer = null;
-        hitLayer = null;
         toolbarBound = false;
         if (resizeObserver) {
             resizeObserver.disconnect();
@@ -275,10 +273,6 @@
             map.removeLayer(gridLayer);
         }
         gridLayer = null;
-        if (hitLayer && map) {
-            map.removeLayer(hitLayer);
-        }
-        hitLayer = null;
     }
 
     function buildLegendHtml(metrics, motion, viewMode) {
@@ -319,7 +313,7 @@
         }
 
         const gridNote = viewMode === 'grid'
-            ? '<div class="mt-2 text-[10px] opacity-80">{{ __('Grid cells match server buckets (≈0.001°). Tooltip: raw counts + normalized intensity + rank.') }}</div>'
+            ? '<div class="mt-2 text-[10px] opacity-80">{{ __('Grid cells match server buckets (≈0.001°).') }}</div>'
             : '';
 
         return '<div class="font-semibold">' + title + '</div>'
@@ -359,42 +353,7 @@
                 fillColor: fill,
                 fillOpacity: metric === 'stopped' ? 0.82 : 0.72,
             });
-            const im = b.intensity_moving != null ? Number(b.intensity_moving).toFixed(3) : '—';
-            const is = b.intensity_stopped != null ? Number(b.intensity_stopped).toFixed(3) : '—';
-            const tip = '<div style="min-width:160px" class="text-xs leading-snug">'
-                + '<b>{{ __('Samples') }}</b> {{ __('moving') }}: ' + (b.w_moving ?? 0) + ', {{ __('stopped') }}: ' + (b.w_stopped ?? 0) + '<br/>'
-                + '<b>{{ __('Normalized') }}</b> {{ __('moving') }}: ' + im + ', {{ __('stopped') }}: ' + is + '<br/>'
-                + '<b>{{ __('Rank % below') }}</b> {{ __('moving') }}: ' + (b.rank_moving_pct ?? '—') + ', {{ __('stopped') }}: ' + (b.rank_stopped_pct ?? '—')
-                + '</div>';
-            rect.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
             layer.addLayer(rect);
-        });
-        return layer;
-    }
-
-    function renderHitMarkers(buckets, motion) {
-        const layer = L.layerGroup();
-        const maxHits = 900;
-        const use = buckets.length > maxHits ? buckets.filter(function (_, i) { return i % Math.ceil(buckets.length / maxHits) === 0; }) : buckets;
-        use.forEach(function (b) {
-            if ((b.w_moving || 0) + (b.w_stopped || 0) <= 0) {
-                return;
-            }
-            const m = L.circleMarker([Number(b.lat), Number(b.lng)], {
-                radius: 8,
-                fillOpacity: 0.001,
-                opacity: 0,
-                interactive: true,
-            });
-            const im = b.intensity_moving != null ? Number(b.intensity_moving).toFixed(3) : '—';
-            const is = b.intensity_stopped != null ? Number(b.intensity_stopped).toFixed(3) : '—';
-            const tip = '<div style="min-width:170px" class="text-xs leading-snug">'
-                + '<b>{{ __('Samples') }}</b> {{ __('moving') }}: ' + (b.w_moving ?? 0) + ', {{ __('stopped') }}: ' + (b.w_stopped ?? 0) + '<br/>'
-                + '<b>{{ __('Intensity') }}</b> {{ __('moving') }}: ' + im + ', {{ __('stopped') }}: ' + is + '<br/>'
-                + '<b>{{ __('Rank % below') }}</b> {{ __('moving') }}: ' + (b.rank_moving_pct ?? '—') + ', {{ __('stopped') }}: ' + (b.rank_stopped_pct ?? '—')
-                + '</div>';
-            m.bindTooltip(tip, { sticky: true, direction: 'top' });
-            layer.addLayer(m);
         });
         return layer;
     }
@@ -542,12 +501,6 @@
                 map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
             }
 
-            const heatShown = (motion === 'moving' && showM && heatM.length) || (motion === 'stopped' && showS && heatS.length)
-                || (motion === 'both' && ((showM && heatM.length) || (showS && heatS.length)));
-            if (heatShown) {
-                hitLayer = renderHitMarkers(buckets, motion);
-                hitLayer.addTo(map);
-            }
         }
 
         requestAnimationFrame(invalidateMapSize);
