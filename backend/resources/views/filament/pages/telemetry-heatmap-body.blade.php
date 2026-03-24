@@ -46,7 +46,7 @@
 </style>
 <div class="space-y-3">
     <p class="text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Moving = smooth flow heatmap; stopped/parking = tighter, posterized dwell hotspots (separate palette and blur). Optional contour rings for parking. Grid = discrete cells.') }}
+        {{ __('Moving = smooth Viridis flow. Parking = continuous green→yellow→orange→red density (p95/p99 cap, ratio^0.7 for mids). Softer, wider heat blend. Optional iso-rings. Grid = discrete cells.') }}
     </p>
     <div id="admin-hm-toolbar" class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
         <label class="inline-flex items-center gap-2">
@@ -94,32 +94,32 @@
 <script>
 (function () {
     const GRADIENT_MOVING = { 0.0: '#440154', 0.25: '#3b528b', 0.5: '#21918c', 0.75: '#5ec962', 1.0: '#fde725' };
-    /** Parking: warm sequential, strong mids; matches posterized heat input (no white peak). */
-    const GRADIENT_STOPPED = { 0.0: '#fff4d6', 0.18: '#ffd166', 0.35: '#f79d65', 0.55: '#ef476f', 0.78: '#e63946', 1.0: '#b5179e' };
+    /** Parking: Google-style traffic density (green → yellow → orange → red, no white peak). */
+    const GRADIENT_STOPPED = { 0.0: '#1b5e20', 0.22: '#43a047', 0.45: '#c6d84a', 0.62: '#ffeb3b', 0.8: '#fb8c00', 1.0: '#c62828' };
     const HEAT_RADIUS = 24;
     const HEAT_BLUR = 14;
     const HEAT_MIN_OPACITY = 0.16;
     const HEAT_MAX_DENOM_MOVING = 2.15;
-    /** Parking heat: sharper blobs, stronger local contrast */
-    const PARKING_HEAT_RADIUS = 15;
-    const PARKING_HEAT_BLUR = 6;
-    const PARKING_HEAT_MIN_OPACITY = 0.24;
-    const PARKING_HEAT_MAX_DENOM = 1.58;
-    const PARKING_BAND_COLORS = ['#fff4d6', '#ffd166', '#f79d65', '#ef476f', '#e63946', '#b5179e'];
+    /** Parking: wider blend so full-city distribution reads through */
+    const PARKING_HEAT_RADIUS = 40;
+    const PARKING_HEAT_BLUR = 21;
+    const PARKING_HEAT_MIN_OPACITY = 0.27;
+    const PARKING_HEAT_MAX_DENOM = 1.82;
+    /** Iso-ring stroke colors by intensity tier (green → red). */
+    const PARKING_CONTOUR_COLORS = ['#2e7d32', '#66bb6a', '#cddc39', '#ffca28', '#f57c00', '#b71c1c'];
 
-    /** Quantize 0–1 stopped intensity into 6 dwell bands (heatmap + grid + contours). */
     function parkingBandIndex(t) {
         const x = Math.max(0, Math.min(1, Number(t)));
-        if (x <= 0.10) {
+        if (x <= 0.12) {
             return 0;
         }
-        if (x <= 0.22) {
+        if (x <= 0.28) {
             return 1;
         }
-        if (x <= 0.38) {
+        if (x <= 0.44) {
             return 2;
         }
-        if (x <= 0.58) {
+        if (x <= 0.6) {
             return 3;
         }
         if (x <= 0.78) {
@@ -127,13 +127,6 @@
         }
 
         return 5;
-    }
-
-    /** Representative heat weight per band so leaflet.heat snaps to stepped ramps. */
-    function posterizeParkingIntensity(t) {
-        const k = parkingBandIndex(t);
-
-        return [0.04, 0.15, 0.30, 0.48, 0.68, 0.92][k];
     }
     const CELL_HALF = 0.0005;
 
@@ -263,7 +256,7 @@
     }
 
     const STOPS_MOVING = [[0, '#440154'], [0.25, '#3b528b'], [0.5, '#21918c'], [0.75, '#5ec962'], [1, '#fde725']];
-    const STOPS_STOPPED = [[0, '#fff4d6'], [0.18, '#ffd166'], [0.35, '#f79d65'], [0.55, '#ef476f'], [0.78, '#e63946'], [1, '#b5179e']];
+    const STOPS_STOPPED = [[0, '#1b5e20'], [0.22, '#43a047'], [0.45, '#c6d84a'], [0.62, '#ffeb3b'], [0.8, '#fb8c00'], [1, '#c62828']];
 
     function clearHeatmapLayers() {
         if (heatLayerMoving && map) {
@@ -302,24 +295,24 @@
         if (motion === 'moving') {
             title = '{{ __('Moving — sample density') }}';
         } else if (motion === 'stopped') {
-            title = '{{ __('Parking — dwell hotspots (banded)') }}';
+            title = '{{ __('Parking — city density (green → red)') }}';
         } else {
-            title = '{{ __('Layers: moving (flow) + parking (clustered)') }}';
+            title = '{{ __('Layers: moving (flow) + parking (density)') }}';
         }
 
         const barMoving = 'linear-gradient(90deg, #440154 0%, #3b528b 25%, #21918c 50%, #5ec962 75%, #fde725 100%)';
-        const barStopped = 'linear-gradient(90deg, #fff4d6 0%, #ffd166 18%, #f79d65 35%, #ef476f 55%, #e63946 78%, #b5179e 100%)';
+        const barStopped = 'linear-gradient(90deg, #1b5e20 0%, #43a047 22%, #c6d84a 45%, #ffeb3b 62%, #fb8c00 80%, #c62828 100%)';
 
         let bars = '';
         if (motion === 'both') {
             bars = '<div class="font-semibold mt-1">{{ __('Moving') }}</div><div class="hm-leg-bar" style="background:' + barMoving + ';"></div>'
                 + '<div class="text-[10px] opacity-80">{{ __('Low') }} → {{ __('Peak') }} (γ=' + (metrics.intensity_gamma ?? '—') + ')</div>'
                 + '<div class="font-semibold mt-2">{{ __('Parking / stopped') }}</div><div class="hm-leg-bar" style="background:' + barStopped + ';"></div>'
-                + '<div class="text-[10px] opacity-80">{{ __('Banded dwell scale (p95/p99 cap)') }}</div>';
+                + '<div class="text-[10px] opacity-80">{{ __('Continuous green→red; parking uses ratio^0.7 after percentile cap.') }}</div>';
         } else if (motion === 'stopped') {
             bars = '<div class="hm-leg-bar" style="background:' + barStopped + ';"></div>'
                 + '<div class="text-[10px] flex flex-wrap gap-x-1 justify-between"><span>{{ __('Low') }}</span><span>{{ __('Mid') }}</span><span>{{ __('High') }}</span><span>{{ __('Peak') }}</span></div>'
-                + '<div class="text-[10px] opacity-75 mt-1">{{ __('Sharper heat + 6 dwell bands') }}</div>';
+                + '<div class="text-[10px] opacity-75 mt-1">{{ __('Intensity: min(1, w/cap) then ^0.7 (cap = p95/p99 or max).') }}</div>';
         } else {
             bars = '<div class="hm-leg-bar" style="background:' + barMoving + ';"></div>'
                 + '<div class="text-[10px] flex justify-between"><span>{{ __('Low') }}</span><span>{{ __('Medium') }}</span><span>{{ __('High') }}</span><span>{{ __('Peak') }}</span></div>';
@@ -348,13 +341,13 @@
                 return;
             }
             const ratio = Math.min(1, w / cap);
-            const inten = g <= 1 ? ratio : Math.min(1, Math.pow(ratio, g));
+            const intenMoving = g <= 1 ? ratio : Math.min(1, Math.pow(ratio, g));
             let fill;
             if (metric === 'stopped') {
-                const serverIs = b.intensity_stopped != null ? Number(b.intensity_stopped) : inten;
-                fill = PARKING_BAND_COLORS[parkingBandIndex(serverIs)];
+                const serverIs = b.intensity_stopped != null ? Number(b.intensity_stopped) : Math.min(1, Math.pow(ratio, 0.7));
+                fill = colorFromStops(serverIs, stops);
             } else {
-                fill = colorFromStops(inten, stops);
+                fill = colorFromStops(intenMoving, stops);
             }
             const lat = Number(b.lat);
             const lng = Number(b.lng);
@@ -457,7 +450,7 @@
                 return [Number(b.lat), Number(b.lng), Number(b.intensity_moving) || 0];
             });
             const heatS = buckets.filter(function (b) { return (b.w_stopped || 0) > 0; }).map(function (b) {
-                return [Number(b.lat), Number(b.lng), posterizeParkingIntensity(Number(b.intensity_stopped) || 0)];
+                return [Number(b.lat), Number(b.lng), Number(b.intensity_stopped) || 0];
             });
 
             const parkingHeatOpts = {
@@ -512,7 +505,7 @@
                     if (band < 2) {
                         return;
                     }
-                    var color = PARKING_BAND_COLORS[band];
+                    var color = PARKING_CONTOUR_COLORS[band];
                     var c = L.circle([Number(b.lat), Number(b.lng)], {
                         radius: 36 + band * 30,
                         color: color,

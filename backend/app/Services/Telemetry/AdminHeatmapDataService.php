@@ -80,7 +80,7 @@ class AdminHeatmapDataService
             $wt = $wm + $ws;
 
             $im = HeatmapIntensityNormalizer::normalize($wm, $capMoving, $gamma);
-            $is = HeatmapIntensityNormalizer::normalize($ws, $capStopped, $gamma);
+            $is = HeatmapIntensityNormalizer::normalizeStopped($ws, $capStopped);
 
             $rankM = HeatmapIntensityNormalizer::rankPercentBelow($wm, $wMoving);
             $rankS = HeatmapIntensityNormalizer::rankPercentBelow($ws, $wStopped);
@@ -157,6 +157,7 @@ class AdminHeatmapDataService
                 'parking_time_hours' => 0,
                 'data_source' => 'device_locations',
                 'intensity_gamma' => $gamma,
+                'intensity_stopped_power' => HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER,
                 'normalization' => $normalization,
                 'cap_moving' => $capMoving,
                 'cap_stopped' => $capStopped,
@@ -182,6 +183,7 @@ class AdminHeatmapDataService
             'parking_time_hours' => 0,
             'data_source' => 'device_locations',
             'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
+            'intensity_stopped_power' => HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER,
             'normalization' => $normalization,
             'cap_moving' => 1,
             'cap_stopped' => 1,

@@ -24,4 +24,12 @@ class HeatmapIntensityNormalizerTest extends TestCase
     {
         $this->assertEqualsWithDelta(0.25, HeatmapIntensityNormalizer::normalize(5, 10, 2.0), 1e-9);
     }
+
+    public function test_normalize_stopped_applies_power_below_one_to_boost_mids(): void
+    {
+        $half = HeatmapIntensityNormalizer::normalizeStopped(5, 10);
+        $this->assertGreaterThan(0.5, $half);
+        $this->assertEqualsWithDelta(pow(0.5, 0.7), $half, 1e-9);
+        $this->assertEqualsWithDelta(1.0, HeatmapIntensityNormalizer::normalizeStopped(10, 10), 1e-9);
+    }
 }

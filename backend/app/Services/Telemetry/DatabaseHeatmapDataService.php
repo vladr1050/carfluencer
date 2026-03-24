@@ -61,7 +61,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             $wt = $wm + $ws;
 
             $im = HeatmapIntensityNormalizer::normalize($wm, $capMoving, $gamma);
-            $is = HeatmapIntensityNormalizer::normalize($ws, $capStopped, $gamma);
+            $is = HeatmapIntensityNormalizer::normalizeStopped($ws, $capStopped);
             $it = HeatmapIntensityNormalizer::normalize($wt, $capTotal, $gamma);
 
             $bucketsOut[] = [
@@ -94,6 +94,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $metrics['heatmap_motion'] = self::heatmapMotionLabel($mode);
         $metrics['campaign_id'] = $campaignId;
         $metrics['intensity_gamma'] = $gamma;
+        $metrics['intensity_stopped_power'] = HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER;
         $metrics['normalization'] = $normalization;
         $metrics['cap_moving'] = $capMoving;
         $metrics['cap_stopped'] = $capStopped;
@@ -306,6 +307,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             'campaign_id' => $campaignId,
             'data_source' => 'none',
             'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
+            'intensity_stopped_power' => HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER,
             'normalization' => 'p95',
             'cap_moving' => 1,
             'cap_stopped' => 1,

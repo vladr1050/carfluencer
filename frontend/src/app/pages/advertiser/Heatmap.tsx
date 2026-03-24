@@ -45,11 +45,11 @@ const HEAT_MAX_DENOM_MOVING = 2.15;
 const HEAT_MIN_OPACITY = 0.16;
 const HEAT_RADIUS = 24;
 const HEAT_BLUR = 14;
-/** Parking heat: tighter stamps, less blur, stronger floor — hotspot blobs not red fog. */
-const PARKING_HEAT_RADIUS = 15;
-const PARKING_HEAT_BLUR = 6;
-const PARKING_HEAT_MIN_OPACITY = 0.24;
-const PARKING_HEAT_MAX_DENOM = 1.58;
+/** Parking: wide blend + floor so full-city density reads on light basemap (Google-style). */
+const PARKING_HEAT_RADIUS = 40;
+const PARKING_HEAT_BLUR = 21;
+const PARKING_HEAT_MIN_OPACITY = 0.27;
+const PARKING_HEAT_MAX_DENOM = 1.82;
 const CELL_HALF = 0.0005;
 
 const GRADIENT_MOVING: Record<number, string> = {
@@ -59,14 +59,14 @@ const GRADIENT_MOVING: Record<number, string> = {
   0.75: '#5ec962',
   1.0: '#fde725',
 };
-/** Warm sequential ramp aligned with posterized heat input (no white peak). */
+/** Google-style density: green → yellow → orange → red (no white / magenta peak). */
 const GRADIENT_STOPPED: Record<number, string> = {
-  0.0: '#fff4d6',
-  0.18: '#ffd166',
-  0.35: '#f79d65',
-  0.55: '#ef476f',
-  0.78: '#e63946',
-  1.0: '#b5179e',
+  0.0: '#1b5e20',
+  0.22: '#43a047',
+  0.45: '#c6d84a',
+  0.62: '#ffeb3b',
+  0.8: '#fb8c00',
+  1.0: '#c62828',
 };
 
 const STOPS_MOVING: [number, string][] = [
@@ -77,23 +77,25 @@ const STOPS_MOVING: [number, string][] = [
   [1, '#fde725'],
 ];
 
-const PARKING_BAND_COLORS = ['#fff4d6', '#ffd166', '#f79d65', '#ef476f', '#e63946', '#b5179e'] as const;
+const STOPS_STOPPED: [number, string][] = [
+  [0, '#1b5e20'],
+  [0.22, '#43a047'],
+  [0.45, '#c6d84a'],
+  [0.62, '#ffeb3b'],
+  [0.8, '#fb8c00'],
+  [1, '#c62828'],
+];
 
-/** Quantize 0–1 stopped intensity into 6 dwell bands (heatmap + grid + contours). */
+const PARKING_CONTOUR_COLORS = ['#2e7d32', '#66bb6a', '#cddc39', '#ffca28', '#f57c00', '#b71c1c'] as const;
+
 function parkingBandIndex(t: number): number {
   const x = Math.max(0, Math.min(1, t));
-  if (x <= 0.1) return 0;
-  if (x <= 0.22) return 1;
-  if (x <= 0.38) return 2;
-  if (x <= 0.58) return 3;
+  if (x <= 0.12) return 0;
+  if (x <= 0.28) return 1;
+  if (x <= 0.44) return 2;
+  if (x <= 0.6) return 3;
   if (x <= 0.78) return 4;
   return 5;
-}
-
-/** Representative heat weight per band so leaflet.heat snaps to stepped ramps. */
-function posterizeParkingIntensity(t: number): number {
-  const k = parkingBandIndex(t);
-  return [0.04, 0.15, 0.3, 0.48, 0.68, 0.92][k];
 }
 
 function parseHex(h: string): [number, number, number] {
@@ -195,11 +197,14 @@ function AnalyticsMapLayers({
           const w = gridMetric === 'stopped' ? b.w_stopped : b.w_moving;
           if (w <= 0) return;
           const cap = gridMetric === 'stopped' ? capS : capM;
-          const inten = Math.min(1, w / cap);
+          const ratio = Math.min(1, w / cap);
           const fill =
             gridMetric === 'stopped'
-              ? PARKING_BAND_COLORS[parkingBandIndex(Number(b.intensity_stopped) || 0)]
-              : colorFromStops(inten, STOPS_MOVING);
+              ? colorFromStops(
+                  b.intensity_stopped != null ? Number(b.intensity_stopped) : Math.min(1, ratio ** 0.7),
+                  STOPS_STOPPED,
+                )
+              : colorFromStops(ratio, STOPS_MOVING);
           const bounds: L.LatLngBoundsExpression = [
             [b.lat - CELL_HALF, b.lng - CELL_HALF],
             [b.lat + CELL_HALF, b.lng + CELL_HALF],
@@ -228,7 +233,7 @@ function AnalyticsMapLayers({
         .map((b) => [b.lat, b.lng, b.intensity_moving] as [number, number, number]);
       const heatS = buckets
         .filter((b) => b.w_stopped > 0)
-        .map((b) => [b.lat, b.lng, posterizeParkingIntensity(Number(b.intensity_stopped) || 0)] as [number, number, number]);
+        .map((b) => [b.lat, b.lng, Number(b.intensity_stopped) || 0] as [number, number, number]);
 
       const addHeat = (triples: [number, number, number][], gradient: Record<number, string>, denom: number, r: number, blur: number) => {
         if (!triples.length || typeof L.heatLayer !== 'function') return;
@@ -276,7 +281,7 @@ function AnalyticsMapLayers({
           if (b.w_stopped <= 0) return;
           const band = parkingBandIndex(Number(b.intensity_stopped) || 0);
           if (band < 2) return;
-          const color = PARKING_BAND_COLORS[band];
+          const color = PARKING_CONTOUR_COLORS[band];
           const c = L.circle([b.lat, b.lng], {
             radius: 36 + band * 30,
             color,
@@ -442,6 +447,8 @@ type HeatmapApi = {
       mode: string;
       heatmap_motion?: string;
       intensity_gamma?: number;
+      /** Fixed 0.7 curve for stopped intensity (after p95/p99/max cap). */
+      intensity_stopped_power?: number;
       normalization?: string;
       cap_moving?: number;
       cap_stopped?: number;
@@ -579,7 +586,7 @@ export function AdvertiserHeatmap() {
   const normLabel = metrics?.normalization ?? normalization;
   const legendGradientMoving = 'linear-gradient(to right, #440154, #3b528b, #21918c, #5ec962, #fde725)';
   const legendGradientStopped =
-    'linear-gradient(to right, #fff4d6 0%, #ffd166 18%, #f79d65 35%, #ef476f 55%, #e63946 78%, #b5179e 100%)';
+    'linear-gradient(to right, #1b5e20 0%, #43a047 22%, #c6d84a 45%, #ffeb3b 62%, #fb8c00 80%, #c62828 100%)';
 
   const center: LatLngTuple =
     buckets.length > 0 ? [buckets[0].lat, buckets[0].lng] : HEATMAP_DEFAULT_CENTER;
@@ -839,23 +846,26 @@ export function AdvertiserHeatmap() {
             <>
               <div className="font-medium mt-1">Moving</div>
               <div className="h-2.5 rounded mt-1 border border-border/50" style={{ background: legendGradientMoving }} />
-              <div className="font-medium mt-2">Stopped (banded)</div>
+              <div className="font-medium mt-2">Parking (density)</div>
               <div className="h-2.5 rounded mt-1 border border-border/50" style={{ background: legendGradientStopped }} />
             </>
           ) : mode === 'parking' ? (
             <>
               <div className="h-3 rounded border border-border/50" style={{ background: legendGradientStopped }} />
-              <div className="mt-1 text-muted-foreground text-[10px]">Banded dwell hotspots (6 levels)</div>
+              <div className="mt-1 text-muted-foreground text-[10px]">
+                Green → yellow → orange → red; continuous city-scale blend.
+              </div>
             </>
           ) : (
             <div className="h-3 rounded border border-border/50" style={{ background: legendGradientMoving }} />
           )}
           <div className="mt-2 text-muted-foreground">
             {normLabel === 'max' ? 'Absolute max per layer' : normLabel === 'p99' ? 'Capped at p99' : 'Capped at p95'}
-            {metrics?.intensity_gamma != null ? ` · γ=${metrics.intensity_gamma}` : ''}
+            {(mode === 'driving' || mode === 'both') && metrics?.intensity_gamma != null ? ` · moving γ=${metrics.intensity_gamma}` : ''}
+            {(mode === 'parking' || mode === 'both') ? ` · parking ^${metrics?.intensity_stopped_power ?? 0.7}` : ''}
           </div>
           <div className="mt-1 text-muted-foreground text-[10px]">
-            Low → medium → high → peak (no white hotspot). Hover cells for counts.
+            Parking boosts mid-density (capped ratio to power below 1). Hover cells for counts.
           </div>
         </div>
       </div>

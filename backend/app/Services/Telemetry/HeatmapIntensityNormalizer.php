@@ -3,10 +3,14 @@
 namespace App\Services\Telemetry;
 
 /**
- * Intensity 0…1 from raw bucket counts: absolute max or percentile cap + optional gamma.
+ * Intensity 0…1 from raw bucket counts: absolute max or percentile cap + optional gamma (moving).
+ * Stopped/parking uses a fixed mild power curve after the same cap (see {@see normalizeStopped}).
  */
 final class HeatmapIntensityNormalizer
 {
+    /** Lifts mid-density vs linear; used only for stopped layer (Google-style density). */
+    public const STOPPED_INTENSITY_POWER = 0.7;
+
     /**
      * @param  list<int>  $weights  Non-negative counts per bucket (same layer).
      */
@@ -42,6 +46,18 @@ final class HeatmapIntensityNormalizer
         }
 
         return min(1.0, $ratio ** $gamma);
+    }
+
+    /**
+     * Stopped layer: ratio = min(1, w/cap) with cap from p95/p99/max, then ratio to the power STOPPED_INTENSITY_POWER.
+     * Exponent below 1 boosts mid-density so the map stays readable outside peak hubs.
+     */
+    public static function normalizeStopped(int $w, int $cap): float
+    {
+        $cap = max(1, $cap);
+        $ratio = max(0.0, min(1.0, $w / $cap));
+
+        return min(1.0, $ratio ** self::STOPPED_INTENSITY_POWER);
     }
 
     /**

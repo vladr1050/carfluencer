@@ -39,6 +39,7 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
                 },
                 'campaign_id' => $campaignId,
                 'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
+                'intensity_stopped_power' => HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER,
                 'normalization' => 'p95',
                 'cap_moving' => 100,
                 'cap_stopped' => 20,
