@@ -41,57 +41,239 @@ const HEATMAP_DEFAULT_ZOOM_WITH_DATA = 11;
  * leaflet.heat (simpleheat): each stamp uses globalAlpha = max(intensity/max, minOpacity).
  * Defaults are very faint on light basemaps — raise minOpacity and lower max for readable color.
  */
-const HEATMAP_MAX_DENOMINATOR = 2.35;
-const HEATMAP_MIN_OPACITY = 0.14;
+const HEAT_MAX_DENOM_MOVING = 2.15;
+const HEAT_MAX_DENOM_STOPPED = 2.35;
+const HEAT_MIN_OPACITY = 0.16;
+const HEAT_RADIUS = 24;
+const HEAT_BLUR = 14;
+const CELL_HALF = 0.0005;
 
-function HeatmapLayer({ data, mode }: { data: [number, number, number][]; mode: string }) {
+const GRADIENT_MOVING: Record<number, string> = {
+  0.0: '#440154',
+  0.25: '#3b528b',
+  0.5: '#21918c',
+  0.75: '#5ec962',
+  1.0: '#fde725',
+};
+const GRADIENT_STOPPED: Record<number, string> = {
+  0.0: '#fff5eb',
+  0.25: '#fdc38d',
+  0.5: '#fc8d59',
+  0.75: '#d7301f',
+  1.0: '#7f0000',
+};
+
+const STOPS_MOVING: [number, string][] = [
+  [0, '#440154'],
+  [0.25, '#3b528b'],
+  [0.5, '#21918c'],
+  [0.75, '#5ec962'],
+  [1, '#fde725'],
+];
+const STOPS_STOPPED: [number, string][] = [
+  [0, '#fff5eb'],
+  [0.25, '#fdc38d'],
+  [0.5, '#fc8d59'],
+  [0.75, '#d7301f'],
+  [1, '#7f0000'],
+];
+
+function parseHex(h: string): [number, number, number] {
+  const s = h.replace('#', '');
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+}
+function mix(a: [number, number, number], b: [number, number, number], t: number): [number, number, number] {
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ];
+}
+function rgbToHex(rgb: [number, number, number]): string {
+  return (
+    '#' +
+    rgb
+      .map((x) => {
+        const h = Math.max(0, Math.min(255, x)).toString(16);
+        return h.length === 1 ? '0' + h : h;
+      })
+      .join('')
+  );
+}
+function colorFromStops(t: number, stops: [number, string][]): string {
+  t = Math.max(0, Math.min(1, t));
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0, c0] = stops[i];
+    const [t1, c1] = stops[i + 1];
+    if (t <= t1 || i === stops.length - 2) {
+      if (t1 <= t0) return c1;
+      const u = (t - t0) / (t1 - t0);
+      return rgbToHex(mix(parseHex(c0), parseHex(c1), Math.max(0, Math.min(1, u))));
+    }
+  }
+  return stops[stops.length - 1][1];
+}
+
+type HeatmapBucket = {
+  lat: number;
+  lng: number;
+  w_moving: number;
+  w_stopped: number;
+  w_total: number;
+  intensity_moving: number;
+  intensity_stopped: number;
+  rank_moving_pct?: number;
+  rank_stopped_pct?: number;
+};
+
+function FitBounds({ buckets }: { buckets: HeatmapBucket[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!buckets.length) return;
+    const ll = buckets.map((b) => L.latLng(b.lat, b.lng));
+    map.fitBounds(L.latLngBounds(ll), { padding: [48, 48], maxZoom: 16 });
+  }, [map, buckets]);
+  return null;
+}
+
+function AnalyticsMapLayers({
+  buckets,
+  mode,
+  viewMode,
+  gridMetric,
+  showMoving,
+  showStopped,
+}: {
+  buckets: HeatmapBucket[];
+  mode: 'driving' | 'parking' | 'both';
+  viewMode: 'heatmap' | 'grid';
+  gridMetric: 'moving' | 'stopped';
+  showMoving: boolean;
+  showStopped: boolean;
+}) {
   const map = useMap();
 
   useEffect(() => {
-    if (!data || data.length === 0) return;
-
-    const addHeatmapWhenReady = (): L.Layer | undefined => {
-      const container = map.getContainer();
-      if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) {
-        setTimeout(addHeatmapWhenReady, 100);
-        return undefined;
-      }
-
-      const gradient =
-        mode === 'parking'
-          ? { 0.0: '#140010', 0.18: '#F10DBF', 0.45: '#F10DBF', 0.85: '#FF8AE8', 1.0: '#FFFFFF' }
-          : mode === 'driving'
-            ? { 0.0: '#101400', 0.18: '#C1F60D', 0.45: '#C1F60D', 0.85: '#E8FF7A', 1.0: '#FFFFFF' }
-            : {
-                0.0: '#0a0a0a',
-                0.15: '#C1F60D',
-                0.4: '#F10DBF',
-                0.65: '#C1F60D',
-                0.85: '#FFFFFF',
-                1.0: '#FFFFFF',
-              };
-
-      const heatLayer = L.heatLayer(data, {
-        radius: 25,
-        blur: 12,
-        maxZoom: 17,
-        minOpacity: HEATMAP_MIN_OPACITY,
-        max: 1.0 / HEATMAP_MAX_DENOMINATOR,
-        gradient,
-      });
-
-      heatLayer.addTo(map);
-      return heatLayer;
+    const toRemove: L.Layer[] = [];
+    const add = (ly: L.Layer) => {
+      ly.addTo(map);
+      toRemove.push(ly);
     };
 
-    const layer = addHeatmapWhenReady();
+    const ready = (): boolean => {
+      const c = map.getContainer();
+      return !!(c && c.offsetWidth > 0 && c.offsetHeight > 0);
+    };
+
+    const run = () => {
+      if (!ready() || !buckets.length) return;
+
+      if (viewMode === 'grid') {
+        const capM = Math.max(1, ...buckets.map((b) => b.w_moving));
+        const capS = Math.max(1, ...buckets.map((b) => b.w_stopped));
+        buckets.forEach((b) => {
+          const w = gridMetric === 'stopped' ? b.w_stopped : b.w_moving;
+          if (w <= 0) return;
+          const cap = gridMetric === 'stopped' ? capS : capM;
+          const inten = Math.min(1, w / cap);
+          const fill = colorFromStops(inten, gridMetric === 'stopped' ? STOPS_STOPPED : STOPS_MOVING);
+          const bounds: L.LatLngBoundsExpression = [
+            [b.lat - CELL_HALF, b.lng - CELL_HALF],
+            [b.lat + CELL_HALF, b.lng + CELL_HALF],
+          ];
+          const rect = L.rectangle(bounds, {
+            stroke: true,
+            color: 'rgba(0,0,0,0.25)',
+            weight: 1,
+            fillColor: fill,
+            fillOpacity: 0.72,
+          });
+          const tip =
+            `<div style="min-width:160px;font-size:12px;line-height:1.35">` +
+            `<b>Samples</b> moving: ${b.w_moving}, stopped: ${b.w_stopped}<br/>` +
+            `<b>Normalized</b> moving: ${b.intensity_moving?.toFixed(3) ?? '—'}, stopped: ${b.intensity_stopped?.toFixed(3) ?? '—'}<br/>` +
+            `<b>Rank % below</b> moving: ${b.rank_moving_pct ?? '—'}, stopped: ${b.rank_stopped_pct ?? '—'}` +
+            `</div>`;
+          rect.bindTooltip(tip, { sticky: true, direction: 'top' });
+          add(rect);
+        });
+        return;
+      }
+
+      const heatM = buckets
+        .filter((b) => b.w_moving > 0)
+        .map((b) => [b.lat, b.lng, b.intensity_moving] as [number, number, number]);
+      const heatS = buckets
+        .filter((b) => b.w_stopped > 0)
+        .map((b) => [b.lat, b.lng, b.intensity_stopped] as [number, number, number]);
+
+      const addHeat = (triples: [number, number, number][], gradient: Record<number, string>, denom: number, r: number, blur: number) => {
+        if (!triples.length || typeof L.heatLayer !== 'function') return;
+        const h = L.heatLayer(triples, {
+          radius: r,
+          blur,
+          maxZoom: 17,
+          minOpacity: HEAT_MIN_OPACITY,
+          max: 1.0 / denom,
+          gradient,
+        });
+        add(h);
+      };
+
+      if (mode === 'driving' && showMoving) {
+        addHeat(heatM, GRADIENT_MOVING, HEAT_MAX_DENOM_MOVING, HEAT_RADIUS, HEAT_BLUR);
+      } else if (mode === 'parking' && showStopped) {
+        addHeat(heatS, GRADIENT_STOPPED, HEAT_MAX_DENOM_STOPPED, HEAT_RADIUS + 2, HEAT_BLUR + 2);
+      } else if (mode === 'both') {
+        if (showMoving) addHeat(heatM, GRADIENT_MOVING, HEAT_MAX_DENOM_MOVING, HEAT_RADIUS, HEAT_BLUR);
+        if (showStopped)
+          addHeat(heatS, GRADIENT_STOPPED, HEAT_MAX_DENOM_STOPPED, Math.round(HEAT_RADIUS * 0.82), Math.round(HEAT_BLUR * 0.85));
+      }
+
+      const heatShown =
+        mode === 'driving'
+          ? showMoving && heatM.length > 0
+          : mode === 'parking'
+            ? showStopped && heatS.length > 0
+            : (showMoving && heatM.length > 0) || (showStopped && heatS.length > 0);
+
+      if (viewMode === 'heatmap' && heatShown) {
+        const markers = L.layerGroup();
+        const maxH = 800;
+        const step = buckets.length > maxH ? Math.ceil(buckets.length / maxH) : 1;
+        buckets.forEach((b, i) => {
+          if (i % step !== 0) return;
+          if (b.w_moving + b.w_stopped <= 0) return;
+          const m = L.circleMarker([b.lat, b.lng], { radius: 8, fillOpacity: 0.001, opacity: 0, interactive: true });
+          const tip =
+            `<div style="min-width:170px;font-size:12px;line-height:1.35">` +
+            `<b>Samples</b> moving: ${b.w_moving}, stopped: ${b.w_stopped}<br/>` +
+            `<b>Intensity</b> moving: ${b.intensity_moving?.toFixed(3) ?? '—'}, stopped: ${b.intensity_stopped?.toFixed(3) ?? '—'}` +
+            `</div>`;
+          m.bindTooltip(tip, { sticky: true, direction: 'top' });
+          markers.addLayer(m);
+        });
+        add(markers);
+      }
+    };
+
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      if (ready()) {
+        run();
+        return;
+      }
+      t = setTimeout(schedule, 100);
+    };
+    schedule();
 
     return () => {
-      if (layer && map.hasLayer(layer)) {
-        map.removeLayer(layer);
-      }
+      if (t) clearTimeout(t);
+      toRemove.forEach((ly) => {
+        if (map.hasLayer(ly)) map.removeLayer(ly);
+      });
     };
-  }, [map, data, mode]);
+  }, [map, buckets, mode, viewMode, gridMetric, showMoving, showStopped]);
 
   return null;
 }
@@ -113,13 +295,21 @@ function MapInvalidateOnResize() {
 }
 
 function MapContent({
-  data,
+  buckets,
   mode,
   basemap,
+  viewMode,
+  gridMetric,
+  showMoving,
+  showStopped,
 }: {
-  data: [number, number, number][];
-  mode: string;
+  buckets: HeatmapBucket[];
+  mode: 'driving' | 'parking' | 'both';
   basemap: AdvertiserMapBasemap;
+  viewMode: 'heatmap' | 'grid';
+  gridMetric: 'moving' | 'stopped';
+  showMoving: boolean;
+  showStopped: boolean;
 }) {
   return (
     <>
@@ -131,7 +321,15 @@ function MapContent({
         {...(basemap.subdomains ? { subdomains: basemap.subdomains } : {})}
       />
       <MapInvalidateOnResize />
-      <HeatmapLayer data={data} mode={mode} />
+      {buckets.length > 0 ? <FitBounds buckets={buckets} /> : null}
+      <AnalyticsMapLayers
+        buckets={buckets}
+        mode={mode}
+        viewMode={viewMode}
+        gridMetric={gridMetric}
+        showMoving={showMoving}
+        showStopped={showStopped}
+      />
     </>
   );
 }
@@ -170,15 +368,20 @@ type VehicleOpt = { id: number; brand: string; model: string; imei: string };
 type HeatmapApi = {
   campaign: { id: number; name: string; start_date?: string | null; end_date?: string | null };
   heatmap: {
-    points: { lat: number; lng: number; intensity: number }[];
+    points: { lat: number; lng: number; intensity: number; w_moving?: number; w_stopped?: number }[];
+    buckets: HeatmapBucket[];
     metrics: {
       impressions: number;
       driving_distance_km: number;
       driving_time_hours: number;
       parking_time_hours: number;
       mode: string;
-      /** stopped | moving | both — same filter semantics as admin heatmap */
       heatmap_motion?: string;
+      intensity_gamma?: number;
+      normalization?: string;
+      cap_moving?: number;
+      cap_stopped?: number;
+      cap_total?: number;
     };
   };
 };
@@ -203,6 +406,11 @@ export function AdvertiserHeatmap() {
   const [customDateFrom, setCustomDateFrom] = useState(dateFromUrl || '');
   const [customDateTo, setCustomDateTo] = useState(dateToUrl || '');
   const [mode, setMode] = useState<'driving' | 'parking' | 'both'>('both');
+  const [normalization, setNormalization] = useState<'p95' | 'p99' | 'max'>('p95');
+  const [mapView, setMapView] = useState<'heatmap' | 'grid'>('heatmap');
+  const [gridMetric, setGridMetric] = useState<'moving' | 'stopped'>('moving');
+  const [showLayerMoving, setShowLayerMoving] = useState(true);
+  const [showLayerStopped, setShowLayerStopped] = useState(true);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -258,6 +466,7 @@ export function AdvertiserHeatmap() {
     if (from) qs.set('date_from', from);
     if (to) qs.set('date_to', to);
     qs.set('mode', mode);
+    qs.set('normalization', normalization);
     try {
       const data = await apiJson<HeatmapApi>(`/api/advertiser/heatmap?${qs.toString()}`);
       setHeatmapPayload(data);
@@ -267,16 +476,15 @@ export function AdvertiserHeatmap() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCampaignId, selectedVehicle, dateRange, customDateFrom, customDateTo, mode]);
+  }, [selectedCampaignId, selectedVehicle, dateRange, customDateFrom, customDateTo, mode, normalization]);
 
   useEffect(() => {
     void loadHeatmap();
   }, [loadHeatmap]);
 
-  const heatmapData: [number, number, number][] =
-    heatmapPayload?.heatmap.points.map((p) => [p.lat, p.lng, p.intensity]) ?? [];
+  const buckets: HeatmapBucket[] = heatmapPayload?.heatmap.buckets ?? [];
 
-  const hasData = heatmapData.length > 0;
+  const hasData = buckets.length > 0 || (heatmapPayload?.heatmap.points?.length ?? 0) > 0;
   const metrics = heatmapPayload?.heatmap.metrics;
 
   const totalImpressions = metrics?.impressions ?? 0;
@@ -294,18 +502,20 @@ export function AdvertiserHeatmap() {
     setCustomDateFrom('');
     setCustomDateTo('');
     setMode('both');
+    setNormalization('p95');
+    setMapView('heatmap');
+    setGridMetric('moving');
+    setShowLayerMoving(true);
+    setShowLayerStopped(true);
     setSearchParams({});
   };
 
-  const legendGradient =
-    mode === 'parking'
-      ? 'linear-gradient(to right, #140010, #F10DBF, #FF8AE8, #FFFFFF)'
-      : mode === 'driving'
-        ? 'linear-gradient(to right, #101400, #C1F60D, #E8FF7A, #FFFFFF)'
-        : 'linear-gradient(to right, #0a0a0a, #C1F60D, #F10DBF, #FFFFFF)';
+  const normLabel = metrics?.normalization ?? normalization;
+  const legendGradientMoving = 'linear-gradient(to right, #440154, #3b528b, #21918c, #5ec962, #fde725)';
+  const legendGradientStopped = 'linear-gradient(to right, #fff5eb, #fdc38d, #fc8d59, #d7301f, #7f0000)';
 
   const center: LatLngTuple =
-    heatmapData.length > 0 ? [heatmapData[0][0], heatmapData[0][1]] : HEATMAP_DEFAULT_CENTER;
+    buckets.length > 0 ? [buckets[0].lat, buckets[0].lng] : HEATMAP_DEFAULT_CENTER;
 
   return (
     <div className="flex h-dvh min-h-0 flex-col bg-background">
@@ -437,6 +647,66 @@ export function AdvertiserHeatmap() {
                 />
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-border/60">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">Intensity scale:</label>
+                <select
+                  value={normalization}
+                  onChange={(e) => setNormalization(e.target.value as 'p95' | 'p99' | 'max')}
+                  className="px-3 py-2 rounded-lg bg-input-background dark:bg-input border border-border text-sm"
+                >
+                  <option value="p95">p95 (recommended)</option>
+                  <option value="p99">p99</option>
+                  <option value="max">Max bucket</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">Map view:</label>
+                <select
+                  value={mapView}
+                  onChange={(e) => setMapView(e.target.value as 'heatmap' | 'grid')}
+                  className="px-3 py-2 rounded-lg bg-input-background dark:bg-input border border-border text-sm"
+                >
+                  <option value="heatmap">Heatmap</option>
+                  <option value="grid">Grid</option>
+                </select>
+              </div>
+              {mapView === 'grid' && (
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground">Grid shows:</label>
+                  <select
+                    value={gridMetric}
+                    onChange={(e) => setGridMetric(e.target.value as 'moving' | 'stopped')}
+                    className="px-3 py-2 rounded-lg bg-input-background dark:bg-input border border-border text-sm"
+                  >
+                    <option value="moving">Moving samples</option>
+                    <option value="stopped">Stopped samples</option>
+                  </select>
+                </div>
+              )}
+              {mode === 'both' && mapView === 'heatmap' && (
+                <div className="flex flex-wrap items-center gap-4 text-sm">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showLayerMoving}
+                      onChange={(e) => setShowLayerMoving(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    Moving layer
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showLayerStopped}
+                      onChange={(e) => setShowLayerStopped(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    Stopped layer
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -473,12 +743,38 @@ export function AdvertiserHeatmap() {
           className="z-0 h-full w-full min-h-[280px] bg-[#e8e8e8]"
           style={{ height: '100%', width: '100%', minHeight: '280px', background: '#e8e8e8' }}
         >
-          <MapContent data={heatmapData} mode={mode} basemap={mapBasemap} />
+          <MapContent
+            buckets={buckets}
+            mode={mode}
+            basemap={mapBasemap}
+            viewMode={mapView}
+            gridMetric={gridMetric}
+            showMoving={mode === 'parking' ? false : showLayerMoving}
+            showStopped={mode === 'driving' ? false : showLayerStopped}
+          />
         </MapContainer>
 
-        <div className="absolute top-4 right-4 bg-card border border-border rounded-lg p-4 shadow-lg z-[1000]">
-          <div className="text-sm mb-3">Heat intensity</div>
-          <div className="w-32 h-4 rounded" style={{ background: legendGradient }} />
+        <div className="absolute top-4 right-4 bg-card border border-border rounded-lg p-4 shadow-lg z-[1000] max-w-[220px] text-xs leading-snug">
+          <div className="font-semibold text-sm mb-2">Activity scale</div>
+          {mode === 'both' ? (
+            <>
+              <div className="font-medium mt-1">Moving</div>
+              <div className="h-2.5 rounded mt-1 border border-border/50" style={{ background: legendGradientMoving }} />
+              <div className="font-medium mt-2">Stopped</div>
+              <div className="h-2.5 rounded mt-1 border border-border/50" style={{ background: legendGradientStopped }} />
+            </>
+          ) : mode === 'parking' ? (
+            <div className="h-3 rounded border border-border/50" style={{ background: legendGradientStopped }} />
+          ) : (
+            <div className="h-3 rounded border border-border/50" style={{ background: legendGradientMoving }} />
+          )}
+          <div className="mt-2 text-muted-foreground">
+            {normLabel === 'max' ? 'Absolute max per layer' : normLabel === 'p99' ? 'Capped at p99' : 'Capped at p95'}
+            {metrics?.intensity_gamma != null ? ` · γ=${metrics.intensity_gamma}` : ''}
+          </div>
+          <div className="mt-1 text-muted-foreground text-[10px]">
+            Low → medium → high → peak (no white hotspot). Hover cells for counts.
+          </div>
         </div>
       </div>
 

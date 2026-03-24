@@ -86,6 +86,7 @@ class TelemetryHeatmapPage extends Page
             'date_from' => now()->subDays(7)->toDateString(),
             'date_to' => now()->toDateString(),
             'motion' => 'both',
+            'heatmap_normalization' => 'p95',
         ];
 
         $defaults = $this->mergeHeatmapDefaultsFromRequest($defaults);
@@ -166,6 +167,8 @@ class TelemetryHeatmapPage extends Page
                 'form_map_scope' => 'map_scope',
                 'form.motion' => 'motion',
                 'form_motion' => 'motion',
+                'form.heatmap_normalization' => 'heatmap_normalization',
+                'form_heatmap_normalization' => 'heatmap_normalization',
                 'form.campaign_id' => 'campaign_id',
                 'form_campaign_id' => 'campaign_id',
                 'form.vehicle_id' => 'vehicle_id',
@@ -302,6 +305,7 @@ class TelemetryHeatmapPage extends Page
             'date_from',
             'date_to',
             'motion',
+            'heatmap_normalization',
         ] as $key) {
             if (! array_key_exists($key, $pairs)) {
                 continue;
@@ -476,7 +480,16 @@ class TelemetryHeatmapPage extends Page
                     ])
                     ->inline()
                     ->required()
-                    ->helperText(__('Moving / stopped uses speed and ignition (same rules as stop-session builder).')),
+                    ->helperText(__('Moving / stopped uses speed and ignition (same rules as stop-session builder). “Both” draws two analytical layers (no mixed gradient).')),
+                Select::make('heatmap_normalization')
+                    ->label(__('Intensity normalization'))
+                    ->options([
+                        'p95' => __('Percentile p95 (recommended)'),
+                        'p99' => __('Percentile p99'),
+                        'max' => __('Absolute max bucket'),
+                    ])
+                    ->native(false)
+                    ->helperText(__('p95/p99 cap the scale so one hotspot does not flatten mid-density areas. Values above the cap map to peak color.')),
             ]);
     }
 
@@ -517,6 +530,7 @@ class TelemetryHeatmapPage extends Page
         $params = [
             'scope' => $s['map_scope'] ?? 'vehicle',
             'motion' => $s['motion'] ?? 'both',
+            'normalization' => $s['heatmap_normalization'] ?? 'p95',
             'date_from' => array_key_exists('date_from', $s) ? $this->scalarForHttpQuery($s['date_from']) : null,
             'date_to' => array_key_exists('date_to', $s) ? $this->scalarForHttpQuery($s['date_to']) : null,
         ];
@@ -597,13 +611,17 @@ class TelemetryHeatmapPage extends Page
             return;
         }
 
-        $count = count($payload['heatmap']['points'] ?? []);
+        $count = count($payload['heatmap']['buckets'] ?? $payload['heatmap']['points'] ?? []);
         $samples = (int) ($payload['heatmap']['metrics']['location_samples'] ?? 0);
         if ($withSuccessToast) {
             $gamma = $payload['heatmap']['metrics']['intensity_gamma'] ?? null;
+            $norm = $payload['heatmap']['metrics']['normalization'] ?? null;
             $body = __('Clusters: :clusters · GPS samples in range: :samples', ['clusters' => $count, 'samples' => $samples]);
             if (is_numeric($gamma)) {
                 $body .= ' · γ='.(string) $gamma;
+            }
+            if (is_string($norm) && $norm !== '') {
+                $body .= ' · '.$norm;
             }
             Notification::make()
                 ->title(__('Heatmap updated'))

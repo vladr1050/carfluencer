@@ -3,34 +3,110 @@
 @endphp
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
-    /* Positron-style land tone while tiles load */
     #admin-telemetry-map .leaflet-container { background: #e8e8e8; }
+    #admin-hm-map-wrap { position: relative; }
+    #admin-hm-legend {
+        position: absolute;
+        z-index: 1000;
+        bottom: 12px;
+        left: 12px;
+        max-width: 220px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 11px;
+        line-height: 1.35;
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+        color: #1a1a1a;
+    }
+    .dark #admin-hm-legend {
+        background: rgba(30, 30, 30, 0.94);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #f3f4f6;
+    }
+    #admin-hm-legend .hm-leg-bar {
+        height: 10px;
+        border-radius: 3px;
+        margin: 6px 0 4px;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+    }
+    #admin-hm-toolbar select {
+        border-radius: 6px;
+        border: 1px solid rgb(209 213 219);
+        padding: 4px 8px;
+        font-size: 13px;
+        background: white;
+    }
+    .dark #admin-hm-toolbar select {
+        background: rgb(31 41 55);
+        border-color: rgb(75 85 99);
+        color: #f3f4f6;
+    }
 </style>
-<div class="space-y-4">
+<div class="space-y-3">
     <p class="text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Aggregated buckets from PostgreSQL `device_locations` for the filters above (campaign / vehicle(s), period, moving vs stopped).') }}
+        {{ __('Aggregated buckets from PostgreSQL `device_locations`. Analytical palettes (Viridis-style moving, sequential oranges stopped). “Both” = two layers, not a blended gradient. Use Grid for precise cell comparison.') }}
     </p>
-    {{-- min-height + vh: Filament flex layout can collapse fixed px height; map must exist before first "Load" --}}
-    <div
-        id="admin-telemetry-map"
-        wire:ignore
-        class="z-0 w-full rounded-lg border border-gray-200 dark:border-gray-700"
-        style="height: min(560px, 55vh); min-height: 320px; background-color: #e8e8e8;"
-    ></div>
+    <div id="admin-hm-toolbar" class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
+        <label class="inline-flex items-center gap-2">
+            <span class="font-medium">{{ __('View') }}</span>
+            <select id="admin-hm-view-mode" aria-label="{{ __('View mode') }}">
+                <option value="heatmap">{{ __('Heatmap') }}</option>
+                <option value="grid">{{ __('Grid') }}</option>
+            </select>
+        </label>
+        <label id="admin-hm-grid-metric-wrap" class="hidden inline-flex items-center gap-2">
+            <span class="font-medium">{{ __('Grid metric') }}</span>
+            <select id="admin-hm-grid-metric" aria-label="{{ __('Grid metric') }}">
+                <option value="moving">{{ __('Moving samples') }}</option>
+                <option value="stopped">{{ __('Stopped samples') }}</option>
+            </select>
+        </label>
+        <span id="admin-hm-both-wrap" class="hidden inline-flex flex-wrap items-center gap-4">
+            <label class="inline-flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="admin-hm-layer-moving" checked class="rounded border-gray-300" />
+                <span>{{ __('Moving layer') }}</span>
+            </label>
+            <label class="inline-flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="admin-hm-layer-stopped" checked class="rounded border-gray-300" />
+                <span>{{ __('Stopped layer') }}</span>
+            </label>
+        </span>
+    </div>
+    <div id="admin-hm-map-wrap">
+        <div
+            id="admin-telemetry-map"
+            wire:ignore
+            class="z-0 w-full rounded-lg border border-gray-200 dark:border-gray-700"
+            style="height: min(560px, 55vh); min-height: 320px; background-color: #e8e8e8;"
+        ></div>
+        <div id="admin-hm-legend" style="display: none;"></div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 (function () {
+    const GRADIENT_MOVING = { 0.0: '#440154', 0.25: '#3b528b', 0.5: '#21918c', 0.75: '#5ec962', 1.0: '#fde725' };
+    const GRADIENT_STOPPED = { 0.0: '#fff5eb', 0.25: '#fdc38d', 0.5: '#fc8d59', 0.75: '#d7301f', 1.0: '#7f0000' };
+    const HEAT_RADIUS = 24;
+    const HEAT_BLUR = 14;
+    const HEAT_MIN_OPACITY = 0.16;
+    const HEAT_MAX_DENOM_MOVING = 2.15;
+    const HEAT_MAX_DENOM_STOPPED = 2.35;
+    const CELL_HALF = 0.0005;
+
     let map = null;
-    let heatLayer = null;
+    let heatLayerMoving = null;
+    let heatLayerStopped = null;
+    let gridLayer = null;
+    let hitLayer = null;
     let resizeObserver = null;
+    let toolbarBound = false;
     const defaultCenter = [56.88, 24.6];
     const defaultZoom = 7;
-    /** leaflet.heat: higher minOpacity + lower max = readable on light basemaps (see frontend Heatmap.tsx) */
-    const HEATMAP_MAX_DENOMINATOR = 2.35;
-    const HEATMAP_MIN_OPACITY = 0.14;
     const maptilerKey = {!! json_encode($maptilerKey) !!};
     const positronTileUrl = maptilerKey
         ? ('https://api.maptiler.com/maps/positron/{z}/{x}/{y}.png?key=' + encodeURIComponent(maptilerKey))
@@ -90,7 +166,11 @@
     }
 
     document.addEventListener('livewire:navigated', function () {
-        heatLayer = null;
+        heatLayerMoving = null;
+        heatLayerStopped = null;
+        gridLayer = null;
+        hitLayer = null;
+        toolbarBound = false;
         if (resizeObserver) {
             resizeObserver.disconnect();
             resizeObserver = null;
@@ -104,71 +184,331 @@
         tryInitMap();
     });
 
-    /**
-     * Same leaflet.heat options as Advertiser portal (frontend/.../Heatmap.tsx HeatmapLayer).
-     * motion: moving → driving gradient, stopped → parking, both → combined.
-     */
-    function adminHeatGradientForMotion(motion) {
-        if (motion === 'stopped') {
-            return { 0.0: '#140010', 0.18: '#F10DBF', 0.45: '#F10DBF', 0.85: '#FF8AE8', 1.0: '#FFFFFF' };
+    function parseHex(h) {
+        const s = h.replace('#', '');
+        return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+    }
+
+    function mix(a, b, t) {
+        return [
+            Math.round(a[0] + (b[0] - a[0]) * t),
+            Math.round(a[1] + (b[1] - a[1]) * t),
+            Math.round(a[2] + (b[2] - a[2]) * t),
+        ];
+    }
+
+    function rgbToHex(rgb) {
+        return '#' + rgb.map(function (x) {
+            const h = Math.max(0, Math.min(255, x)).toString(16);
+            return h.length === 1 ? '0' + h : h;
+        }).join('');
+    }
+
+    /** @param {Array<[number, string]>} stops sorted by t 0..1 */
+    function colorFromStops(t, stops) {
+        t = Math.max(0, Math.min(1, t));
+        for (let i = 0; i < stops.length - 1; i++) {
+            const [t0, c0] = stops[i];
+            const [t1, c1] = stops[i + 1];
+            if (t <= t1 || i === stops.length - 2) {
+                if (t1 <= t0) {
+                    return c1;
+                }
+                const u = (t - t0) / (t1 - t0);
+                return rgbToHex(mix(parseHex(c0), parseHex(c1), Math.max(0, Math.min(1, u))));
+            }
         }
+        return stops[stops.length - 1][1];
+    }
+
+    const STOPS_MOVING = [[0, '#440154'], [0.25, '#3b528b'], [0.5, '#21918c'], [0.75, '#5ec962'], [1, '#fde725']];
+    const STOPS_STOPPED = [[0, '#fff5eb'], [0.25, '#fdc38d'], [0.5, '#fc8d59'], [0.75, '#d7301f'], [1, '#7f0000']];
+
+    function clearHeatmapLayers() {
+        if (heatLayerMoving && map) {
+            map.removeLayer(heatLayerMoving);
+        }
+        if (heatLayerStopped && map) {
+            map.removeLayer(heatLayerStopped);
+        }
+        heatLayerMoving = null;
+        heatLayerStopped = null;
+        if (gridLayer && map) {
+            map.removeLayer(gridLayer);
+        }
+        gridLayer = null;
+        if (hitLayer && map) {
+            map.removeLayer(hitLayer);
+        }
+        hitLayer = null;
+    }
+
+    function buildLegendHtml(metrics, motion, viewMode) {
+        const norm = metrics && metrics.normalization ? String(metrics.normalization) : 'p95';
+        const capM = metrics && metrics.cap_moving != null ? metrics.cap_moving : '—';
+        const capS = metrics && metrics.cap_stopped != null ? metrics.cap_stopped : '—';
+        const normNote = norm === 'max'
+            ? '{{ __('Scale: absolute max per layer.') }}'
+            : (norm === 'p99'
+                ? '{{ __('Scale capped at p99 sample count per layer.') }}'
+                : '{{ __('Scale capped at p95 sample count per layer.') }}');
+
+        let title = '{{ __('Heat intensity') }}';
         if (motion === 'moving') {
-            return { 0.0: '#101400', 0.18: '#C1F60D', 0.45: '#C1F60D', 0.85: '#E8FF7A', 1.0: '#FFFFFF' };
+            title = '{{ __('Moving — sample density') }}';
+        } else if (motion === 'stopped') {
+            title = '{{ __('Stopped — sample density') }}';
+        } else {
+            title = '{{ __('Layers: moving (Viridis) + stopped (orange)') }}';
         }
 
-        return { 0.0: '#0a0a0a', 0.15: '#C1F60D', 0.4: '#F10DBF', 0.65: '#C1F60D', 0.85: '#FFFFFF', 1.0: '#FFFFFF' };
+        const barMoving = 'linear-gradient(90deg, #440154 0%, #3b528b 25%, #21918c 50%, #5ec962 75%, #fde725 100%)';
+        const barStopped = 'linear-gradient(90deg, #fff5eb 0%, #fdc38d 25%, #fc8d59 50%, #d7301f 75%, #7f0000 100%)';
+
+        let bars = '';
+        if (motion === 'both') {
+            bars = '<div class="font-semibold mt-1">{{ __('Moving') }}</div><div class="hm-leg-bar" style="background:' + barMoving + ';"></div>'
+                + '<div class="text-[10px] opacity-80">{{ __('Low') }} → {{ __('Peak') }} (γ=' + (metrics.intensity_gamma ?? '—') + ')</div>'
+                + '<div class="font-semibold mt-2">{{ __('Stopped') }}</div><div class="hm-leg-bar" style="background:' + barStopped + ';"></div>';
+        } else if (motion === 'stopped') {
+            bars = '<div class="hm-leg-bar" style="background:' + barStopped + ';"></div>'
+                + '<div class="text-[10px] flex justify-between"><span>{{ __('Low') }}</span><span>{{ __('Medium') }}</span><span>{{ __('High') }}</span><span>{{ __('Peak') }}</span></div>';
+        } else {
+            bars = '<div class="hm-leg-bar" style="background:' + barMoving + ';"></div>'
+                + '<div class="text-[10px] flex justify-between"><span>{{ __('Low') }}</span><span>{{ __('Medium') }}</span><span>{{ __('High') }}</span><span>{{ __('Peak') }}</span></div>';
+        }
+
+        const gridNote = viewMode === 'grid'
+            ? '<div class="mt-2 text-[10px] opacity-80">{{ __('Grid cells match server buckets (≈0.001°). Tooltip: raw counts + normalized intensity + rank.') }}</div>'
+            : '';
+
+        return '<div class="font-semibold">' + title + '</div>'
+            + bars
+            + '<div class="mt-2 text-[10px] opacity-85">' + normNote + '</div>'
+            + '<div class="text-[10px] opacity-75 mt-1">{{ __('Cap moving') }}: ' + capM + ' · {{ __('Cap stopped') }}: ' + capS + '</div>'
+            + gridNote;
+    }
+
+    function renderGrid(buckets, metric, capMoving, capStopped, gamma) {
+        const layer = L.layerGroup();
+        const stops = metric === 'stopped' ? STOPS_STOPPED : STOPS_MOVING;
+        const cap = metric === 'stopped' ? Math.max(1, capStopped) : Math.max(1, capMoving);
+        const g = Number(gamma) > 0 ? Number(gamma) : 1.55;
+
+        buckets.forEach(function (b) {
+            const w = metric === 'stopped' ? (b.w_stopped || 0) : (b.w_moving || 0);
+            if (w <= 0) {
+                return;
+            }
+            const ratio = Math.min(1, w / cap);
+            const inten = g <= 1 ? ratio : Math.min(1, Math.pow(ratio, g));
+            const fill = colorFromStops(inten, stops);
+            const lat = Number(b.lat);
+            const lng = Number(b.lng);
+            const bounds = [[lat - CELL_HALF, lng - CELL_HALF], [lat + CELL_HALF, lng + CELL_HALF]];
+            const rect = L.rectangle(bounds, {
+                stroke: true,
+                color: 'rgba(0,0,0,0.25)',
+                weight: 1,
+                fillColor: fill,
+                fillOpacity: 0.72,
+            });
+            const im = b.intensity_moving != null ? Number(b.intensity_moving).toFixed(3) : '—';
+            const is = b.intensity_stopped != null ? Number(b.intensity_stopped).toFixed(3) : '—';
+            const tip = '<div style="min-width:160px" class="text-xs leading-snug">'
+                + '<b>{{ __('Samples') }}</b> {{ __('moving') }}: ' + (b.w_moving ?? 0) + ', {{ __('stopped') }}: ' + (b.w_stopped ?? 0) + '<br/>'
+                + '<b>{{ __('Normalized') }}</b> {{ __('moving') }}: ' + im + ', {{ __('stopped') }}: ' + is + '<br/>'
+                + '<b>{{ __('Rank % below') }}</b> {{ __('moving') }}: ' + (b.rank_moving_pct ?? '—') + ', {{ __('stopped') }}: ' + (b.rank_stopped_pct ?? '—')
+                + '</div>';
+            rect.bindTooltip(tip, { sticky: true, direction: 'top', opacity: 0.95 });
+            layer.addLayer(rect);
+        });
+        return layer;
+    }
+
+    function renderHitMarkers(buckets, motion) {
+        const layer = L.layerGroup();
+        const maxHits = 900;
+        const use = buckets.length > maxHits ? buckets.filter(function (_, i) { return i % Math.ceil(buckets.length / maxHits) === 0; }) : buckets;
+        use.forEach(function (b) {
+            if ((b.w_moving || 0) + (b.w_stopped || 0) <= 0) {
+                return;
+            }
+            const m = L.circleMarker([Number(b.lat), Number(b.lng)], {
+                radius: 8,
+                fillOpacity: 0.001,
+                opacity: 0,
+                interactive: true,
+            });
+            const im = b.intensity_moving != null ? Number(b.intensity_moving).toFixed(3) : '—';
+            const is = b.intensity_stopped != null ? Number(b.intensity_stopped).toFixed(3) : '—';
+            const tip = '<div style="min-width:170px" class="text-xs leading-snug">'
+                + '<b>{{ __('Samples') }}</b> {{ __('moving') }}: ' + (b.w_moving ?? 0) + ', {{ __('stopped') }}: ' + (b.w_stopped ?? 0) + '<br/>'
+                + '<b>{{ __('Intensity') }}</b> {{ __('moving') }}: ' + im + ', {{ __('stopped') }}: ' + is + '<br/>'
+                + '<b>{{ __('Rank % below') }}</b> {{ __('moving') }}: ' + (b.rank_moving_pct ?? '—') + ', {{ __('stopped') }}: ' + (b.rank_stopped_pct ?? '—')
+                + '</div>';
+            m.bindTooltip(tip, { sticky: true, direction: 'top' });
+            layer.addLayer(m);
+        });
+        return layer;
+    }
+
+    function redrawFromState() {
+        const payload = window.__adminHeatmapLastPayload;
+        if (!payload || !map) {
+            return;
+        }
+        const motion = (payload.filter && payload.filter.motion) ? payload.filter.motion : 'both';
+        const metrics = (payload.heatmap && payload.heatmap.metrics) ? payload.heatmap.metrics : {};
+        const buckets = (payload.heatmap && payload.heatmap.buckets) ? payload.heatmap.buckets : [];
+        const viewModeEl = document.getElementById('admin-hm-view-mode');
+        const viewMode = viewModeEl ? viewModeEl.value : 'heatmap';
+        const gridMetricEl = document.getElementById('admin-hm-grid-metric');
+        const gridMetric = gridMetricEl ? gridMetricEl.value : 'moving';
+        const showM = !document.getElementById('admin-hm-layer-moving') || document.getElementById('admin-hm-layer-moving').checked;
+        const showS = !document.getElementById('admin-hm-layer-stopped') || document.getElementById('admin-hm-layer-stopped').checked;
+
+        clearHeatmapLayers();
+
+        const leg = document.getElementById('admin-hm-legend');
+        if (leg) {
+            leg.style.display = buckets.length ? 'block' : 'none';
+            leg.innerHTML = buildLegendHtml(metrics, motion, viewMode);
+        }
+
+        const gridWrap = document.getElementById('admin-hm-grid-metric-wrap');
+        if (gridWrap) {
+            gridWrap.classList.toggle('hidden', viewMode !== 'grid');
+        }
+
+        if (buckets.length === 0) {
+            map.setView(defaultCenter, defaultZoom);
+            requestAnimationFrame(invalidateMapSize);
+            return;
+        }
+
+        const capM = Number(metrics.cap_moving) || 1;
+        const capS = Number(metrics.cap_stopped) || 1;
+        const gamma = metrics.intensity_gamma != null ? Number(metrics.intensity_gamma) : 1.55;
+
+        if (viewMode === 'grid') {
+            gridLayer = renderGrid(buckets, gridMetric, capM, capS, gamma);
+            gridLayer.addTo(map);
+            try {
+                map.fitBounds(gridLayer.getBounds(), { padding: [48, 48], maxZoom: 16 });
+            } catch (e) {
+                map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
+            }
+        } else {
+            const heatM = buckets.filter(function (b) { return (b.w_moving || 0) > 0; }).map(function (b) {
+                return [Number(b.lat), Number(b.lng), Number(b.intensity_moving) || 0];
+            });
+            const heatS = buckets.filter(function (b) { return (b.w_stopped || 0) > 0; }).map(function (b) {
+                return [Number(b.lat), Number(b.lng), Number(b.intensity_stopped) || 0];
+            });
+
+            if (motion === 'moving' && showM && heatM.length && typeof L.heatLayer === 'function') {
+                heatLayerMoving = L.heatLayer(heatM, {
+                    radius: HEAT_RADIUS,
+                    blur: HEAT_BLUR,
+                    maxZoom: 17,
+                    minOpacity: HEAT_MIN_OPACITY,
+                    max: 1.0 / HEAT_MAX_DENOM_MOVING,
+                    gradient: GRADIENT_MOVING,
+                });
+                heatLayerMoving.addTo(map);
+            } else if (motion === 'stopped' && showS && heatS.length && typeof L.heatLayer === 'function') {
+                heatLayerStopped = L.heatLayer(heatS, {
+                    radius: HEAT_RADIUS + 2,
+                    blur: HEAT_BLUR + 2,
+                    maxZoom: 17,
+                    minOpacity: HEAT_MIN_OPACITY + 0.02,
+                    max: 1.0 / HEAT_MAX_DENOM_STOPPED,
+                    gradient: GRADIENT_STOPPED,
+                });
+                heatLayerStopped.addTo(map);
+            } else if (motion === 'both') {
+                if (showM && heatM.length && typeof L.heatLayer === 'function') {
+                    heatLayerMoving = L.heatLayer(heatM, {
+                        radius: HEAT_RADIUS,
+                        blur: HEAT_BLUR,
+                        maxZoom: 17,
+                        minOpacity: HEAT_MIN_OPACITY,
+                        max: 1.0 / HEAT_MAX_DENOM_MOVING,
+                        gradient: GRADIENT_MOVING,
+                    });
+                    heatLayerMoving.addTo(map);
+                }
+                if (showS && heatS.length && typeof L.heatLayer === 'function') {
+                    heatLayerStopped = L.heatLayer(heatS, {
+                        radius: Math.round(HEAT_RADIUS * 0.82),
+                        blur: Math.round(HEAT_BLUR * 0.85),
+                        maxZoom: 17,
+                        minOpacity: HEAT_MIN_OPACITY + 0.04,
+                        max: 1.0 / HEAT_MAX_DENOM_STOPPED,
+                        gradient: GRADIENT_STOPPED,
+                    });
+                    heatLayerStopped.addTo(map);
+                }
+            }
+
+            const layers = [];
+            if (heatLayerMoving) {
+                layers.push(heatLayerMoving);
+            }
+            if (heatLayerStopped) {
+                layers.push(heatLayerStopped);
+            }
+            if (layers.length) {
+                try {
+                    const fg = L.featureGroup(layers);
+                    map.fitBounds(fg.getBounds(), { padding: [56, 56], maxZoom: 16 });
+                } catch (e) {
+                    map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
+                }
+            } else {
+                map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
+            }
+
+            const heatShown = (motion === 'moving' && showM && heatM.length) || (motion === 'stopped' && showS && heatS.length)
+                || (motion === 'both' && ((showM && heatM.length) || (showS && heatS.length)));
+            if (heatShown) {
+                hitLayer = renderHitMarkers(buckets, motion);
+                hitLayer.addTo(map);
+            }
+        }
+
+        requestAnimationFrame(invalidateMapSize);
+        setTimeout(invalidateMapSize, 300);
+    }
+
+    function bindToolbarOnce() {
+        if (toolbarBound) {
+            return;
+        }
+        toolbarBound = true;
+        ['admin-hm-view-mode', 'admin-hm-grid-metric', 'admin-hm-layer-moving', 'admin-hm-layer-stopped'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', redrawFromState);
+                el.addEventListener('input', redrawFromState);
+            }
+        });
     }
 
     window.renderAdminTelemetryHeatmap = function (payload) {
-        const pts = (payload.heatmap && payload.heatmap.points) ? payload.heatmap.points : [];
+        window.__adminHeatmapLastPayload = payload;
         const motion = (payload.filter && payload.filter.motion) ? payload.filter.motion : 'both';
-        const heatData = pts.map(function (p) {
-            const w = Number(p.intensity);
-
-            return [Number(p.lat), Number(p.lng), Number.isFinite(w) ? w : 0];
-        });
-
-        const el = document.getElementById('admin-telemetry-map');
-        if (!el) {
-            return;
+        const bothWrap = document.getElementById('admin-hm-both-wrap');
+        if (bothWrap) {
+            bothWrap.classList.toggle('hidden', motion !== 'both');
         }
 
         if (!ensureBaseMap()) {
             return;
         }
-
-        const center = heatData.length ? [heatData[0][0], heatData[0][1]] : defaultCenter;
-
-        if (heatLayer) {
-            map.removeLayer(heatLayer);
-            heatLayer = null;
-        }
-
-        if (heatData.length && typeof L.heatLayer === 'function') {
-            heatLayer = L.heatLayer(heatData, {
-                radius: 25,
-                blur: 12,
-                maxZoom: 17,
-                minOpacity: HEATMAP_MIN_OPACITY,
-                max: 1.0 / HEATMAP_MAX_DENOMINATOR,
-                gradient: adminHeatGradientForMotion(motion),
-            });
-            heatLayer.addTo(map);
-            if (heatData.length === 1) {
-                map.setView(center, 14);
-            } else {
-                try {
-                    map.fitBounds(heatLayer.getBounds(), { padding: [56, 56], maxZoom: 16 });
-                } catch (e) {
-                    map.setView(center, 11);
-                }
-            }
-        } else {
-            map.setView(defaultCenter, defaultZoom);
-        }
-
-        requestAnimationFrame(invalidateMapSize);
-        setTimeout(invalidateMapSize, 300);
+        bindToolbarOnce();
+        redrawFromState();
     };
 })();
 </script>

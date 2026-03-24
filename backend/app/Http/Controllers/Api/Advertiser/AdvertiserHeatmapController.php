@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Services\Telemetry\HeatmapDataServiceInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AdvertiserHeatmapController extends Controller
 {
@@ -22,6 +23,7 @@ class AdvertiserHeatmapController extends Controller
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'mode' => ['nullable', 'string', 'in:driving,parking,both'],
+            'normalization' => ['nullable', 'string', Rule::in(['max', 'p95', 'p99'])],
         ]);
 
         $campaign = Campaign::query()->findOrFail($data['campaign_id']);
@@ -32,6 +34,7 @@ class AdvertiserHeatmapController extends Controller
             'date_from' => $data['date_from'] ?? null,
             'date_to' => $data['date_to'] ?? null,
             'mode' => $data['mode'] ?? 'both',
+            'normalization' => $data['normalization'] ?? 'p95',
         ];
 
         $payload = $this->heatmapData->fetchHeatmapData((int) $campaign->id, $filters);

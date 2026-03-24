@@ -70,7 +70,7 @@ class AdminTelemetryHeatmapTest extends TestCase
         $this->getJson('/internal/admin/telemetry/heatmap-data?scope=vehicle&vehicle_id='.$vehicle->id.'&date_from=2026-03-01&date_to=2026-03-31&motion=both')
             ->assertOk()
             ->assertJsonPath('vehicles.0.imei', $vehicle->imei)
-            ->assertJsonStructure(['heatmap' => ['points', 'metrics'], 'filter']);
+            ->assertJsonStructure(['heatmap' => ['points', 'buckets', 'metrics'], 'filter']);
     }
 
     public function test_moving_filter_excludes_low_speed_points(): void
@@ -116,7 +116,9 @@ class AdminTelemetryHeatmapTest extends TestCase
         $this->actingAs($admin);
         $response = $this->getJson('/internal/admin/telemetry/heatmap-data?scope=vehicle&vehicle_id='.$vehicle->id.'&date_from=2026-03-01&date_to=2026-03-31&motion=moving');
         $response->assertOk();
-        $this->assertSame(1, (int) data_get($response->json(), 'heatmap.metrics.location_samples'));
+        $this->assertSame(2, (int) data_get($response->json(), 'heatmap.metrics.location_samples'));
+        $this->assertSame(1, (int) data_get($response->json(), 'heatmap.metrics.location_samples_moving'));
+        $this->assertSame(1, (int) data_get($response->json(), 'heatmap.metrics.location_samples_stopped'));
     }
 
     public function test_campaign_scope_returns_linked_vehicles(): void

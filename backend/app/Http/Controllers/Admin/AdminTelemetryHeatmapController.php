@@ -27,6 +27,7 @@ class AdminTelemetryHeatmapController extends Controller
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'motion' => ['nullable', 'string', Rule::in(['moving', 'stopped', 'both'])],
+            'normalization' => ['nullable', 'string', Rule::in(['max', 'p95', 'p99'])],
         ]);
 
         if ($data['scope'] === 'vehicles') {
@@ -40,6 +41,7 @@ class AdminTelemetryHeatmapController extends Controller
         }
 
         $motion = $data['motion'] ?? 'both';
+        $normalization = $data['normalization'] ?? 'p95';
 
         $result = $heatmap->build([
             'scope' => $data['scope'],
@@ -49,6 +51,7 @@ class AdminTelemetryHeatmapController extends Controller
             'date_from' => $data['date_from'] ?? null,
             'date_to' => $data['date_to'] ?? null,
             'motion' => $motion,
+            'normalization' => $normalization,
         ]);
 
         $vehiclesPayload = $this->resolveVehiclesPayload($data);
@@ -58,12 +61,14 @@ class AdminTelemetryHeatmapController extends Controller
                 'filter' => [
                     'scope' => $data['scope'],
                     'motion' => $motion,
+                    'normalization' => $normalization,
                     'date_from' => $data['date_from'] ?? null,
                     'date_to' => $data['date_to'] ?? null,
                 ],
                 'vehicles' => $vehiclesPayload,
                 'heatmap' => [
                     'points' => $result['points'],
+                    'buckets' => $result['buckets'],
                     'metrics' => $result['meta'],
                 ],
             ])

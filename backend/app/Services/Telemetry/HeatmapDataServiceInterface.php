@@ -9,8 +9,8 @@ namespace App\Services\Telemetry;
 interface HeatmapDataServiceInterface
 {
     /**
-     * @param  array{vehicle_ids?: array<int>, date_from?: string, date_to?: string, mode?: string}  $filters
-     * @return array{points: array<int, array{lat: float, lng: float, intensity: float}>, metrics: array<string, mixed>}
+     * @param  array{vehicle_ids?: array<int>, date_from?: string, date_to?: string, mode?: string, normalization?: string}  $filters
+     * @return array{points: list<array<string, mixed>>, buckets: list<array<string, mixed>>, metrics: array<string, mixed>}
      */
     public function fetchHeatmapData(int $campaignId, array $filters = []): array;
 }

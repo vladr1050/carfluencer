@@ -7,7 +7,6 @@ use App\Models\DailyImpression;
 use App\Models\DeviceLocation;
 use App\Models\Vehicle;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
 {
@@ -22,8 +21,14 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         if ($imeis === []) {
             return [
                 'points' => [],
+                'buckets' => [],
                 'metrics' => $this->emptyMetrics($campaignId, $mode),
             ];
+        }
+
+        $normalization = $filters['normalization'] ?? 'p95';
+        if (! in_array($normalization, ['max', 'p95', 'p99'], true)) {
+            $normalization = 'p95';
         }
 
         $q = DeviceLocation::query()->whereIn('device_id', $imeis);
@@ -34,36 +39,69 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             $q->whereDate('event_at', '<=', $filters['date_to']);
         }
 
-        DeviceLocationMotionScope::applyAdvertiserMode($q, $mode);
+        $bucketsRaw = DeviceLocationHeatmapBuckets::groupedDualCounts($q->clone());
 
-        $driver = DB::getDriverName();
-        if ($driver === 'pgsql') {
-            $buckets = $q->clone()
-                ->selectRaw('ROUND(CAST(latitude AS numeric), 3)::float AS lat, ROUND(CAST(longitude AS numeric), 3)::float AS lng, COUNT(*) AS w')
-                ->groupByRaw('ROUND(CAST(latitude AS numeric), 3), ROUND(CAST(longitude AS numeric), 3)')
-                ->get();
-        } else {
-            $buckets = $q->clone()
-                ->selectRaw('ROUND(latitude, 3) AS lat, ROUND(longitude, 3) AS lng, COUNT(*) AS w')
-                ->groupByRaw('ROUND(latitude, 3), ROUND(longitude, 3)')
-                ->get();
+        $gamma = TelemetryHeatmapConfig::intensityGamma();
+        $wMoving = $bucketsRaw->map(fn ($r) => (int) $r->w_moving)->all();
+        $wStopped = $bucketsRaw->map(fn ($r) => (int) $r->w_stopped)->all();
+        $wTotals = $bucketsRaw->map(fn ($r) => (int) $r->w_moving + (int) $r->w_stopped)->all();
+
+        $capMoving = HeatmapIntensityNormalizer::capFromWeights($wMoving, $normalization);
+        $capStopped = HeatmapIntensityNormalizer::capFromWeights($wStopped, $normalization);
+        $capTotal = HeatmapIntensityNormalizer::capFromWeights($wTotals, $normalization);
+
+        $bucketsOut = [];
+        $points = [];
+
+        foreach ($bucketsRaw as $r) {
+            $lat = (float) $r->lat;
+            $lng = (float) $r->lng;
+            $wm = (int) $r->w_moving;
+            $ws = (int) $r->w_stopped;
+            $wt = $wm + $ws;
+
+            $im = HeatmapIntensityNormalizer::normalize($wm, $capMoving, $gamma);
+            $is = HeatmapIntensityNormalizer::normalize($ws, $capStopped, $gamma);
+            $it = HeatmapIntensityNormalizer::normalize($wt, $capTotal, $gamma);
+
+            $bucketsOut[] = [
+                'lat' => $lat,
+                'lng' => $lng,
+                'w_moving' => $wm,
+                'w_stopped' => $ws,
+                'w_total' => $wt,
+                'intensity_moving' => $im,
+                'intensity_stopped' => $is,
+                'rank_moving_pct' => HeatmapIntensityNormalizer::rankPercentBelow($wm, $wMoving),
+                'rank_stopped_pct' => HeatmapIntensityNormalizer::rankPercentBelow($ws, $wStopped),
+            ];
+
+            if ($mode === 'driving') {
+                if ($wm > 0) {
+                    $points[] = ['lat' => $lat, 'lng' => $lng, 'intensity' => $im, 'w' => $wm, 'w_moving' => $wm, 'w_stopped' => $ws];
+                }
+            } elseif ($mode === 'parking') {
+                if ($ws > 0) {
+                    $points[] = ['lat' => $lat, 'lng' => $lng, 'intensity' => $is, 'w' => $ws, 'w_moving' => $wm, 'w_stopped' => $ws];
+                }
+            } elseif ($wt > 0) {
+                $points[] = ['lat' => $lat, 'lng' => $lng, 'intensity' => $it, 'w' => $wt, 'w_moving' => $wm, 'w_stopped' => $ws];
+            }
         }
-
-        $maxW = (int) ($buckets->max('w') ?: 1);
-        $points = $buckets->map(fn ($r) => [
-            'lat' => (float) $r->lat,
-            'lng' => (float) $r->lng,
-            'intensity' => HeatmapBucketIntensity::normalize((int) $r->w, $maxW),
-        ])->values()->all();
 
         $metrics = $this->resolveMetrics($campaignId, $filters);
         $metrics['mode'] = $mode;
         $metrics['heatmap_motion'] = self::heatmapMotionLabel($mode);
         $metrics['campaign_id'] = $campaignId;
-        $metrics['intensity_gamma'] = TelemetryHeatmapConfig::intensityGamma();
+        $metrics['intensity_gamma'] = $gamma;
+        $metrics['normalization'] = $normalization;
+        $metrics['cap_moving'] = $capMoving;
+        $metrics['cap_stopped'] = $capStopped;
+        $metrics['cap_total'] = $capTotal;
 
         return [
             'points' => $points,
+            'buckets' => $bucketsOut,
             'metrics' => $metrics,
         ];
     }
@@ -268,6 +306,10 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             'campaign_id' => $campaignId,
             'data_source' => 'none',
             'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
+            'normalization' => 'p95',
+            'cap_moving' => 1,
+            'cap_stopped' => 1,
+            'cap_total' => 1,
         ];
     }
 
