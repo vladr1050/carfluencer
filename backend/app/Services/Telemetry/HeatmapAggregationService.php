@@ -83,13 +83,14 @@ GROUP BY device_id, {$latExpr}, {$lngExpr}
 HAVING COUNT(*) > 0
 SQL;
 
+            // Bindings must follow the order of ? in the SQL: SELECT day/mode/tier, then event_at bounds, then speed threshold in $whereMotion.
             DB::statement($sql, [
                 $dayStr,
                 $mode,
                 $zoomTier,
-                $threshold,
                 $start->toDateTimeString(),
                 $end->toDateTimeString(),
+                $threshold,
             ]);
         });
     }
