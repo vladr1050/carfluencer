@@ -444,8 +444,8 @@ function HeatmapApiLoader({
 }: {
   selectedCampaignId: string;
   selectedVehicle: string;
-  dateFrom?: string;
-  dateTo?: string;
+  dateFrom: string;
+  dateTo: string;
   mode: 'driving' | 'parking';
   normalization: string;
   setHeatmapPayload: (d: HeatmapApi | null) => void;
@@ -475,15 +475,22 @@ function HeatmapApiLoader({
     const qs = new URLSearchParams();
     qs.set('campaign_id', selectedCampaignId);
     if (selectedVehicle !== 'all') qs.set('vehicle_id', selectedVehicle);
-    if (dateFrom) qs.set('date_from', dateFrom);
-    if (dateTo) qs.set('date_to', dateTo);
+    qs.set('date_from', dateFrom);
+    qs.set('date_to', dateTo);
     qs.set('mode', mode);
     qs.set('normalization', normalization);
-    qs.set('south', String(b.getSouth()));
-    qs.set('west', String(b.getWest()));
-    qs.set('north', String(b.getNorth()));
-    qs.set('east', String(b.getEast()));
-    qs.set('zoom', String(map.getZoom()));
+    const south = b.getSouth();
+    const north = b.getNorth();
+    const west = b.getWest();
+    const east = b.getEast();
+    const zoom = map.getZoom();
+    if ([south, north, west, east, zoom].every((n) => Number.isFinite(n))) {
+      qs.set('south', String(south));
+      qs.set('west', String(west));
+      qs.set('north', String(north));
+      qs.set('east', String(east));
+      qs.set('zoom', String(zoom));
+    }
     try {
       const data = await apiJson<HeatmapApi>(`/api/advertiser/heatmap?${qs.toString()}`, { signal: ac.signal });
       if (requestId !== heatmapRequestIdRef.current) {
@@ -694,10 +701,14 @@ export function AdvertiserHeatmap() {
 
   const hasCampaignContext = !!campaignIdFromUrl;
 
-  const { from: dateFrom, to: dateTo } = useMemo(
-    () => resolveDates(appliedDateRange, appliedCustomFrom, appliedCustomTo),
-    [appliedDateRange, appliedCustomFrom, appliedCustomTo],
-  );
+  const { dateFrom, dateTo } = useMemo(() => {
+    const resolved = resolveDates(appliedDateRange, appliedCustomFrom, appliedCustomTo);
+    if (resolved.from && resolved.to) {
+      return { dateFrom: resolved.from, dateTo: resolved.to };
+    }
+    const fb = resolveDates('last-7-days', '', '');
+    return { dateFrom: fb.from as string, dateTo: fb.to as string };
+  }, [appliedDateRange, appliedCustomFrom, appliedCustomTo]);
 
   const dateRangePendingDirty =
     dateRange !== appliedDateRange || customDateFrom !== appliedCustomFrom || customDateTo !== appliedCustomTo;
@@ -737,7 +748,16 @@ export function AdvertiserHeatmap() {
         setAppliedCustomFrom(from);
         setAppliedCustomTo(to);
       } else {
-        setAppliedDateRange('custom');
+        const fb = resolveDates('last-7-days', '', '');
+        if (fb.from && fb.to) {
+          setCustomDateFrom(fb.from);
+          setCustomDateTo(fb.to);
+          setAppliedDateRange('custom');
+          setAppliedCustomFrom(fb.from);
+          setAppliedCustomTo(fb.to);
+        } else {
+          setAppliedDateRange('custom');
+        }
       }
     },
     [appliedDateRange, appliedCustomFrom, appliedCustomTo],
