@@ -101,6 +101,11 @@ return [
              */
             'legacy_fallback_without_viewport' => filter_var(env('TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT', true), FILTER_VALIDATE_BOOLEAN),
             /**
+             * When true, advertiser heatmap summary KPIs may fall back to a full device_locations scan
+             * if daily_impressions and session aggregates are empty. Default false (return insufficient_aggregates).
+             */
+            'advertiser_raw_summary_fallback' => filter_var(env('TELEMETRY_HEATMAP_ADVERTISER_RAW_SUMMARY_FALLBACK', false), FILTER_VALIDATE_BOOLEAN),
+            /**
              * Map zoom (Leaflet) → tier index. Each tier uses `decimals` for ROUND(lat/lng, decimals).
              * max_zoom inclusive: first matching tier wins (list order matters).
              */

@@ -114,13 +114,14 @@ class AdvertiserHeatmapMetricsEstimatedTest extends TestCase
             .'&south=54&north=55&west=25&east=26&zoom=11';
         $res = $this->getJson($url)->assertOk();
 
-        $this->assertSame(500, $res->json('heatmap.metrics.impressions'));
-        $this->assertSame('daily_impressions_estimated', $res->json('heatmap.metrics.data_source'));
-        $km = (float) $res->json('heatmap.metrics.driving_distance_km');
+        $this->assertSame(500, $res->json('summary_metrics.impressions'));
+        $this->assertSame('daily_impressions_estimated', $res->json('summary_metrics.data_source'));
+        $this->assertTrue($res->json('summary_metrics.is_estimated'));
+        $km = (float) $res->json('summary_metrics.driving_distance_km');
         $this->assertGreaterThan(5.0, $km, 'Estimated driving distance should reflect GPS segment');
-        $hours = (float) $res->json('heatmap.metrics.driving_time_hours');
+        $hours = (float) $res->json('summary_metrics.driving_time_hours');
         $this->assertGreaterThan(0.0, $hours, 'Driving time should derive from distance or sessions');
-        $parkH = (float) $res->json('heatmap.metrics.parking_time_hours');
+        $parkH = (float) $res->json('summary_metrics.parking_time_hours');
         $this->assertGreaterThanOrEqual(0.5, $parkH, 'Parking hours from consecutive low-speed GPS segment');
     }
 }

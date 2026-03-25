@@ -30,24 +30,29 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
         ];
 
         return [
-            'points' => $points,
-            'buckets' => $buckets,
-            'metrics' => [
+            'map' => [
+                'points' => $points,
+                'buckets' => $buckets,
+                'mode' => $mode,
+                'heatmap_motion' => $mode === 'parking' ? 'stopped' : 'moving',
+                'campaign_id' => $campaignId,
+                'normalization' => 'p95',
+                'heatmap_rollup' => false,
+            ],
+            'debug' => [
+                'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
+                'intensity_stopped_power' => HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER,
+                'cap_moving' => 100,
+                'cap_stopped' => 20,
+                'cap_total' => 100,
+            ],
+            'summary_metrics' => [
                 'impressions' => 2847350,
                 'driving_distance_km' => 1247,
                 'driving_time_hours' => 82,
                 'parking_time_hours' => 156,
-                'mode' => $mode,
-                'heatmap_motion' => $mode === 'parking' ? 'stopped' : 'moving',
-                'campaign_id' => $campaignId,
-                'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
-                'intensity_stopped_power' => HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER,
-                'normalization' => 'p95',
-                'cap_moving' => 100,
-                'cap_stopped' => 20,
-                'cap_total' => 100,
-                'heatmap_rollup' => false,
                 'data_source' => 'mock',
+                'is_estimated' => false,
             ],
         ];
     }

@@ -37,6 +37,7 @@ If `TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT` is true (default), missing vi
 
 - `TELEMETRY_HEATMAP_ROLLUP_READ` — enable rollup reads (default true).
 - `TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT` — allow legacy path without viewport (default true for dev).
+- `TELEMETRY_HEATMAP_ADVERTISER_RAW_SUMMARY_FALLBACK` — allow legacy full `device_locations` scan for advertiser **summary_metrics** when daily rows are missing (default false).
 - `telemetry.heatmap.rollup.zoom_tiers` — tier definitions.
 
 ## Ongoing operations
@@ -45,4 +46,18 @@ If `TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT` is true (default), missing vi
 - **Automated (when ClickHouse telemetry sync is enabled):** `telemetry:scheduler-tick` runs **hourly** (with `0 * * * *` cron for `schedule:run`); after the admin-configured **`aggregateDailyAt`** UTC slot has passed for the calendar day, it also runs `heatmap:aggregate --from=yesterday --to=yesterday --all-modes` on **PostgreSQL** once per UTC calendar day (cache key `telemetry_tick_heatmap_rollup_{date}`). For sub-hourly incremental ClickHouse pulls, use `* * * * *` cron and `everyMinute()` in `bootstrap/app.php`.
 - **Manual / extra backfill:** e.g. `php artisan heatmap:aggregate-day $(date -u +%F)` or a `--from`/`--to` range with `--all-modes`.
 - Re-running `heatmap:aggregate` for a range is **idempotent** (delete-then-insert per day/tier/mode).
-- **Advertiser heatmap JSON** includes map buckets from rollup (viewport + zoom) and **KPI block** (`impressions`, `driving_distance_km`, `driving_time_hours`, `parking_time_hours`) from `resolveMetrics()` over the same `date_from` / `date_to` and vehicles — i.e. daily_impressions / stop_sessions / GPS estimates, not the rollup cells. If KPIs look wrong after changing dates, hard-refresh once; the SPA also aborts superseded fetches so pan/zoom cannot overwrite a newer period’s response.
+## Advertiser API: map vs summary KPIs (`GET /api/advertiser/heatmap`)
+
+The JSON response separates **viewport-dependent** data from **period totals**:
+
+| Section | Purpose | Depends on |
+|--------|---------|------------|
+| `map` | `points`, `buckets`, `mode`, `heatmap_motion`, `normalization`, `heatmap_rollup` | bbox, zoom, `mode` (driving/parking **layer**), dates, vehicles |
+| `debug` | `intensity_gamma`, `intensity_stopped_power`, caps, `location_samples`, `location_samples_viewport`, `heatmap_zoom_tier`, optional errors | Same as map (internal / diagnostics) |
+| `summary_metrics` | `impressions`, `driving_distance_km`, `driving_time_hours`, `parking_time_hours`, `data_source`, `is_estimated` | **Campaign + date range + selected vehicles only** — not bbox, zoom, or map mode |
+
+**Product rule:** Bottom KPI cards always show **full activity** for the selected campaign/vehicles/period. Toggling driving vs parking changes only the **map layer** in `map`, not the semantics of `summary_metrics`.
+
+**Sources** (`summary_metrics.data_source`): `daily_impressions` when aggregates cover the period; `daily_impressions_estimated` when GPS gap-fill from `device_locations` was used (`is_estimated: true`); `insufficient_aggregates` when there are no usable daily rows and **raw fallback is disabled** (default) — KPI numeric fields are `null`. Optional escape hatch: `TELEMETRY_HEATMAP_ADVERTISER_RAW_SUMMARY_FALLBACK=true` restores the legacy full `device_locations` scan for KPIs only (marked `device_locations_*`, `is_estimated: true`).
+
+Shared filter context: `App\Services\Telemetry\HeatmapPageQuery`. Map reads all fields; `HeatmapSummaryMetricsService` ignores bbox/zoom and map `mode`.

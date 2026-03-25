@@ -55,7 +55,7 @@ class AdvertiserHeatmapController extends Controller
             'zoom' => $data['zoom'] ?? null,
         ];
 
-        $payload = $this->heatmapData->fetchHeatmapData((int) $campaign->id, $filters);
+        $bundle = $this->heatmapData->fetchHeatmapData((int) $campaign->id, $filters);
 
         return response()
             ->json([
@@ -65,7 +65,9 @@ class AdvertiserHeatmapController extends Controller
                     'start_date' => $campaign->start_date?->format('Y-m-d'),
                     'end_date' => $campaign->end_date?->format('Y-m-d'),
                 ],
-                'heatmap' => $payload,
+                'map' => $bundle['map'],
+                'debug' => $bundle['debug'],
+                'summary_metrics' => $bundle['summary_metrics'],
             ])
             ->header('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     }

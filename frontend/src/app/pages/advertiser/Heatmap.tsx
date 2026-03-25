@@ -572,25 +572,30 @@ type VehicleOpt = { id: number; brand: string; model: string; imei: string };
 
 type HeatmapApi = {
   campaign: { id: number; name: string; start_date?: string | null; end_date?: string | null };
-  heatmap: {
+  map: {
     points: { lat: number; lng: number; intensity: number; w_moving?: number; w_stopped?: number }[];
     buckets: HeatmapBucket[];
-    metrics: {
-      impressions: number;
-      driving_distance_km: number;
-      driving_time_hours: number;
-      parking_time_hours: number;
-      mode: string;
-      heatmap_motion?: string;
-      intensity_gamma?: number;
-      /** Fixed 0.7 curve for stopped intensity (after p95/p99/max cap). */
-      intensity_stopped_power?: number;
-      normalization?: string;
-      cap_moving?: number;
-      cap_stopped?: number;
-      cap_total?: number;
-      heatmap_rollup?: boolean;
-    };
+    mode: string;
+    heatmap_motion?: string;
+    normalization?: string;
+    heatmap_rollup?: boolean;
+  };
+  debug: {
+    intensity_gamma?: number;
+    intensity_stopped_power?: number;
+    cap_moving?: number;
+    cap_stopped?: number;
+    cap_total?: number;
+    heatmap_error?: string;
+    heatmap_error_detail?: string;
+  };
+  summary_metrics: {
+    impressions: number | null;
+    driving_distance_km: number | null;
+    driving_time_hours: number | null;
+    parking_time_hours: number | null;
+    data_source: string;
+    is_estimated: boolean;
   };
 };
 
@@ -727,15 +732,13 @@ export function AdvertiserHeatmap() {
     }
   }, []);
 
-  const buckets: HeatmapBucket[] = heatmapPayload?.heatmap.buckets ?? [];
+  const mapLayer = heatmapPayload?.map;
+  const mapDebug = heatmapPayload?.debug ?? {};
+  const summary = heatmapPayload?.summary_metrics;
 
-  const hasData = buckets.length > 0 || (heatmapPayload?.heatmap.points?.length ?? 0) > 0;
-  const metrics = heatmapPayload?.heatmap.metrics;
+  const buckets: HeatmapBucket[] = mapLayer?.buckets ?? [];
 
-  const totalImpressions = metrics?.impressions ?? 0;
-  const drivingDistance = metrics?.driving_distance_km ?? 0;
-  const drivingTime = metrics?.driving_time_hours ?? 0;
-  const parkingTime = metrics?.parking_time_hours ?? 0;
+  const hasData = buckets.length > 0 || (mapLayer?.points?.length ?? 0) > 0;
 
   const handleModeChange = (newMode: 'driving' | 'parking') => {
     setMode(newMode);
@@ -755,7 +758,7 @@ export function AdvertiserHeatmap() {
     setSearchParams({});
   };
 
-  const normLabel = metrics?.normalization ?? normalization;
+  const normLabel = mapLayer?.normalization ?? normalization;
   const legendGradientMoving = 'linear-gradient(to right, #440154, #3b528b, #21918c, #5ec962, #fde725)';
   const legendGradientStopped =
     'linear-gradient(to right, #1b5e20 0%, #43a047 22%, #c6d84a 45%, #ffeb3b 62%, #fb8c00 80%, #c62828 100%)';
@@ -1032,7 +1035,7 @@ export function AdvertiserHeatmap() {
             gridMetric={gridMetric}
             showParkingContours={showParkingContours}
             shadowPreset={shadowPreset}
-            skipAutoFitBounds={metrics?.heatmap_rollup === true}
+            skipAutoFitBounds={mapLayer?.heatmap_rollup === true}
           />
         </MapContainer>
 
@@ -1061,8 +1064,8 @@ export function AdvertiserHeatmap() {
           )}
           <div className="mt-2 text-muted-foreground">
             {normLabel === 'max' ? 'Absolute max per layer' : normLabel === 'p99' ? 'Capped at p99' : 'Capped at p95'}
-            {mode === 'driving' && metrics?.intensity_gamma != null ? ` · moving γ=${metrics.intensity_gamma}` : ''}
-            {mode === 'parking' ? ` · parking ^${metrics?.intensity_stopped_power ?? 0.7}` : ''}
+            {mode === 'driving' && mapDebug.intensity_gamma != null ? ` · moving γ=${mapDebug.intensity_gamma}` : ''}
+            {mode === 'parking' ? ` · parking ^${mapDebug.intensity_stopped_power ?? 0.7}` : ''}
           </div>
           <div className="mt-1 text-muted-foreground text-[10px]">
             Parking boosts mid-density (capped ratio to power below 1).
@@ -1071,12 +1074,17 @@ export function AdvertiserHeatmap() {
       </div>
 
       <div className="p-4 border-t border-border bg-card">
+        {summary?.data_source === 'insufficient_aggregates' ? (
+          <p className="text-xs text-muted-foreground mb-3">
+            Period KPIs need daily_impressions (and related aggregates). Expand the date range or run daily telemetry jobs — raw map points may still appear from rollups.
+          </p>
+        ) : null}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
             <Eye className="w-5 h-5" style={{ color: '#C1F60D' }} />
             <div>
               <div className="text-2xl" style={{ color: '#C1F60D' }}>
-                {totalImpressions.toLocaleString()}
+                {summary?.impressions != null ? summary.impressions.toLocaleString() : '—'}
               </div>
               <div className="text-xs text-muted-foreground">Impressions</div>
             </div>
@@ -1084,21 +1092,27 @@ export function AdvertiserHeatmap() {
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
             <Navigation className="w-5 h-5 text-accent" />
             <div>
-              <div className="text-2xl">{drivingDistance} km</div>
+              <div className="text-2xl">
+                {summary?.driving_distance_km != null ? `${summary.driving_distance_km} km` : '—'}
+              </div>
               <div className="text-xs text-muted-foreground">Driving distance</div>
             </div>
           </div>
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
             <Clock className="w-5 h-5" />
             <div>
-              <div className="text-2xl">{drivingTime} hrs</div>
+              <div className="text-2xl">
+                {summary?.driving_time_hours != null ? `${summary.driving_time_hours} hrs` : '—'}
+              </div>
               <div className="text-xs text-muted-foreground">Driving time</div>
             </div>
           </div>
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
             <Clock className="w-5 h-5" />
             <div>
-              <div className="text-2xl">{parkingTime} hrs</div>
+              <div className="text-2xl">
+                {summary?.parking_time_hours != null ? `${summary.parking_time_hours} hrs` : '—'}
+              </div>
               <div className="text-xs text-muted-foreground">Parking time</div>
             </div>
           </div>

@@ -21,7 +21,11 @@ interface HeatmapDataServiceInterface
      *     east?: float|string|null,
      *     zoom?: int|string|null
      * }  $filters
-     * @return array{points: list<array<string, mixed>>, buckets: list<array<string, mixed>>, metrics: array<string, mixed>}
+     * @return array{
+     *     map: array<string, mixed>,
+     *     debug: array<string, mixed>,
+     *     summary_metrics: array<string, mixed>
+     * }
      */
     public function fetchHeatmapData(int $campaignId, array $filters = []): array;
 }

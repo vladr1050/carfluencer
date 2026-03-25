@@ -80,16 +80,19 @@ class AdvertiserHeatmapMotionFilterTest extends TestCase
         $base = '/api/advertiser/heatmap?campaign_id='.$campaign->id.'&date_from=2026-03-01&date_to=2026-03-31';
 
         $parking = $this->getJson($base.'&mode=parking')->assertOk();
-        $parkingLats = collect($parking->json('heatmap.points'))->pluck('lat')->all();
+        $parkingLats = collect($parking->json('map.points'))->pluck('lat')->all();
         $this->assertContains(54.5, $parkingLats);
         $this->assertNotContains(54.6, $parkingLats);
-        $this->assertSame('stopped', $parking->json('heatmap.metrics.heatmap_motion'));
+        $this->assertSame('stopped', $parking->json('map.heatmap_motion'));
+        $this->assertSame('insufficient_aggregates', $parking->json('summary_metrics.data_source'));
+        $this->assertNull($parking->json('summary_metrics.impressions'));
 
         $driving = $this->getJson($base.'&mode=driving')->assertOk();
-        $drivingLats = collect($driving->json('heatmap.points'))->pluck('lat')->all();
+        $drivingLats = collect($driving->json('map.points'))->pluck('lat')->all();
         $this->assertContains(54.6, $drivingLats);
         $this->assertNotContains(54.5, $drivingLats);
-        $this->assertSame('moving', $driving->json('heatmap.metrics.heatmap_motion'));
+        $this->assertSame('moving', $driving->json('map.heatmap_motion'));
+        $this->assertSame($parking->json('summary_metrics'), $driving->json('summary_metrics'));
 
         $this->getJson($base.'&mode=both')->assertUnprocessable();
     }

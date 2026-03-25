@@ -52,7 +52,7 @@ Sanctum cookie / bearer token as configured. Register and login under `/api/auth
 | POST | `/api/advertiser/campaigns/{campaign}/proofs` | Multipart `file` + `vehicle_id` |
 | GET | `/api/advertiser/vehicles` | Query `per_page` (1–200) |
 | GET | `/api/advertiser/vehicles/{vehicle}` | |
-| GET | `/api/advertiser/heatmap` | Query: `campaign_id`, optional `vehicle_id`, `date_from`/`date_to`, **`mode`**: `driving` \| `parking` \| `both`, optional **`normalization`**: `max` \| `p95` \| `p99` (default **p95**). Response includes **`heatmap.buckets`**: per grid cell `w_moving`, `w_stopped`, `intensity_moving`, `intensity_stopped`, rank-% fields; **`heatmap.points`** remains for backward compatibility (`both` uses total-count intensity per cell). Metrics add `normalization`, `cap_*`, `intensity_gamma` (moving), **`intensity_stopped_power`** (fixed **0.7** for stopped curve). Same motion rules as admin. Footer KPIs: km/time for full period; map respects **mode** for primary `points`. |
+| GET | `/api/advertiser/heatmap` | Query: `campaign_id`, optional `vehicle_id`, `date_from`/`date_to`, **`mode`**: `driving` \| `parking`, optional bbox `south`/`west`/`north`/`east` + `zoom`, **`normalization`**: `max` \| `p95` \| `p99` (default **p95**). Response: **`map`** (`points`, `buckets`, `mode`, `heatmap_motion`, `normalization`, `heatmap_rollup`), **`debug`** (e.g. `intensity_gamma`, `intensity_stopped_power`, caps, viewport sample counts), **`summary_metrics`** (period KPIs: `impressions`, `driving_distance_km`, `driving_time_hours`, `parking_time_hours`, `data_source`, `is_estimated` — independent of viewport and map mode). See `docs/ARCHITECTURE/06_heatmap_rollup.md`. |
 | GET | `/api/advertiser/pricing` | |
 | GET | `/api/advertiser/profile-discounts` | |
 
