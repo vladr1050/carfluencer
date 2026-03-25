@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
-import { Calendar, Navigation, Clock, Eye, ChevronDown, ChevronUp, X, RotateCcw, AlertCircle } from 'lucide-react';
+import {
+  Calendar,
+  Navigation,
+  Clock,
+  Eye,
+  ChevronDown,
+  ChevronUp,
+  X,
+  RotateCcw,
+  AlertCircle,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { LatLngTuple } from 'leaflet';
 import '../../utils/leaflet-icon-fix';
@@ -316,6 +328,26 @@ function MapInvalidateOnResize() {
   return null;
 }
 
+/** Leaflet needs invalidateSize after native fullscreen toggles (ResizeObserver may lag on some browsers). */
+function MapInvalidateOnFullscreen() {
+  const map = useMap();
+  useEffect(() => {
+    const fix = () => {
+      requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false });
+        setTimeout(() => map.invalidateSize({ animate: false }), 200);
+      });
+    };
+    document.addEventListener('fullscreenchange', fix);
+    document.addEventListener('webkitfullscreenchange', fix as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', fix);
+      document.removeEventListener('webkitfullscreenchange', fix as EventListener);
+    };
+  }, [map]);
+  return null;
+}
+
 function MapContent({
   buckets,
   mode,
@@ -343,6 +375,7 @@ function MapContent({
         {...(basemap.subdomains ? { subdomains: basemap.subdomains } : {})}
       />
       <MapInvalidateOnResize />
+      <MapInvalidateOnFullscreen />
       {buckets.length > 0 ? <FitBounds buckets={buckets} enabled={!skipAutoFitBounds} /> : null}
       <AnalyticsMapLayers
         buckets={buckets}
@@ -543,6 +576,8 @@ export function AdvertiserHeatmap() {
   const [gridMetric, setGridMetric] = useState<'moving' | 'stopped'>('moving');
   const [showParkingContours, setShowParkingContours] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
+  const mapShellRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [heatmapPayload, setHeatmapPayload] = useState<HeatmapApi | null>(null);
@@ -591,6 +626,41 @@ export function AdvertiserHeatmap() {
   useEffect(() => {
     setGridMetric(mode === 'parking' ? 'stopped' : 'moving');
   }, [mode]);
+
+  useEffect(() => {
+    const shell = mapShellRef.current;
+    const sync = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element | null };
+      const active = document.fullscreenElement ?? doc.webkitFullscreenElement;
+      setMapFullscreen(!!shell && active === shell);
+    };
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('webkitfullscreenchange', sync);
+    sync();
+    return () => {
+      document.removeEventListener('fullscreenchange', sync);
+      document.removeEventListener('webkitfullscreenchange', sync);
+    };
+  }, []);
+
+  const toggleMapFullscreen = useCallback(async () => {
+    const el = mapShellRef.current;
+    if (!el) return;
+    const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> };
+    const htmlEl = el as HTMLElement & { webkitRequestFullscreen?: () => void };
+    try {
+      if (document.fullscreenElement === el || doc.webkitFullscreenElement === el) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (doc.webkitExitFullscreen) await doc.webkitExitFullscreen();
+      } else if (htmlEl.requestFullscreen) {
+        await htmlEl.requestFullscreen();
+      } else if (htmlEl.webkitRequestFullscreen) {
+        htmlEl.webkitRequestFullscreen();
+      }
+    } catch {
+      /* user denied or API unsupported */
+    }
+  }, []);
 
   const buckets: HeatmapBucket[] = heatmapPayload?.heatmap.buckets ?? [];
 
@@ -809,7 +879,10 @@ export function AdvertiserHeatmap() {
         )}
       </div>
 
-      <div className="relative min-h-0 flex-1">
+      <div
+        ref={mapShellRef}
+        className={`relative min-h-0 flex-1 flex flex-col bg-[#e8e8e8] ${mapFullscreen ? 'rounded-none' : ''}`}
+      >
         {isLoading && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-[2000] flex items-center justify-center">
             <div className="bg-card border border-border rounded-lg p-6 shadow-lg flex items-center gap-3">
@@ -852,8 +925,13 @@ export function AdvertiserHeatmap() {
         <MapContainer
           center={center}
           zoom={hasData ? HEATMAP_DEFAULT_ZOOM_WITH_DATA : HEATMAP_DEFAULT_ZOOM_NO_DATA}
-          className="z-0 h-full w-full min-h-[280px] bg-[#e8e8e8]"
-          style={{ height: '100%', width: '100%', minHeight: '280px', background: '#e8e8e8' }}
+          className={`z-0 w-full bg-[#e8e8e8] ${mapFullscreen ? 'flex-1 min-h-0 h-full' : 'h-full min-h-[280px]'}`}
+          style={{
+            height: mapFullscreen ? '100%' : '100%',
+            width: '100%',
+            minHeight: mapFullscreen ? undefined : 280,
+            background: '#e8e8e8',
+          }}
         >
           <HeatmapApiLoader
             selectedCampaignId={selectedCampaignId}
@@ -876,6 +954,17 @@ export function AdvertiserHeatmap() {
             skipAutoFitBounds={metrics?.heatmap_rollup === true}
           />
         </MapContainer>
+
+        <button
+          type="button"
+          onClick={() => void toggleMapFullscreen()}
+          className="absolute top-4 left-4 z-[1100] flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-lg hover:bg-muted/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-pressed={mapFullscreen}
+          title={mapFullscreen ? 'Exit full screen' : 'Full screen map'}
+        >
+          {mapFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          <span className="hidden sm:inline">{mapFullscreen ? 'Exit full screen' : 'Full screen'}</span>
+        </button>
 
         <div className="absolute top-4 right-4 bg-card border border-border rounded-lg p-4 shadow-lg z-[1000] max-w-[220px] text-xs leading-snug">
           <div className="font-semibold text-sm mb-2">Activity scale</div>
