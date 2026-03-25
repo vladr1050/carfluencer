@@ -24,6 +24,6 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('telemetry:scheduler-tick')->everyMinute()->withoutOverlapping();
+        $schedule->command('telemetry:scheduler-tick')->hourly()->withoutOverlapping();
     })
     ->create();

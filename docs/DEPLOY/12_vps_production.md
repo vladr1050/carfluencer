@@ -17,7 +17,7 @@ cd /var/www/carfluencer
 sudo bash deploy/setup-ubuntu-server.sh 'https://www.carplace.lv'
 ```
 
-Скрипт ставит **Nginx, PostgreSQL, PHP 8.4-FPM, Composer, Supervisor**, собирает **`backend/.env`**, **`composer install`**, **`migrate`**, кэши, включает сайт, пишет **cron** `schedule:run` в **`/etc/cron.d/carfluencer-laravel`**, поднимает воркер **`carfluencer-queue`** в Supervisor. Пароль БД выводится в конце — **сохрани**. Остаётся: **первый админ** (`make:filament-user`), при необходимости **TLS** (§7) и **ClickHouse** в `.env`.
+Скрипт ставит **Nginx, PostgreSQL, PHP 8.4-FPM, Composer, Supervisor**, собирает **`backend/.env`**, **`composer install`**, **`migrate`**, кэши, включает сайт, пишет **cron** `schedule:run` **раз в час** в **`/etc/cron.d/carfluencer-laravel`**, поднимает воркер **`carfluencer-queue`** в Supervisor. Пароль БД выводится в конце — **сохрани**. Остаётся: **первый админ** (`make:filament-user`), при необходимости **TLS** (§7) и **ClickHouse** в `.env`.
 
 Если Nginx не стартует с ошибкой **Address already in use** на порту 80 — часто уже запущен **Apache** (`systemctl stop apache2 && systemctl disable apache2`).
 
@@ -207,10 +207,10 @@ sudo nginx -t && sudo systemctl reload nginx
 
 После **`deploy/setup-ubuntu-server.sh`** уже настроены:
 
-- **`/etc/cron.d/carfluencer-laravel`** — каждую минуту `php8.4 artisan schedule:run` от **`www-data`**
+- **`/etc/cron.d/carfluencer-laravel`** — **раз в час** (`0 * * * *`) `php8.4 artisan schedule:run` от **`www-data`**
 - **Supervisor** — программа **`carfluencer-queue`** (`queue:work database`), лог: `backend/storage/logs/worker.log`
 
-Планировщик Laravel: в **`bootstrap/app.php`** зарегистрировано **`telemetry:scheduler-tick`** каждую минуту. Сам **инкрементальный** опрос ClickHouse срабатывает не чаще интервала из админки (**Telematics → ClickHouse & automation**, по умолчанию 10 минут) и обрабатывает ограниченное число IMEI за проход (`TELEMETRY_CH_MAX_IMEIS_PER_TICK`), чтобы не перегружать внешний сервер.
+Планировщик Laravel: в **`bootstrap/app.php`** зарегистрировано **`telemetry:scheduler-tick`** **ежечасно** (`hourly()`). С **часовым** cron инкрементальный опрос ClickHouse фактически не чаще **раза в час**, даже если в админке (**Telematics → ClickHouse & automation**) интервал меньше 60 минут. Нужен опрос чаще — верни в crontab `* * * * *` и в **`bootstrap/app.php`** вызов **`everyMinute()`**. Суточные задачи (**build-stop-sessions**, **aggregate-daily**, heatmap rollup) ориентируются на **UTC** и время из админки; логика слота совместима с часовым запуском.
 
 **Если ставили сервер вручную** (без скрипта):
 

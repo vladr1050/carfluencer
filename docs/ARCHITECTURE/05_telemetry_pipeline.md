@@ -94,7 +94,7 @@ Default CH query expects table columns: `device_id`, `timestamp`, `latitude`, `l
 2. `telemetry:build-stop-sessions --date=yesterday`  
 3. `telemetry:aggregate-daily --date=yesterday`  
 
-Scheduler (see `backend/bootstrap/app.php`): `telemetry:scheduler-tick` every minute (incremental when due per admin interval, default **10** min); build + aggregate for **yesterday** nightly.
+Scheduler (see `backend/bootstrap/app.php`): `telemetry:scheduler-tick` **hourly** by default (with hourly system cron); incremental pull runs at most once per tick (pair with admin interval); build + aggregate for **yesterday** after the configured UTC slots (compatible with hourly `schedule:run`).
 
 ---
 

@@ -126,7 +126,7 @@ CRON_FILE=/etc/cron.d/carfluencer-laravel
   echo "SHELL=/bin/sh"
   echo "PATH=/usr/sbin:/usr/bin:/sbin:/bin"
   echo ""
-  echo "* * * * * www-data cd ${REPO_ROOT}/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1"
+  echo "0 * * * * www-data cd ${REPO_ROOT}/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1"
 } > "$CRON_FILE"
 chmod 644 "$CRON_FILE"
 

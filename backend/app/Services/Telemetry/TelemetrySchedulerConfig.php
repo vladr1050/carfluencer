@@ -3,6 +3,7 @@
 namespace App\Services\Telemetry;
 
 use App\Models\PlatformSetting;
+use Carbon\Carbon;
 
 /**
  * Persisted telemetry scheduler settings (Filament + console tick).
@@ -45,6 +46,25 @@ final class TelemetrySchedulerConfig
         }
 
         return '01:10';
+    }
+
+    /**
+     * Whether the UTC wall-clock has reached the admin-configured daily run time for "yesterday's" batch jobs.
+     *
+     * Times before 12:00 UTC are treated as "next morning" (run after today's slot at that time).
+     * Times from 12:00 UTC onward are treated as "same calendar evening" (run after yesterday's slot).
+     * This matches the old minute-granularity scheduler while allowing system cron to run hourly.
+     */
+    public static function utcDailySlotMetForYesterday(Carbon $nowUtc, string $hhMm): bool
+    {
+        $hhMm = self::normalizeTime($hhMm);
+        $todayAt = $nowUtc->copy()->utc()->startOfDay()->setTimeFromTimeString($hhMm);
+        $hour = (int) explode(':', $hhMm, 2)[0];
+        if ($hour < 12) {
+            return $nowUtc->copy()->utc()->gte($todayAt);
+        }
+
+        return $nowUtc->copy()->utc()->gte($todayAt->copy()->subDay());
     }
 
     /**

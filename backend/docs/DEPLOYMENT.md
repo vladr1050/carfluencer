@@ -40,8 +40,10 @@ php artisan view:cache
 На VPS после **`deploy/setup-ubuntu-server.sh`** cron уже в **`/etc/cron.d/carfluencer-laravel`** (`www-data`, `php8.4 artisan schedule:run`). Вручную:
 
 ```cron
-* * * * * www-data cd /var/www/carfluencer/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
+0 * * * * www-data cd /var/www/carfluencer/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
 ```
+
+Инкрементальный опрос ClickHouse в тике не чаще одного раза в час при таком cron; для интервала из админки меньше 60 минут используйте `* * * * *` и `everyMinute()` в `bootstrap/app.php`.
 
 ## Queues
 

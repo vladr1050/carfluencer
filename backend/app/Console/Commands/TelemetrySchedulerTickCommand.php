@@ -89,10 +89,10 @@ class TelemetrySchedulerTickCommand extends Command
 
     private function maybeRunDailyJobs(): void
     {
-        $now = now()->format('H:i');
+        $nowUtc = now('UTC');
         $yesterday = Carbon::yesterday('UTC')->toDateString();
 
-        if ($now === TelemetrySchedulerConfig::buildSessionsAt()) {
+        if (TelemetrySchedulerConfig::utcDailySlotMetForYesterday($nowUtc, TelemetrySchedulerConfig::buildSessionsAt())) {
             $key = 'telemetry_tick_build_sessions_'.$yesterday;
             if (! Cache::has($key)) {
                 Artisan::call('telemetry:build-stop-sessions', ['--date' => $yesterday]);
@@ -101,7 +101,7 @@ class TelemetrySchedulerTickCommand extends Command
             }
         }
 
-        if ($now === TelemetrySchedulerConfig::aggregateDailyAt()) {
+        if (TelemetrySchedulerConfig::utcDailySlotMetForYesterday($nowUtc, TelemetrySchedulerConfig::aggregateDailyAt())) {
             $key = 'telemetry_tick_aggregate_'.$yesterday;
             if (! Cache::has($key)) {
                 Artisan::call('telemetry:aggregate-daily', ['--date' => $yesterday]);

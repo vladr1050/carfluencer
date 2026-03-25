@@ -51,7 +51,7 @@ Under **Telematics** in the sidebar (collapsed group like the others):
 - **Heatmap** — objects, period, point type, **Load / refresh heatmap**, map (PostgreSQL `device_locations`).
 - **ClickHouse & automation** — queue **ClickHouse → PostgreSQL** (incremental or historical) + collapsed **scheduler**.
 
-The scheduler runs `php artisan telemetry:scheduler-tick` **every minute**; incremental pull uses IMEIs for vehicles with **Scheduled ClickHouse pull** enabled (and a non-empty IMEI).
+The scheduler runs `php artisan telemetry:scheduler-tick` **hourly** by default (system cron `schedule:run` once per hour); incremental pull uses IMEIs for vehicles with **Scheduled ClickHouse pull** enabled (and a non-empty IMEI). For a shorter incremental interval, run `schedule:run` every minute and use `everyMinute()` in `bootstrap/app.php`.
 
 > Ops note: `php artisan telemetry:sync-incremental` is still a **global** ClickHouse cursor (entire table). The scheduler tick does not use it for normal operation.
 
