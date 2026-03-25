@@ -23,7 +23,9 @@ class HeatmapSummaryMetricsService
      *     driving_time_hours: float|null,
      *     parking_time_hours: float|null,
      *     data_source: string,
-     *     is_estimated: bool
+     *     is_estimated: bool,
+     *     trips: int|null,
+     *     heatmap_selection: array<string, mixed>|null
      * }
      */
     public function fetchForAdvertiser(HeatmapPageQuery $query): array
@@ -40,14 +42,17 @@ class HeatmapSummaryMetricsService
                 'parking_time_hours' => null,
                 'data_source' => 'period_required',
                 'is_estimated' => false,
+                'trips' => null,
+                'heatmap_selection' => null,
             ];
         }
 
         $vehicleIdsArr = $query->resolveCampaignVehicleIds()->all();
+        $vehicleCount = count($vehicleIdsArr);
         $imeis = Vehicle::query()->whereIn('id', $vehicleIdsArr)->pluck('imei')->filter()->values()->all();
 
         if ($vehicleIdsArr === [] || $imeis === []) {
-            return $this->emptySummaryNone();
+            return array_merge($this->emptySummaryNone(), TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount));
         }
 
         $q = DailyImpression::query()
@@ -99,28 +104,31 @@ class HeatmapSummaryMetricsService
                 || ($parkMin <= 0 && $parkMinSessions <= 0 && $estimatedParkMin > 0.0);
             $dataSource = $usedGpsEst ? 'daily_impressions_estimated' : 'daily_impressions';
 
-            return [
+            return array_merge([
                 'impressions' => $impr,
                 'driving_distance_km' => round($effectiveDist, 2),
                 'driving_time_hours' => $drivingHours,
                 'parking_time_hours' => $parkingHours,
                 'data_source' => $dataSource,
                 'is_estimated' => $usedGpsEst,
-            ];
+            ], TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount));
         }
 
         if (filter_var(config('telemetry.heatmap.rollup.advertiser_raw_summary_fallback', false), FILTER_VALIDATE_BOOLEAN)) {
-            return $this->rawDeviceLocationsFallback($campaignId, $from, $to, $vehicleIdsArr, $imeis);
+            return array_merge(
+                $this->rawDeviceLocationsFallback($campaignId, $from, $to, $vehicleIdsArr, $imeis),
+                TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount),
+            );
         }
 
-        return [
+        return array_merge([
             'impressions' => null,
             'driving_distance_km' => null,
             'driving_time_hours' => null,
             'parking_time_hours' => null,
             'data_source' => 'insufficient_aggregates',
             'is_estimated' => false,
-        ];
+        ], TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount));
     }
 
     /**
@@ -132,7 +140,9 @@ class HeatmapSummaryMetricsService
      *     driving_time_hours: float|null,
      *     parking_time_hours: float|null,
      *     data_source: string,
-     *     is_estimated: bool
+     *     is_estimated: bool,
+     *     trips: int|null,
+     *     heatmap_selection: array<string, mixed>|null
      * }
      */
     private function rawDeviceLocationsFallback(
@@ -177,7 +187,9 @@ class HeatmapSummaryMetricsService
      *     driving_time_hours: float|null,
      *     parking_time_hours: float|null,
      *     data_source: string,
-     *     is_estimated: bool
+     *     is_estimated: bool,
+     *     trips: int|null,
+     *     heatmap_selection: array<string, mixed>|null
      * }
      */
     private function emptySummaryNone(): array

@@ -12,6 +12,8 @@ import {
   AlertCircle,
   Maximize2,
   Minimize2,
+  Car,
+  Route,
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { LatLngTuple } from 'leaflet';
@@ -549,6 +551,21 @@ function HeatmapApiLoader({
   return null;
 }
 
+/** Matches API `summary_metrics.heatmap_selection` dates (Y-m-d); used for top bar before/after load. */
+function formatHeatmapContextPeriod(isoFrom: string, isoTo: string): string {
+  try {
+    const a = new Date(`${isoFrom}T12:00:00Z`);
+    const b = new Date(`${isoTo}T12:00:00Z`);
+    if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) {
+      return `${isoFrom} — ${isoTo}`;
+    }
+    const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    return `${a.toLocaleDateString(undefined, opts)} — ${b.toLocaleDateString(undefined, opts)}`;
+  } catch {
+    return `${isoFrom} — ${isoTo}`;
+  }
+}
+
 function resolveDates(
   dateRange: string,
   customFrom: string,
@@ -606,6 +623,14 @@ type HeatmapApi = {
     parking_time_hours: number | null;
     data_source: string;
     is_estimated: boolean;
+    trips: number | null;
+    heatmap_selection: {
+      date_from: string;
+      date_to: string;
+      full_calendar_days: number;
+      vehicle_count: number;
+      trips_per_vehicle_full_day: number;
+    } | null;
   };
 };
 
@@ -1054,6 +1079,34 @@ export function AdvertiserHeatmap() {
         )}
       </div>
 
+      {selectedCampaignId ? (
+        <div className="shrink-0 border-b border-border bg-muted/90 px-3 py-2.5 backdrop-blur-sm sm:px-4">
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2 text-sm">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="text-muted-foreground shrink-0">Period</span>
+              <span className="inline-flex items-center gap-1.5 font-medium text-foreground min-w-0">
+                <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                <span className="truncate">
+                  {formatHeatmapContextPeriod(
+                    summary?.heatmap_selection?.date_from ?? dateFrom,
+                    summary?.heatmap_selection?.date_to ?? dateTo,
+                  )}
+                </span>
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="text-muted-foreground shrink-0">Vehicles</span>
+              <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground">
+                <Car className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                {summary?.heatmap_selection?.vehicle_count != null
+                  ? summary.heatmap_selection.vehicle_count.toLocaleString()
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div
         ref={mapShellRef}
         className={`relative min-h-0 flex-1 flex flex-col bg-[#e8e8e8] ${mapFullscreen ? 'rounded-none' : ''}`}
@@ -1178,10 +1231,10 @@ export function AdvertiserHeatmap() {
         ) : null}
         {summary?.data_source === 'insufficient_aggregates' ? (
           <p className="text-xs text-muted-foreground mb-3">
-            Period KPIs need daily_impressions (and related aggregates). Expand the date range or run daily telemetry jobs — raw map points may still appear from rollups.
+            Period KPIs need daily_impressions (and related aggregates). Expand the date range or run daily telemetry jobs — raw map points may still appear from rollups. For a custom range, the end date is inclusive: if aggregates exist only on the latest days, move the end date forward to include them.
           </p>
         ) : null}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
             <Eye className="w-5 h-5" style={{ color: '#C1F60D' }} />
             <div>
@@ -1189,6 +1242,16 @@ export function AdvertiserHeatmap() {
                 {summary?.impressions != null ? summary.impressions.toLocaleString() : '—'}
               </div>
               <div className="text-xs text-muted-foreground">Impressions</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
+            <Route className="w-5 h-5 shrink-0 text-fuchsia-500" aria-hidden />
+            <div className="min-w-0">
+              <div className="text-2xl font-medium tabular-nums text-fuchsia-500">
+                {summary?.trips != null ? summary.trips.toLocaleString() : '—'}
+              </div>
+              <div className="text-xs font-medium text-foreground">Trips</div>
+              <div className="text-[10px] leading-tight text-muted-foreground mt-0.5">Carfluencers</div>
             </div>
           </div>
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">

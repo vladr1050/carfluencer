@@ -384,6 +384,18 @@ class TelemetryHeatmapPage extends Page
                             '1 = linear (equal scaling). Higher values make the densest map cells hotter; mid-density fades. Applies to this admin heatmap and the advertiser portal API. When saved, overrides TELEMETRY_HEATMAP_INTENSITY_GAMMA from .env. If many grid cells have similar point counts, the map already looks uniform — changing γ has little effect. After save we reload the map when filters are valid; otherwise use “Load / refresh heatmap”.'
                         )
                     ),
+                TextInput::make('advertiser_trips_per_vehicle_full_day')
+                    ->label(__('Trips per vehicle per full day'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->maxValue(1000)
+                    ->step(0.1)
+                    ->required()
+                    ->helperText(
+                        __(
+                            'Advertiser portal → Heatmap: “Trips” KPI = this coefficient × (vehicles in the current selection) × (inclusive calendar days in the selected period). Editable without code deploy; falls back to ADVERTISER_HEATMAP_TRIPS_PER_VEHICLE_FULL_DAY in .env when unset in platform settings.'
+                        )
+                    ),
             ]);
     }
 
@@ -394,6 +406,9 @@ class TelemetryHeatmapPage extends Page
             $fallback = is_array($this->heatmapSettings) ? $this->heatmapSettings : [];
             if (! array_key_exists('intensity_gamma', $data) || $data['intensity_gamma'] === null || $data['intensity_gamma'] === '') {
                 $data['intensity_gamma'] = $fallback['intensity_gamma'] ?? 1.55;
+            }
+            if (! array_key_exists('advertiser_trips_per_vehicle_full_day', $data) || $data['advertiser_trips_per_vehicle_full_day'] === null || $data['advertiser_trips_per_vehicle_full_day'] === '') {
+                $data['advertiser_trips_per_vehicle_full_day'] = $fallback['advertiser_trips_per_vehicle_full_day'] ?? 1.0;
             }
             TelemetryHeatmapConfig::saveFromForm($data);
             $gamma = TelemetryHeatmapConfig::intensityGamma();

@@ -29,6 +29,15 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
             ['lat' => 51.515, 'lng' => -0.095, 'w_moving' => 90, 'w_stopped' => 15, 'w_total' => 105, 'intensity_moving' => 0.9, 'intensity_stopped' => 0.6, 'rank_moving_pct' => 66.0, 'rank_stopped_pct' => 0.0],
         ];
 
+        $dateFrom = isset($filters['date_from']) ? (string) $filters['date_from'] : '';
+        $dateTo = isset($filters['date_to']) ? (string) $filters['date_to'] : '';
+        $tripBlock = ['trips' => null, 'heatmap_selection' => null];
+        if ($dateFrom !== '' && $dateTo !== '') {
+            $pageQuery = HeatmapPageQuery::fromAdvertiserFilters($campaignId, $filters);
+            $vehicleCount = $pageQuery->resolveCampaignVehicleIds()->count();
+            $tripBlock = TelemetryHeatmapConfig::computeAdvertiserTripsKpi($dateFrom, $dateTo, $vehicleCount);
+        }
+
         return [
             'map' => [
                 'points' => $points,
@@ -46,14 +55,14 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
                 'cap_stopped' => 20,
                 'cap_total' => 100,
             ],
-            'summary_metrics' => [
+            'summary_metrics' => array_merge([
                 'impressions' => 2847350,
                 'driving_distance_km' => 1247,
                 'driving_time_hours' => 82,
                 'parking_time_hours' => 156,
                 'data_source' => 'mock',
                 'is_estimated' => false,
-            ],
+            ], $tripBlock),
         ];
     }
 }

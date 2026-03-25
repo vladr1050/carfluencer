@@ -80,6 +80,11 @@ return [
          */
         'intensity_gamma' => max(1.0, min(3.0, (float) env('TELEMETRY_HEATMAP_INTENSITY_GAMMA', 1.55))),
         /**
+         * Advertiser heatmap "Trips" KPI: multiplier × vehicle_count × full_calendar_days (inclusive).
+         * Overridden by platform_settings.advertiser_heatmap_trips_per_vehicle_full_day when set.
+         */
+        'advertiser_trips_per_vehicle_full_day' => max(0.0, min(1000.0, (float) env('ADVERTISER_HEATMAP_TRIPS_PER_VEHICLE_FULL_DAY', 1.0))),
+        /**
          * GPS fallback for parking hours: ignore gaps longer than this between consecutive points (device offline).
          */
         'max_parking_segment_seconds' => max(60, min(86400, (int) env('TELEMETRY_HEATMAP_MAX_PARKING_SEGMENT_SECONDS', 7200))),

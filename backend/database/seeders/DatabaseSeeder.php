@@ -10,6 +10,7 @@ use App\Models\ContentBlock;
 use App\Models\GeoZone;
 use App\Models\MediaOwnerProfile;
 use App\Models\PlatformSetting;
+use App\Services\Telemetry\TelemetryHeatmapConfig;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Database\Seeder;
@@ -141,6 +142,10 @@ class DatabaseSeeder extends Seeder
         PlatformSetting::query()->updateOrCreate(
             ['key' => 'telemetry_aggregate_daily_at'],
             ['value' => '01:40']
+        );
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => TelemetryHeatmapConfig::KEY_ADVERTISER_TRIPS_PER_VEHICLE_FULL_DAY],
+            ['value' => '1']
         );
 
         GeoZone::query()->updateOrCreate(

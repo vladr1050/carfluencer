@@ -95,9 +95,17 @@ class AdvertiserHeatmapSummaryContractTest extends TestCase
         $this->assertArrayHasKey('parking_time_hours', $sm);
         $this->assertArrayHasKey('data_source', $sm);
         $this->assertArrayHasKey('is_estimated', $sm);
+        $this->assertArrayHasKey('trips', $sm);
+        $this->assertArrayHasKey('heatmap_selection', $sm);
         $this->assertSame(200, $sm['impressions']);
         $this->assertSame('daily_impressions', $sm['data_source']);
         $this->assertFalse($sm['is_estimated']);
+        $this->assertIsArray($sm['heatmap_selection']);
+        $this->assertSame('2026-03-01', $sm['heatmap_selection']['date_from']);
+        $this->assertSame('2026-03-31', $sm['heatmap_selection']['date_to']);
+        $this->assertSame(1, $sm['heatmap_selection']['vehicle_count']);
+        $this->assertSame(31, $sm['heatmap_selection']['full_calendar_days']);
+        $this->assertSame(31, $sm['trips']);
 
         $this->assertArrayNotHasKey('location_samples_viewport', $sm);
         $this->assertArrayNotHasKey('cap_moving', $sm);
@@ -210,5 +218,9 @@ class AdvertiserHeatmapSummaryContractTest extends TestCase
 
         $this->assertSame(10, $march->json('summary_metrics.impressions'));
         $this->assertSame(5000, $april->json('summary_metrics.impressions'));
+        $this->assertSame(31, $march->json('summary_metrics.trips'));
+        $this->assertSame(30, $april->json('summary_metrics.trips'));
+        $this->assertSame(31, $march->json('summary_metrics.heatmap_selection.full_calendar_days'));
+        $this->assertSame(30, $april->json('summary_metrics.heatmap_selection.full_calendar_days'));
     }
 }
