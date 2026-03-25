@@ -57,7 +57,6 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
         Route::post('campaigns/{campaign}/vehicles', [AdvertiserCampaignVehicleController::class, 'store']);
         Route::delete('campaigns/{campaign}/vehicles/{campaignVehicle}', [AdvertiserCampaignVehicleController::class, 'destroy']);
         Route::get('campaigns/{campaign}/proofs', [AdvertiserCampaignProofController::class, 'index']);
-        Route::post('campaigns/{campaign}/proofs', [AdvertiserCampaignProofController::class, 'store']);
         Route::get('vehicles', [AdvertiserVehicleController::class, 'index']);
         Route::get('vehicles/{vehicle}', [AdvertiserVehicleController::class, 'show']);
         Route::get('heatmap', [AdvertiserHeatmapController::class, 'show']);

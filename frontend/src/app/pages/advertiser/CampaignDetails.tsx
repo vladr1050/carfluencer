@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Calendar, Car, ExternalLink, MapPin, Loader2, Upload } from 'lucide-react';
-import { apiFormData, apiJson } from '@/lib/api';
+import { ArrowLeft, Calendar, Car, ExternalLink, MapPin, Loader2 } from 'lucide-react';
+import { apiJson } from '@/lib/api';
 
 type VehicleRow = { id: number; brand: string; model: string; imei: string };
 type CampaignVehicleRow = {
@@ -52,8 +52,6 @@ export function AdvertiserCampaignDetails() {
   const [attachSize, setAttachSize] = useState('M');
   const [attachErr, setAttachErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [proofVid, setProofVid] = useState('');
-  const [proofMsg, setProofMsg] = useState<string | null>(null);
   const [proofs, setProofs] = useState<ProofRow[]>([]);
 
   const loadProofs = useCallback(() => {
@@ -70,11 +68,6 @@ export function AdvertiserCampaignDetails() {
     apiJson<CampaignDetail>(`/api/advertiser/campaigns/${campaignId}`)
       .then((data) => {
         setCampaign(data);
-        const rows = data.campaign_vehicles ?? [];
-        const ids = new Set(rows.map((r) => r.vehicle_id));
-        if (ids.size) {
-          setProofVid((prev) => prev || String([...ids][0]));
-        }
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
@@ -122,32 +115,6 @@ export function AdvertiserCampaignDetails() {
     try {
       await apiJson(`/api/advertiser/campaigns/${campaignId}/vehicles/${cvId}`, { method: 'DELETE' });
       loadCampaign(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onProofUpload(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!campaignId || !proofVid) return;
-    const input = (e.target as HTMLFormElement).elements.namedItem('proof') as HTMLInputElement;
-    const file = input?.files?.[0];
-    if (!file) {
-      setProofMsg('Choose a file.');
-      return;
-    }
-    setProofMsg(null);
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append('vehicle_id', proofVid);
-      fd.append('file', file);
-      await apiFormData(`/api/advertiser/campaigns/${campaignId}/proofs`, fd);
-      setProofMsg('Upload successful.');
-      input.value = '';
-      loadProofs();
-    } catch (err) {
-      setProofMsg(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setBusy(false);
     }
@@ -310,42 +277,9 @@ export function AdvertiserCampaignDetails() {
         </div>
       )}
 
-      <div className="rounded-lg border border-border bg-card p-5">
-        <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
-          <Upload className="w-5 h-5" />
-          Campaign proof
-        </h2>
-        <p className="text-xs text-muted-foreground mb-4">Image or PDF for a vehicle already on this campaign.</p>
-        <form className="flex flex-wrap items-end gap-3" onSubmit={(ev) => void onProofUpload(ev)}>
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Vehicle</label>
-            <select
-              value={proofVid}
-              onChange={(e) => setProofVid(e.target.value)}
-              required
-              className="px-3 py-2 rounded-md border border-border bg-input-background dark:bg-input min-w-[220px] text-sm"
-            >
-              <option value="">Select…</option>
-              {rows.map((cv) => (
-                <option key={cv.id} value={cv.vehicle_id}>
-                  {cv.vehicle ? `${cv.vehicle.brand} ${cv.vehicle.model}` : `Vehicle #${cv.vehicle_id}`}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">File</label>
-            <input name="proof" type="file" accept="image/*,.pdf" required className="block text-sm max-w-[240px]" />
-          </div>
-          <button type="submit" disabled={busy || rows.length === 0} className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
-            Upload
-          </button>
-        </form>
-        {proofMsg ? <p className="mt-3 text-sm text-muted-foreground">{proofMsg}</p> : null}
-      </div>
-
       <div className="mt-8 rounded-lg border border-border bg-card p-5">
-        <h2 className="text-lg font-semibold mb-3">Uploaded proofs</h2>
+        <h2 className="text-lg font-semibold mb-2">Campaign proofs</h2>
+        <p className="text-xs text-muted-foreground mb-4">Uploaded by vehicle partners. Download or open each file below.</p>
         {proofs.length === 0 ? (
           <p className="text-sm text-muted-foreground">No proofs yet.</p>
         ) : (

@@ -48,8 +48,7 @@ Sanctum cookie / bearer token as configured. Register and login under `/api/auth
 | PUT | `/api/advertiser/campaigns/{campaign}` | |
 | POST | `/api/advertiser/campaigns/{campaign}/vehicles` | JSON: `vehicle_id`, `placement_size_class` |
 | DELETE | `/api/advertiser/campaigns/{campaign}/vehicles/{campaignVehicle}` | Pivot id |
-| GET | `/api/advertiser/campaigns/{campaign}/proofs` | JSON `data[]`: `id`, `vehicle_id`, `status`, `comment`, `url`, `created_at`, `vehicle` |
-| POST | `/api/advertiser/campaigns/{campaign}/proofs` | Multipart `file` + `vehicle_id` |
+| GET | `/api/advertiser/campaigns/{campaign}/proofs` | Read-only list: same `data[]` shape as media-owner. Upload is **`POST /api/media-owner/campaigns/{campaign}/proofs`** only. |
 | GET | `/api/advertiser/vehicles` | Query `per_page` (1–200) |
 | GET | `/api/advertiser/vehicles/{vehicle}` | |
 | GET | `/api/advertiser/heatmap` | Query: `campaign_id`, **required** `date_from` and `date_to`, optional `vehicle_id`, **`mode`**: `driving` \| `parking`, optional bbox `south`/`west`/`north`/`east` + `zoom`, **`normalization`**: `max` \| `p95` \| `p99` (default **p95**). Response: **`map`** (`points`, `buckets`, `mode`, `heatmap_motion`, `normalization`, `heatmap_rollup`), **`debug`** (e.g. `intensity_gamma`, `intensity_stopped_power`, caps, viewport sample counts), **`summary_metrics`** (period KPIs: `impressions`, `driving_distance_km`, `driving_time_hours`, `parking_time_hours`, `data_source`, `is_estimated` — independent of viewport and map mode). See `docs/ARCHITECTURE/06_heatmap_rollup.md`. |

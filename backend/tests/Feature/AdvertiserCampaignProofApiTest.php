@@ -8,7 +8,6 @@ use App\Models\CampaignVehicle;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -17,7 +16,7 @@ class AdvertiserCampaignProofApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_advertiser_can_upload_proof_for_vehicle_on_campaign(): void
+    public function test_advertiser_cannot_upload_proof_via_api(): void
     {
         Storage::fake('public');
 
@@ -50,18 +49,9 @@ class AdvertiserCampaignProofApiTest extends TestCase
 
         Sanctum::actingAs($advertiser);
 
-        $file = UploadedFile::fake()->image('proof.jpg');
-
-        $response = $this->post(
-            "/api/advertiser/campaigns/{$campaign->id}/proofs",
-            [
-                'vehicle_id' => $vehicle->id,
-                'file' => $file,
-            ],
-            ['Accept' => 'application/json']
-        );
-
-        $response->assertCreated()->assertJsonPath('status', 'uploaded');
+        $this->postJson("/api/advertiser/campaigns/{$campaign->id}/proofs", [
+            'vehicle_id' => $vehicle->id,
+        ])->assertStatus(405);
     }
 
     public function test_advertiser_can_list_campaign_proofs(): void
