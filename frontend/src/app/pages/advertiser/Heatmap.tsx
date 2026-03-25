@@ -702,17 +702,46 @@ export function AdvertiserHeatmap() {
   const dateRangePendingDirty =
     dateRange !== appliedDateRange || customDateFrom !== appliedCustomFrom || customDateTo !== appliedCustomTo;
 
+  /** Presets apply immediately; only custom range needs the button. */
   const canApplyDateRange =
-    dateRangePendingDirty && (dateRange !== 'custom' || (Boolean(customDateFrom) && Boolean(customDateTo)));
+    dateRange === 'custom' &&
+    dateRangePendingDirty &&
+    Boolean(customDateFrom) &&
+    Boolean(customDateTo);
 
   const applyDateRange = useCallback(() => {
-    if (!canApplyDateRange) {
+    if (dateRange !== 'custom' || !customDateFrom || !customDateTo) {
       return;
     }
-    setAppliedDateRange(dateRange);
+    setAppliedDateRange('custom');
     setAppliedCustomFrom(customDateFrom);
     setAppliedCustomTo(customDateTo);
-  }, [canApplyDateRange, dateRange, customDateFrom, customDateTo]);
+  }, [dateRange, customDateFrom, customDateTo]);
+
+  const handleDateRangeSelectChange = useCallback(
+    (value: string) => {
+      setDateRange(value);
+      if (value !== 'custom') {
+        setAppliedDateRange(value);
+        setAppliedCustomFrom('');
+        setAppliedCustomTo('');
+        setCustomDateFrom('');
+        setCustomDateTo('');
+        return;
+      }
+      const { from, to } = resolveDates(appliedDateRange, appliedCustomFrom, appliedCustomTo);
+      if (from && to) {
+        setCustomDateFrom(from);
+        setCustomDateTo(to);
+        setAppliedDateRange('custom');
+        setAppliedCustomFrom(from);
+        setAppliedCustomTo(to);
+      } else {
+        setAppliedDateRange('custom');
+      }
+    },
+    [appliedDateRange, appliedCustomFrom, appliedCustomTo],
+  );
 
   useEffect(() => {
     setGridMetric(mode === 'parking' ? 'stopped' : 'moving');
@@ -879,7 +908,7 @@ export function AdvertiserHeatmap() {
                 <label className="text-sm text-muted-foreground">Date range:</label>
                 <select
                   value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
+                  onChange={(e) => handleDateRangeSelectChange(e.target.value)}
                   className="px-3 py-2 rounded-lg bg-input-background dark:bg-input border border-border"
                 >
                   <option value="last-24-hours">Last 24 hours</option>
@@ -916,9 +945,9 @@ export function AdvertiserHeatmap() {
                 >
                   Apply dates
                 </button>
-                {dateRangePendingDirty ? (
+                {dateRange === 'custom' && dateRangePendingDirty ? (
                   <span className="text-xs text-muted-foreground max-w-[220px]">
-                    Map and KPIs still use the previous period until you apply.
+                    Map and KPIs update after you apply custom dates.
                   </span>
                 ) : null}
               </div>
@@ -1114,6 +1143,15 @@ export function AdvertiserHeatmap() {
       </div>
 
       <div className="p-4 border-t border-border bg-card">
+        {dateFrom && dateTo ? (
+          <p className="text-xs text-muted-foreground mb-3">
+            Totals below are for{' '}
+            <span className="font-medium text-foreground">
+              {dateFrom} → {dateTo}
+            </span>{' '}
+            (inclusive calendar days in the request).
+          </p>
+        ) : null}
         {summary?.data_source === 'insufficient_aggregates' ? (
           <p className="text-xs text-muted-foreground mb-3">
             Period KPIs need daily_impressions (and related aggregates). Expand the date range or run daily telemetry jobs — raw map points may still appear from rollups.

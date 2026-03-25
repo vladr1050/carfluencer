@@ -29,8 +29,19 @@ class HeatmapSummaryMetricsService
     public function fetchForAdvertiser(HeatmapPageQuery $query): array
     {
         $campaignId = $query->campaignId;
-        $from = $query->dateFrom;
-        $to = $query->dateTo;
+        $from = $query->dateFrom !== null && $query->dateFrom !== '' ? $query->dateFrom : null;
+        $to = $query->dateTo !== null && $query->dateTo !== '' ? $query->dateTo : null;
+
+        if ($from === null || $to === null) {
+            return [
+                'impressions' => null,
+                'driving_distance_km' => null,
+                'driving_time_hours' => null,
+                'parking_time_hours' => null,
+                'data_source' => 'period_required',
+                'is_estimated' => false,
+            ];
+        }
 
         $vehicleIdsArr = $query->resolveCampaignVehicleIds()->all();
         $imeis = Vehicle::query()->whereIn('id', $vehicleIdsArr)->pluck('imei')->filter()->values()->all();

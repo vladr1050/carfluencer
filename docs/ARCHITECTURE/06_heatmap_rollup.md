@@ -46,7 +46,10 @@ If `TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT` is true (default), missing vi
 - **Automated (when ClickHouse telemetry sync is enabled):** `telemetry:scheduler-tick` runs **hourly** (with `0 * * * *` cron for `schedule:run`); after the admin-configured **`aggregateDailyAt`** UTC slot has passed for the calendar day, it also runs `heatmap:aggregate --from=yesterday --to=yesterday --all-modes` on **PostgreSQL** once per UTC calendar day (cache key `telemetry_tick_heatmap_rollup_{date}`). For sub-hourly incremental ClickHouse pulls, use `* * * * *` cron and `everyMinute()` in `bootstrap/app.php`.
 - **Manual / extra backfill:** e.g. `php artisan heatmap:aggregate-day $(date -u +%F)` or a `--from`/`--to` range with `--all-modes`.
 - Re-running `heatmap:aggregate` for a range is **idempotent** (delete-then-insert per day/tier/mode).
+
 ## Advertiser API: map vs summary KPIs (`GET /api/advertiser/heatmap`)
+
+Clients must send **`date_from`** and **`date_to`** (inclusive calendar days); requests without both are rejected with **422** so KPIs never silently aggregate “all time”.
 
 The JSON response separates **viewport-dependent** data from **period totals**:
 

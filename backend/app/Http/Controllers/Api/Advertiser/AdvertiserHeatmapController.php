@@ -21,8 +21,8 @@ class AdvertiserHeatmapController extends Controller
         $data = $request->validate([
             'campaign_id' => ['required', 'integer', 'exists:campaigns,id'],
             'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date', 'after_or_equal:date_from'],
             'mode' => ['nullable', 'string', 'in:driving,parking'],
             'normalization' => ['nullable', 'string', Rule::in(['max', 'p95', 'p99'])],
             'south' => ['nullable', 'numeric', 'between:-90,90'],

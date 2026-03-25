@@ -15,6 +15,25 @@ class AdvertiserHeatmapSummaryContractTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_rejects_request_without_date_range(): void
+    {
+        $advertiser = User::factory()->advertiser()->create();
+        $campaign = Campaign::query()->create([
+            'advertiser_id' => $advertiser->id,
+            'name' => 'C',
+            'status' => 'active',
+            'created_by_admin' => false,
+            'platform_commission_percent' => '10',
+            'agency_commission_percent' => '0',
+        ]);
+
+        Sanctum::actingAs($advertiser);
+
+        $this->getJson('/api/advertiser/heatmap?campaign_id='.$campaign->id.'&south=54&north=56&west=24&east=27&zoom=11')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['date_from', 'date_to']);
+    }
+
     public function test_response_exposes_map_debug_and_summary_metrics_not_legacy_heatmap_key(): void
     {
         $advertiser = User::factory()->advertiser()->create();
