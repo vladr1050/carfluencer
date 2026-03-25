@@ -55,13 +55,46 @@ const HEATMAP_DEFAULT_ZOOM_WITH_DATA = 11;
  */
 const HEAT_MAX_DENOM_MOVING = 2.15;
 const HEAT_MIN_OPACITY = 0.16;
-const HEAT_RADIUS = 24;
-const HEAT_BLUR = 14;
 /** Parking: wide blend + floor so full-city density reads on light basemap (Google-style). */
-const PARKING_HEAT_RADIUS = 40;
-const PARKING_HEAT_BLUR = 21;
 const PARKING_HEAT_MIN_OPACITY = 0.27;
 const PARKING_HEAT_MAX_DENOM = 1.82;
+
+/** Leaflet.heat spot spread; aligned with admin Filament heatmap presets. */
+type HeatShadowPreset = 'current' | 'small' | 'xsmall';
+
+const HEAT_SHADOW_PRESETS: Record<
+  HeatShadowPreset,
+  { moving: { radius: number; blur: number }; parking: { radius: number; blur: number } }
+> = {
+  current: {
+    moving: { radius: 24, blur: 14 },
+    parking: { radius: 40, blur: 21 },
+  },
+  small: {
+    moving: { radius: 20, blur: 9 },
+    parking: { radius: 32, blur: 16 },
+  },
+  xsmall: {
+    moving: { radius: 15, blur: 6 },
+    parking: { radius: 24, blur: 12 },
+  },
+};
+
+function heatShadowDims(preset: HeatShadowPreset) {
+  return HEAT_SHADOW_PRESETS[preset] ?? HEAT_SHADOW_PRESETS.current;
+}
+
+/** Scale parking iso-ring radii relative to production parking heat radius. */
+function parkingContourSizeFactor(preset: HeatShadowPreset): number {
+  const base = HEAT_SHADOW_PRESETS.current.parking.radius;
+  return heatShadowDims(preset).parking.radius / base;
+}
+
+function parseHeatShadowFromSearchParams(sp: URLSearchParams): HeatShadowPreset {
+  const v = sp.get('heatmap_shadow');
+  return v === 'small' || v === 'xsmall' ? v : 'current';
+}
+
 const CELL_HALF = 0.0005;
 
 const GRADIENT_MOVING: Record<number, string> = {
@@ -174,12 +207,14 @@ function AnalyticsMapLayers({
   viewMode,
   gridMetric,
   showParkingContours,
+  shadowPreset,
 }: {
   buckets: HeatmapBucket[];
   mode: 'driving' | 'parking';
   viewMode: 'heatmap' | 'grid';
   gridMetric: 'moving' | 'stopped';
   showParkingContours: boolean;
+  shadowPreset: HeatShadowPreset;
 }) {
   const map = useMap();
 
@@ -249,11 +284,15 @@ function AnalyticsMapLayers({
         add(h);
       };
 
+      const dims = heatShadowDims(shadowPreset);
+      const md = dims.moving;
+      const pd = dims.parking;
+
       const addParkingHeat = (triples: [number, number, number][]) => {
         if (!triples.length || typeof L.heatLayer !== 'function') return;
         const h = L.heatLayer(triples, {
-          radius: PARKING_HEAT_RADIUS,
-          blur: PARKING_HEAT_BLUR,
+          radius: pd.radius,
+          blur: pd.blur,
           maxZoom: 17,
           minOpacity: PARKING_HEAT_MIN_OPACITY,
           max: 1.0 / PARKING_HEAT_MAX_DENOM,
@@ -263,12 +302,13 @@ function AnalyticsMapLayers({
       };
 
       if (mode === 'driving') {
-        addHeat(heatM, GRADIENT_MOVING, HEAT_MAX_DENOM_MOVING, HEAT_RADIUS, HEAT_BLUR);
+        addHeat(heatM, GRADIENT_MOVING, HEAT_MAX_DENOM_MOVING, md.radius, md.blur);
       } else {
         addParkingHeat(heatS);
       }
 
       if (showParkingContours && viewMode === 'heatmap' && mode === 'parking') {
+        const contourMul = parkingContourSizeFactor(shadowPreset);
         const g = L.layerGroup();
         buckets.forEach((b) => {
           if (b.w_stopped <= 0) return;
@@ -276,7 +316,7 @@ function AnalyticsMapLayers({
           if (band < 2) return;
           const color = PARKING_CONTOUR_COLORS[band];
           const c = L.circle([b.lat, b.lng], {
-            radius: 36 + band * 30,
+            radius: (36 + band * 30) * contourMul,
             color,
             weight: 1.5,
             opacity: 0.45,
@@ -307,7 +347,7 @@ function AnalyticsMapLayers({
         if (map.hasLayer(ly)) map.removeLayer(ly);
       });
     };
-  }, [map, buckets, mode, viewMode, gridMetric, showParkingContours]);
+  }, [map, buckets, mode, viewMode, gridMetric, showParkingContours, shadowPreset]);
 
   return null;
 }
@@ -355,6 +395,7 @@ function MapContent({
   viewMode,
   gridMetric,
   showParkingContours,
+  shadowPreset,
   skipAutoFitBounds,
 }: {
   buckets: HeatmapBucket[];
@@ -363,6 +404,7 @@ function MapContent({
   viewMode: 'heatmap' | 'grid';
   gridMetric: 'moving' | 'stopped';
   showParkingContours: boolean;
+  shadowPreset: HeatShadowPreset;
   skipAutoFitBounds: boolean;
 }) {
   return (
@@ -383,6 +425,7 @@ function MapContent({
         viewMode={viewMode}
         gridMetric={gridMetric}
         showParkingContours={showParkingContours}
+        shadowPreset={shadowPreset}
       />
     </>
   );
@@ -554,6 +597,28 @@ type HeatmapApi = {
 export function AdvertiserHeatmap() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const [shadowPreset, setShadowPreset] = useState<HeatShadowPreset>(() => parseHeatShadowFromSearchParams(searchParams));
+
+  useEffect(() => {
+    setShadowPreset(parseHeatShadowFromSearchParams(searchParams));
+  }, [searchParams]);
+
+  const setShadowSize = useCallback(
+    (preset: HeatShadowPreset) => {
+      setShadowPreset(preset);
+      setSearchParams((prev) => {
+        const n = new URLSearchParams(prev);
+        if (preset === 'current') {
+          n.delete('heatmap_shadow');
+        } else {
+          n.set('heatmap_shadow', preset);
+        }
+        return n;
+      });
+    },
+    [setSearchParams],
+  );
+
   const campaignIdFromUrl = searchParams.get('campaignId');
   const campaignNameFromUrl = searchParams.get('campaignName');
   const dateFromUrl = searchParams.get('dateFrom');
@@ -686,6 +751,7 @@ export function AdvertiserHeatmap() {
     setMapView('heatmap');
     setGridMetric('moving');
     setShowParkingContours(false);
+    setShadowPreset('current');
     setSearchParams({});
   };
 
@@ -850,6 +916,20 @@ export function AdvertiserHeatmap() {
                   <option value="grid">Grid</option>
                 </select>
               </div>
+              {mapView === 'heatmap' && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Shadow size:</span>
+                  <SegmentedControl<HeatShadowPreset>
+                    value={shadowPreset}
+                    onChange={setShadowSize}
+                    options={[
+                      { value: 'current', label: 'Current' },
+                      { value: 'small', label: 'Smaller' },
+                      { value: 'xsmall', label: 'Very small' },
+                    ]}
+                  />
+                </div>
+              )}
               {mapView === 'grid' && (
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-muted-foreground">Grid shows:</label>
@@ -951,6 +1031,7 @@ export function AdvertiserHeatmap() {
             viewMode={mapView}
             gridMetric={gridMetric}
             showParkingContours={showParkingContours}
+            shadowPreset={shadowPreset}
             skipAutoFitBounds={metrics?.heatmap_rollup === true}
           />
         </MapContainer>
