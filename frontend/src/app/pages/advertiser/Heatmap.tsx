@@ -1250,8 +1250,7 @@ export function AdvertiserHeatmap() {
               <div className="text-2xl font-medium tabular-nums text-fuchsia-500">
                 {summary?.trips != null ? summary.trips.toLocaleString() : '—'}
               </div>
-              <div className="text-xs font-medium text-foreground">Trips</div>
-              <div className="text-[10px] leading-tight text-muted-foreground mt-0.5">Carfluencers</div>
+              <div className="text-xs text-muted-foreground">Carfluencers</div>
             </div>
           </div>
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
