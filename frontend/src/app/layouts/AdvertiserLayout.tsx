@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Car, Briefcase, Map, Banknote, Percent, LogOut, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Car, Briefcase, Map, LogOut, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/auth/AuthContext';
 
@@ -25,8 +25,6 @@ export function AdvertiserLayout() {
     { path: '/advertiser/vehicles', label: 'Vehicles', icon: Car },
     { path: '/advertiser/campaigns', label: 'Campaigns', icon: Briefcase },
     { path: '/advertiser/heatmap', label: 'Heatmap', icon: Map },
-    { path: '/advertiser/pricing', label: 'Pricing', icon: Banknote },
-    { path: '/advertiser/discounts', label: 'Discounts', icon: Percent },
   ];
 
   const isActive = (path: string) => {
