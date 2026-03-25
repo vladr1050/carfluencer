@@ -526,6 +526,9 @@ function HeatmapApiLoader({
 
   useEffect(() => {
     void fetchHeatmap();
+    return () => {
+      heatmapAbortRef.current?.abort();
+    };
   }, [fetchHeatmap]);
 
   useEffect(() => {
@@ -1106,6 +1109,7 @@ export function AdvertiserHeatmap() {
           }}
         >
           <HeatmapApiLoader
+            key={`${selectedCampaignId}-${selectedVehicle}-${dateFrom}-${dateTo}-${mode}-${normalization}`}
             selectedCampaignId={selectedCampaignId}
             selectedVehicle={selectedVehicle}
             dateFrom={dateFrom}
