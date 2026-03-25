@@ -634,12 +634,18 @@ export function AdvertiserHeatmap() {
   const [vehicles, setVehicles] = useState<VehicleOpt[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState(() => campaignIdFromUrl || '');
   const [selectedVehicle, setSelectedVehicle] = useState(vehicleFromUrl);
-  const [dateRange, setDateRange] = useState(() => {
-    if (dateFromUrl && dateToUrl) return 'custom';
-    return 'last-7-days';
-  });
-  const [customDateFrom, setCustomDateFrom] = useState(dateFromUrl || '');
-  const [customDateTo, setCustomDateTo] = useState(dateToUrl || '');
+
+  const initialDateRange = dateFromUrl && dateToUrl ? 'custom' : 'last-7-days';
+  const initialCustomFrom = dateFromUrl || '';
+  const initialCustomTo = dateToUrl || '';
+
+  /** Draft date UI — map/KPI load uses applied* until Apply. */
+  const [dateRange, setDateRange] = useState(initialDateRange);
+  const [customDateFrom, setCustomDateFrom] = useState(initialCustomFrom);
+  const [customDateTo, setCustomDateTo] = useState(initialCustomTo);
+  const [appliedDateRange, setAppliedDateRange] = useState(initialDateRange);
+  const [appliedCustomFrom, setAppliedCustomFrom] = useState(initialCustomFrom);
+  const [appliedCustomTo, setAppliedCustomTo] = useState(initialCustomTo);
   const [mode, setMode] = useState<'driving' | 'parking'>('driving');
   const [normalization, setNormalization] = useState<'p95' | 'p99' | 'max'>('p95');
   const [mapView, setMapView] = useState<'heatmap' | 'grid'>('heatmap');
@@ -689,9 +695,24 @@ export function AdvertiserHeatmap() {
   const hasCampaignContext = !!campaignIdFromUrl;
 
   const { from: dateFrom, to: dateTo } = useMemo(
-    () => resolveDates(dateRange, customDateFrom, customDateTo),
-    [dateRange, customDateFrom, customDateTo],
+    () => resolveDates(appliedDateRange, appliedCustomFrom, appliedCustomTo),
+    [appliedDateRange, appliedCustomFrom, appliedCustomTo],
   );
+
+  const dateRangePendingDirty =
+    dateRange !== appliedDateRange || customDateFrom !== appliedCustomFrom || customDateTo !== appliedCustomTo;
+
+  const canApplyDateRange =
+    dateRangePendingDirty && (dateRange !== 'custom' || (Boolean(customDateFrom) && Boolean(customDateTo)));
+
+  const applyDateRange = useCallback(() => {
+    if (!canApplyDateRange) {
+      return;
+    }
+    setAppliedDateRange(dateRange);
+    setAppliedCustomFrom(customDateFrom);
+    setAppliedCustomTo(customDateTo);
+  }, [canApplyDateRange, dateRange, customDateFrom, customDateTo]);
 
   useEffect(() => {
     setGridMetric(mode === 'parking' ? 'stopped' : 'moving');
@@ -749,6 +770,9 @@ export function AdvertiserHeatmap() {
     setDateRange('last-7-days');
     setCustomDateFrom('');
     setCustomDateTo('');
+    setAppliedDateRange('last-7-days');
+    setAppliedCustomFrom('');
+    setAppliedCustomTo('');
     setMode('driving');
     setNormalization('p95');
     setMapView('heatmap');
@@ -882,6 +906,22 @@ export function AdvertiserHeatmap() {
                   />
                 </div>
               )}
+
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                <button
+                  type="button"
+                  onClick={applyDateRange}
+                  disabled={!canApplyDateRange}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  Apply dates
+                </button>
+                {dateRangePendingDirty ? (
+                  <span className="text-xs text-muted-foreground max-w-[220px]">
+                    Map and KPIs still use the previous period until you apply.
+                  </span>
+                ) : null}
+              </div>
 
               <div className="flex items-center gap-2 ml-auto">
                 <label className="text-sm text-muted-foreground">Mode:</label>
