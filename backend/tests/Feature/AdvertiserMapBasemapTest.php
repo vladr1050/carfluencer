@@ -27,7 +27,14 @@ class AdvertiserMapBasemapTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('provider', 'carto')
-            ->assertJsonPath('subdomains', 'abcd');
+            ->assertJsonPath('subdomains', 'abcd')
+            ->assertJsonStructure([
+                'display_defaults' => [
+                    'normalization',
+                    'map_view',
+                    'shadow_preset',
+                ],
+            ]);
 
         $this->assertStringContainsString('basemaps.cartocdn.com', (string) $response->json('url'));
     }

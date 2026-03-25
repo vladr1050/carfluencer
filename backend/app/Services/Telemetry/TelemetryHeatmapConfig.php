@@ -14,6 +14,12 @@ final class TelemetryHeatmapConfig
 
     public const KEY_ADVERTISER_TRIPS_PER_VEHICLE_FULL_DAY = 'advertiser_heatmap_trips_per_vehicle_full_day';
 
+    public const KEY_GLOBAL_DEFAULT_NORMALIZATION = 'telemetry_heatmap_global_default_normalization';
+
+    public const KEY_GLOBAL_DEFAULT_MAP_VIEW = 'telemetry_heatmap_global_default_map_view';
+
+    public const KEY_GLOBAL_DEFAULT_SHADOW = 'telemetry_heatmap_global_default_shadow';
+
     public static function intensityGamma(): float
     {
         $row = PlatformSetting::get(self::KEY_INTENSITY_GAMMA);
@@ -40,6 +46,45 @@ final class TelemetryHeatmapConfig
         $v = (float) config('telemetry.heatmap.advertiser_trips_per_vehicle_full_day', 1.0);
 
         return max(0.0, min(1000.0, $v));
+    }
+
+    /** @return 'max'|'p95'|'p99' */
+    public static function defaultNormalization(): string
+    {
+        $row = PlatformSetting::get(self::KEY_GLOBAL_DEFAULT_NORMALIZATION);
+        if (is_string($row) && in_array($row, ['max', 'p95', 'p99'], true)) {
+            return $row;
+        }
+
+        $c = (string) config('telemetry.heatmap.global_default_normalization', 'max');
+
+        return in_array($c, ['max', 'p95', 'p99'], true) ? $c : 'max';
+    }
+
+    /** @return 'heatmap'|'grid' */
+    public static function defaultMapView(): string
+    {
+        $row = PlatformSetting::get(self::KEY_GLOBAL_DEFAULT_MAP_VIEW);
+        if ($row === 'grid' || $row === 'heatmap') {
+            return $row;
+        }
+
+        $c = (string) config('telemetry.heatmap.global_default_map_view', 'heatmap');
+
+        return $c === 'grid' ? 'grid' : 'heatmap';
+    }
+
+    /** @return 'current'|'small'|'xsmall' */
+    public static function defaultShadowPreset(): string
+    {
+        $row = PlatformSetting::get(self::KEY_GLOBAL_DEFAULT_SHADOW);
+        if (is_string($row) && in_array($row, ['current', 'small', 'xsmall'], true)) {
+            return $row;
+        }
+
+        $c = (string) config('telemetry.heatmap.global_default_shadow', 'xsmall');
+
+        return in_array($c, ['current', 'small', 'xsmall'], true) ? $c : 'xsmall';
     }
 
     /**
@@ -87,7 +132,13 @@ final class TelemetryHeatmapConfig
     }
 
     /**
-     * @return array{intensity_gamma: string, advertiser_trips_per_vehicle_full_day: string}
+     * @return array{
+     *     intensity_gamma: string,
+     *     advertiser_trips_per_vehicle_full_day: string,
+     *     global_default_normalization: string,
+     *     global_default_map_view: string,
+     *     global_default_shadow: string
+     * }
      */
     public static function allForForm(): array
     {
@@ -102,6 +153,9 @@ final class TelemetryHeatmapConfig
         return [
             'intensity_gamma' => $s,
             'advertiser_trips_per_vehicle_full_day' => $ts,
+            'global_default_normalization' => self::defaultNormalization(),
+            'global_default_map_view' => self::defaultMapView(),
+            'global_default_shadow' => self::defaultShadowPreset(),
         ];
     }
 
@@ -117,5 +171,14 @@ final class TelemetryHeatmapConfig
         $t = (float) ($data['advertiser_trips_per_vehicle_full_day'] ?? 1.0);
         $t = max(0.0, min(1000.0, $t));
         PlatformSetting::set(self::KEY_ADVERTISER_TRIPS_PER_VEHICLE_FULL_DAY, (string) $t);
+
+        $norm = (string) ($data['global_default_normalization'] ?? 'max');
+        PlatformSetting::set(self::KEY_GLOBAL_DEFAULT_NORMALIZATION, in_array($norm, ['max', 'p95', 'p99'], true) ? $norm : 'max');
+
+        $mv = (string) ($data['global_default_map_view'] ?? 'heatmap');
+        PlatformSetting::set(self::KEY_GLOBAL_DEFAULT_MAP_VIEW, $mv === 'grid' ? 'grid' : 'heatmap');
+
+        $sh = (string) ($data['global_default_shadow'] ?? 'xsmall');
+        PlatformSetting::set(self::KEY_GLOBAL_DEFAULT_SHADOW, in_array($sh, ['current', 'small', 'xsmall'], true) ? $sh : 'xsmall');
     }
 }

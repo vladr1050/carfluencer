@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Advertiser;
 
 use App\Http\Controllers\Controller;
+use App\Services\Telemetry\TelemetryHeatmapConfig;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -13,6 +14,12 @@ class AdvertiserMapBasemapController extends Controller
 {
     public function __invoke(): JsonResponse
     {
+        $displayDefaults = [
+            'normalization' => TelemetryHeatmapConfig::defaultNormalization(),
+            'map_view' => TelemetryHeatmapConfig::defaultMapView(),
+            'shadow_preset' => TelemetryHeatmapConfig::defaultShadowPreset(),
+        ];
+
         $key = config('services.maptiler.api_key');
         if (filled($key)) {
             return response()->json([
@@ -21,6 +28,7 @@ class AdvertiserMapBasemapController extends Controller
                 'attribution' => '<a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
                 'subdomains' => null,
                 'max_zoom' => 20,
+                'display_defaults' => $displayDefaults,
             ]);
         }
 
@@ -30,6 +38,7 @@ class AdvertiserMapBasemapController extends Controller
             'attribution' => '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
             'subdomains' => 'abcd',
             'max_zoom' => 20,
+            'display_defaults' => $displayDefaults,
         ]);
     }
 }

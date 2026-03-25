@@ -1,6 +1,7 @@
 @php
     $maptilerKey = filled(config('services.maptiler.api_key')) ? (string) config('services.maptiler.api_key') : '';
     $heatmapShadowBootstrap = isset($heatmapShadow) && in_array($heatmapShadow, ['current', 'small', 'xsmall'], true) ? $heatmapShadow : 'current';
+    $heatmapViewMode = isset($heatmapMapView) && $heatmapMapView === 'grid' ? 'grid' : 'heatmap';
 @endphp
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
@@ -53,8 +54,8 @@
         <label class="inline-flex items-center gap-2">
             <span class="font-medium">{{ __('View') }}</span>
             <select id="admin-hm-view-mode" aria-label="{{ __('View mode') }}">
-                <option value="heatmap">{{ __('Heatmap') }}</option>
-                <option value="grid">{{ __('Grid') }}</option>
+                <option value="heatmap" @selected($heatmapViewMode === 'heatmap')>{{ __('Heatmap') }}</option>
+                <option value="grid" @selected($heatmapViewMode === 'grid')>{{ __('Grid') }}</option>
             </select>
         </label>
         <label id="admin-hm-grid-metric-wrap" class="hidden inline-flex items-center gap-2">

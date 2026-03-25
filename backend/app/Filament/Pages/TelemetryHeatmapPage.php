@@ -83,8 +83,8 @@ class TelemetryHeatmapPage extends Page
             'date_from' => now()->subDays(7)->toDateString(),
             'date_to' => now()->toDateString(),
             'motion' => 'moving',
-            'heatmap_normalization' => 'p95',
-            'heatmap_shadow' => 'current',
+            'heatmap_normalization' => TelemetryHeatmapConfig::defaultNormalization(),
+            'heatmap_shadow' => TelemetryHeatmapConfig::defaultShadowPreset(),
         ];
 
         $defaults = $this->mergeHeatmapDefaultsFromRequest($defaults);
@@ -222,8 +222,8 @@ class TelemetryHeatmapPage extends Page
         }
 
         $allowedShadow = ['current', 'small', 'xsmall'];
-        $sh = $row['heatmap_shadow'] ?? 'current';
-        $row['heatmap_shadow'] = in_array($sh, $allowedShadow, true) ? $sh : 'current';
+        $sh = $row['heatmap_shadow'] ?? TelemetryHeatmapConfig::defaultShadowPreset();
+        $row['heatmap_shadow'] = in_array($sh, $allowedShadow, true) ? $sh : TelemetryHeatmapConfig::defaultShadowPreset();
 
         return $row;
     }
@@ -396,6 +396,35 @@ class TelemetryHeatmapPage extends Page
                             'Advertiser portal → Heatmap: “Trips” KPI = this coefficient × (vehicles in the current selection) × (inclusive calendar days in the selected period). Editable without code deploy; falls back to ADVERTISER_HEATMAP_TRIPS_PER_VEHICLE_FULL_DAY in .env when unset in platform settings.'
                         )
                     ),
+                Select::make('global_default_normalization')
+                    ->label(__('Default intensity scale (admin + advertiser)'))
+                    ->options([
+                        'p95' => __('Percentile p95 (recommended)'),
+                        'p99' => __('Percentile p99'),
+                        'max' => __('Max bucket'),
+                    ])
+                    ->native(false)
+                    ->required()
+                    ->helperText(__('Initial normalization for new heatmap sessions. Advertiser portal uses this from the map-basemap API; the main filter form above also defaults to this on first load.')),
+                Select::make('global_default_map_view')
+                    ->label(__('Default map view (admin + advertiser)'))
+                    ->options([
+                        'heatmap' => __('Heatmap'),
+                        'grid' => __('Grid'),
+                    ])
+                    ->native(false)
+                    ->required()
+                    ->helperText(__('Heatmap vs grid cells. Advertiser portal applies this from map-basemap; admin map toolbar selects this on page load.')),
+                ToggleButtons::make('global_default_shadow')
+                    ->label(__('Default shadow size (admin + advertiser)'))
+                    ->options([
+                        'current' => __('Current'),
+                        'small' => __('Smaller'),
+                        'xsmall' => __('Very small'),
+                    ])
+                    ->inline()
+                    ->required()
+                    ->helperText(__('Leaflet.heat radius/blur preset. Advertiser: from map-basemap unless ?heatmap_shadow= overrides. Admin: main form shadow defaults to this.')),
             ]);
     }
 
@@ -409,6 +438,15 @@ class TelemetryHeatmapPage extends Page
             }
             if (! array_key_exists('advertiser_trips_per_vehicle_full_day', $data) || $data['advertiser_trips_per_vehicle_full_day'] === null || $data['advertiser_trips_per_vehicle_full_day'] === '') {
                 $data['advertiser_trips_per_vehicle_full_day'] = $fallback['advertiser_trips_per_vehicle_full_day'] ?? 1.0;
+            }
+            if (! array_key_exists('global_default_normalization', $data) || $data['global_default_normalization'] === null || $data['global_default_normalization'] === '') {
+                $data['global_default_normalization'] = $fallback['global_default_normalization'] ?? 'max';
+            }
+            if (! array_key_exists('global_default_map_view', $data) || $data['global_default_map_view'] === null || $data['global_default_map_view'] === '') {
+                $data['global_default_map_view'] = $fallback['global_default_map_view'] ?? 'heatmap';
+            }
+            if (! array_key_exists('global_default_shadow', $data) || $data['global_default_shadow'] === null || $data['global_default_shadow'] === '') {
+                $data['global_default_shadow'] = $fallback['global_default_shadow'] ?? 'xsmall';
             }
             TelemetryHeatmapConfig::saveFromForm($data);
             $gamma = TelemetryHeatmapConfig::intensityGamma();
@@ -574,7 +612,7 @@ class TelemetryHeatmapPage extends Page
         $params = [
             'scope' => $s['map_scope'] ?? 'vehicle',
             'motion' => ($s['motion'] ?? 'both') === 'both' ? 'moving' : ($s['motion'] ?? 'moving'),
-            'normalization' => $s['heatmap_normalization'] ?? 'p95',
+            'normalization' => $s['heatmap_normalization'] ?? TelemetryHeatmapConfig::defaultNormalization(),
             'date_from' => array_key_exists('date_from', $s) ? $this->scalarForHttpQuery($s['date_from']) : null,
             'date_to' => array_key_exists('date_to', $s) ? $this->scalarForHttpQuery($s['date_to']) : null,
         ];
@@ -634,9 +672,9 @@ class TelemetryHeatmapPage extends Page
 
         $query = $this->heatmapQueryParams();
         $url = route('internal.admin.telemetry.heatmap-data');
-        $shadow = is_array($this->data) ? ($this->data['heatmap_shadow'] ?? 'current') : 'current';
+        $shadow = is_array($this->data) ? ($this->data['heatmap_shadow'] ?? TelemetryHeatmapConfig::defaultShadowPreset()) : TelemetryHeatmapConfig::defaultShadowPreset();
         if (! in_array($shadow, ['current', 'small', 'xsmall'], true)) {
-            $shadow = 'current';
+            $shadow = TelemetryHeatmapConfig::defaultShadowPreset();
         }
 
         $this->js(
@@ -669,10 +707,11 @@ class TelemetryHeatmapPage extends Page
                     ->columns(1),
                 SchemaView::make('filament.pages.telemetry-heatmap-body')
                     ->viewData(fn (): array => [
-                        'heatmapShadow' => is_array($this->data) ? ($this->data['heatmap_shadow'] ?? 'current') : 'current',
+                        'heatmapShadow' => is_array($this->data) ? ($this->data['heatmap_shadow'] ?? TelemetryHeatmapConfig::defaultShadowPreset()) : TelemetryHeatmapConfig::defaultShadowPreset(),
+                        'heatmapMapView' => TelemetryHeatmapConfig::defaultMapView(),
                     ]),
                 Section::make(__('Heatmap display'))
-                    ->description(__('How strongly the densest location buckets stand out (shared with the advertiser heatmap).'))
+                    ->description(__('γ, Trips coefficient, and global map defaults (intensity scale, view mode, shadow size) apply to the advertiser portal and to the admin heatmap on load. Save, then reload the advertiser page or refresh the admin map to pick up changes.'))
                     ->collapsed()
                     ->schema([
                         Form::make([EmbeddedSchema::make('heatmapSettingsForm')])

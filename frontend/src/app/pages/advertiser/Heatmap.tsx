@@ -35,6 +35,11 @@ type AdvertiserMapBasemap = {
   attribution: string;
   subdomains: string | null;
   max_zoom: number;
+  display_defaults?: {
+    normalization: 'p95' | 'p99' | 'max';
+    map_view: 'heatmap' | 'grid';
+    shadow_preset: HeatShadowPreset;
+  };
 };
 
 const CARTO_POSITRON_FALLBACK: AdvertiserMapBasemap = {
@@ -92,9 +97,13 @@ function parkingContourSizeFactor(preset: HeatShadowPreset): number {
   return heatShadowDims(preset).parking.radius / base;
 }
 
-function parseHeatShadowFromSearchParams(sp: URLSearchParams): HeatShadowPreset {
+/** URL override for shadow; `null` = use server default from map-basemap. */
+function heatmapShadowFromSearchParams(sp: URLSearchParams): HeatShadowPreset | null {
   const v = sp.get('heatmap_shadow');
-  return v === 'small' || v === 'xsmall' ? v : 'current';
+  if (v === 'small' || v === 'xsmall' || v === 'current') {
+    return v;
+  }
+  return null;
 }
 
 const CELL_HALF = 0.0005;
@@ -637,27 +646,16 @@ type HeatmapApi = {
 export function AdvertiserHeatmap() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [shadowPreset, setShadowPreset] = useState<HeatShadowPreset>(() => parseHeatShadowFromSearchParams(searchParams));
+  const displayDefaultsRef = useRef<NonNullable<AdvertiserMapBasemap['display_defaults']> | null>(null);
+
+  const [shadowPreset, setShadowPreset] = useState<HeatShadowPreset>('xsmall');
 
   useEffect(() => {
-    setShadowPreset(parseHeatShadowFromSearchParams(searchParams));
+    const fromUrl = heatmapShadowFromSearchParams(searchParams);
+    if (fromUrl) {
+      setShadowPreset(fromUrl);
+    }
   }, [searchParams]);
-
-  const setShadowSize = useCallback(
-    (preset: HeatShadowPreset) => {
-      setShadowPreset(preset);
-      setSearchParams((prev) => {
-        const n = new URLSearchParams(prev);
-        if (preset === 'current') {
-          n.delete('heatmap_shadow');
-        } else {
-          n.set('heatmap_shadow', preset);
-        }
-        return n;
-      });
-    },
-    [setSearchParams],
-  );
 
   const campaignIdFromUrl = searchParams.get('campaignId');
   const campaignNameFromUrl = searchParams.get('campaignName');
@@ -682,7 +680,7 @@ export function AdvertiserHeatmap() {
   const [appliedCustomFrom, setAppliedCustomFrom] = useState(initialCustomFrom);
   const [appliedCustomTo, setAppliedCustomTo] = useState(initialCustomTo);
   const [mode, setMode] = useState<'driving' | 'parking'>('driving');
-  const [normalization, setNormalization] = useState<'p95' | 'p99' | 'max'>('p95');
+  const [normalization, setNormalization] = useState<'p95' | 'p99' | 'max'>('max');
   const [mapView, setMapView] = useState<'heatmap' | 'grid'>('heatmap');
   const [gridMetric, setGridMetric] = useState<'moving' | 'stopped'>('moving');
   const [showParkingContours, setShowParkingContours] = useState(false);
@@ -705,6 +703,23 @@ export function AdvertiserHeatmap() {
             subdomains: typeof cfg.subdomains === 'string' && cfg.subdomains.length > 0 ? cfg.subdomains : null,
             max_zoom: typeof cfg.max_zoom === 'number' && cfg.max_zoom > 0 ? cfg.max_zoom : 20,
           });
+        }
+        const dd = cfg?.display_defaults;
+        if (dd) {
+          displayDefaultsRef.current = dd;
+          if (dd.normalization === 'max' || dd.normalization === 'p95' || dd.normalization === 'p99') {
+            setNormalization(dd.normalization);
+          }
+          if (dd.map_view === 'heatmap' || dd.map_view === 'grid') {
+            setMapView(dd.map_view);
+          }
+          const urlShadow = heatmapShadowFromSearchParams(new URLSearchParams(window.location.search));
+          if (
+            urlShadow === null &&
+            (dd.shadow_preset === 'current' || dd.shadow_preset === 'small' || dd.shadow_preset === 'xsmall')
+          ) {
+            setShadowPreset(dd.shadow_preset);
+          }
         }
       })
       .catch(() => {
@@ -843,6 +858,7 @@ export function AdvertiserHeatmap() {
   };
 
   const handleResetFilters = () => {
+    const d = displayDefaultsRef.current;
     setSelectedVehicle('all');
     setDateRange('last-7-days');
     setCustomDateFrom('');
@@ -851,11 +867,13 @@ export function AdvertiserHeatmap() {
     setAppliedCustomFrom('');
     setAppliedCustomTo('');
     setMode('driving');
-    setNormalization('p95');
-    setMapView('heatmap');
+    setNormalization(d?.normalization === 'p95' || d?.normalization === 'p99' || d?.normalization === 'max' ? d.normalization : 'max');
+    setMapView(d?.map_view === 'grid' ? 'grid' : 'heatmap');
     setGridMetric('moving');
     setShowParkingContours(false);
-    setShadowPreset('current');
+    setShadowPreset(
+      d?.shadow_preset === 'current' || d?.shadow_preset === 'small' || d?.shadow_preset === 'xsmall' ? d.shadow_preset : 'xsmall',
+    );
     setSearchParams({});
   };
 
@@ -1011,69 +1029,6 @@ export function AdvertiserHeatmap() {
                   ]}
                 />
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-border/60">
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">Intensity scale:</label>
-                <select
-                  value={normalization}
-                  onChange={(e) => setNormalization(e.target.value as 'p95' | 'p99' | 'max')}
-                  className="px-3 py-2 rounded-lg bg-input-background dark:bg-input border border-border text-sm"
-                >
-                  <option value="p95">p95 (recommended)</option>
-                  <option value="p99">p99</option>
-                  <option value="max">Max bucket</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">Map view:</label>
-                <select
-                  value={mapView}
-                  onChange={(e) => setMapView(e.target.value as 'heatmap' | 'grid')}
-                  className="px-3 py-2 rounded-lg bg-input-background dark:bg-input border border-border text-sm"
-                >
-                  <option value="heatmap">Heatmap</option>
-                  <option value="grid">Grid</option>
-                </select>
-              </div>
-              {mapView === 'heatmap' && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Shadow size:</span>
-                  <SegmentedControl<HeatShadowPreset>
-                    value={shadowPreset}
-                    onChange={setShadowSize}
-                    options={[
-                      { value: 'current', label: 'Current' },
-                      { value: 'small', label: 'Smaller' },
-                      { value: 'xsmall', label: 'Very small' },
-                    ]}
-                  />
-                </div>
-              )}
-              {mapView === 'grid' && (
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-muted-foreground">Grid shows:</label>
-                  <select
-                    value={gridMetric}
-                    onChange={(e) => setGridMetric(e.target.value as 'moving' | 'stopped')}
-                    className="px-3 py-2 rounded-lg bg-input-background dark:bg-input border border-border text-sm"
-                  >
-                    <option value="moving">Moving samples</option>
-                    <option value="stopped">Stopped samples</option>
-                  </select>
-                </div>
-              )}
-              {mode === 'parking' && mapView === 'heatmap' && (
-                <label className="inline-flex items-center gap-2 cursor-pointer text-sm">
-                  <input
-                    type="checkbox"
-                    checked={showParkingContours}
-                    onChange={(e) => setShowParkingContours(e.target.checked)}
-                    className="rounded border-border"
-                  />
-                  Parking iso-rings (experimental)
-                </label>
-              )}
             </div>
           </div>
         )}

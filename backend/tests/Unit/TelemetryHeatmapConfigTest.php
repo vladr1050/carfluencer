@@ -26,6 +26,35 @@ class TelemetryHeatmapConfigTest extends TestCase
         $this->assertEqualsWithDelta(1.25, TelemetryHeatmapConfig::intensityGamma(), 1e-9);
     }
 
+    public function test_global_display_defaults_use_config_when_platform_setting_missing(): void
+    {
+        config([
+            'telemetry.heatmap.global_default_normalization' => 'max',
+            'telemetry.heatmap.global_default_map_view' => 'heatmap',
+            'telemetry.heatmap.global_default_shadow' => 'xsmall',
+        ]);
+
+        $this->assertSame('max', TelemetryHeatmapConfig::defaultNormalization());
+        $this->assertSame('heatmap', TelemetryHeatmapConfig::defaultMapView());
+        $this->assertSame('xsmall', TelemetryHeatmapConfig::defaultShadowPreset());
+    }
+
+    public function test_global_display_defaults_respect_platform_settings(): void
+    {
+        config([
+            'telemetry.heatmap.global_default_normalization' => 'max',
+            'telemetry.heatmap.global_default_map_view' => 'heatmap',
+            'telemetry.heatmap.global_default_shadow' => 'xsmall',
+        ]);
+        PlatformSetting::set(TelemetryHeatmapConfig::KEY_GLOBAL_DEFAULT_NORMALIZATION, 'p95');
+        PlatformSetting::set(TelemetryHeatmapConfig::KEY_GLOBAL_DEFAULT_MAP_VIEW, 'grid');
+        PlatformSetting::set(TelemetryHeatmapConfig::KEY_GLOBAL_DEFAULT_SHADOW, 'small');
+
+        $this->assertSame('p95', TelemetryHeatmapConfig::defaultNormalization());
+        $this->assertSame('grid', TelemetryHeatmapConfig::defaultMapView());
+        $this->assertSame('small', TelemetryHeatmapConfig::defaultShadowPreset());
+    }
+
     public function test_trips_kpi_uses_platform_setting_and_full_inclusive_days(): void
     {
         config(['telemetry.heatmap.advertiser_trips_per_vehicle_full_day' => 1.0]);

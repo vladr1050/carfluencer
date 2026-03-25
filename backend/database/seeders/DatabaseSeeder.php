@@ -10,9 +10,9 @@ use App\Models\ContentBlock;
 use App\Models\GeoZone;
 use App\Models\MediaOwnerProfile;
 use App\Models\PlatformSetting;
-use App\Services\Telemetry\TelemetryHeatmapConfig;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Telemetry\TelemetryHeatmapConfig;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -146,6 +146,18 @@ class DatabaseSeeder extends Seeder
         PlatformSetting::query()->updateOrCreate(
             ['key' => TelemetryHeatmapConfig::KEY_ADVERTISER_TRIPS_PER_VEHICLE_FULL_DAY],
             ['value' => '1']
+        );
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => TelemetryHeatmapConfig::KEY_GLOBAL_DEFAULT_NORMALIZATION],
+            ['value' => 'max']
+        );
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => TelemetryHeatmapConfig::KEY_GLOBAL_DEFAULT_MAP_VIEW],
+            ['value' => 'heatmap']
+        );
+        PlatformSetting::query()->updateOrCreate(
+            ['key' => TelemetryHeatmapConfig::KEY_GLOBAL_DEFAULT_SHADOW],
+            ['value' => 'xsmall']
         );
 
         GeoZone::query()->updateOrCreate(

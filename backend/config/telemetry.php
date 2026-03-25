@@ -84,6 +84,10 @@ return [
          * Overridden by platform_settings.advertiser_heatmap_trips_per_vehicle_full_day when set.
          */
         'advertiser_trips_per_vehicle_full_day' => max(0.0, min(1000.0, (float) env('ADVERTISER_HEATMAP_TRIPS_PER_VEHICLE_FULL_DAY', 1.0))),
+        /** Defaults for admin + advertiser heatmap UI (overridden by platform_settings). */
+        'global_default_normalization' => (string) env('TELEMETRY_HEATMAP_GLOBAL_DEFAULT_NORMALIZATION', 'max'),
+        'global_default_map_view' => (string) env('TELEMETRY_HEATMAP_GLOBAL_DEFAULT_MAP_VIEW', 'heatmap'),
+        'global_default_shadow' => (string) env('TELEMETRY_HEATMAP_GLOBAL_DEFAULT_SHADOW', 'xsmall'),
         /**
          * GPS fallback for parking hours: ignore gaps longer than this between consecutive points (device offline).
          */
