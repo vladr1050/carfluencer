@@ -71,12 +71,12 @@ const HEAT_SHADOW_PRESETS: Record<
     parking: { radius: 40, blur: 21 },
   },
   small: {
-    moving: { radius: 20, blur: 9 },
-    parking: { radius: 32, blur: 16 },
+    moving: { radius: 10, blur: 5 },
+    parking: { radius: 16, blur: 8 },
   },
   xsmall: {
-    moving: { radius: 15, blur: 6 },
-    parking: { radius: 24, blur: 12 },
+    moving: { radius: 8, blur: 3 },
+    parking: { radius: 12, blur: 6 },
   },
 };
 
