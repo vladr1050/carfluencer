@@ -3,8 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Models\PlatformSetting;
+use App\Models\TelemetrySyncEvent;
 use App\Services\Telemetry\ClickHouseLocationCollector;
 use App\Services\Telemetry\TelemetrySchedulerConfig;
+use App\Services\Telemetry\TelemetrySyncEventRecorder;
 use App\Services\Telemetry\TelemetrySyncImeiResolver;
 use App\Services\Telemetry\TelemetryVehicleSyncState;
 use Carbon\Carbon;
@@ -12,6 +14,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class TelemetrySchedulerTickCommand extends Command
 {
@@ -21,6 +24,8 @@ class TelemetrySchedulerTickCommand extends Command
 
     public function handle(): int
     {
+        $this->maybePruneSyncEvents();
+
         if (! config('telemetry.clickhouse.enabled')) {
             return self::SUCCESS;
         }
@@ -40,6 +45,19 @@ class TelemetrySchedulerTickCommand extends Command
         return self::SUCCESS;
     }
 
+    private function maybePruneSyncEvents(): void
+    {
+        Cache::remember('telemetry:sync-events-prune-hourly', 3600, function (): true {
+            if (Schema::hasTable('telemetry_sync_events')) {
+                DB::table('telemetry_sync_events')
+                    ->where('occurred_at', '<', now('UTC')->subHours(48))
+                    ->delete();
+            }
+
+            return true;
+        });
+    }
+
     private function maybeRunIncremental(): void
     {
         $interval = TelemetrySchedulerConfig::incrementalIntervalMinutes();
@@ -51,6 +69,17 @@ class TelemetrySchedulerTickCommand extends Command
                 $lastAt = null;
             }
             if ($lastAt !== null && now('UTC')->diffInMinutes($lastAt) < $interval) {
+                TelemetrySyncEventRecorder::record(
+                    TelemetrySyncEvent::SOURCE_SCHEDULER,
+                    TelemetrySyncEvent::ACTION_INCREMENTAL_SKIPPED,
+                    TelemetrySyncEvent::STATUS_SKIPPED,
+                    'Scheduler tick: incremental pull skipped (interval not elapsed).',
+                    [
+                        'interval_minutes' => $interval,
+                        'last_incremental_at_utc' => $last,
+                    ],
+                );
+
                 return;
             }
         }
@@ -68,12 +97,17 @@ class TelemetrySchedulerTickCommand extends Command
         $pauseUs = ((int) config('telemetry.clickhouse.pause_ms_between_imei', 300)) * 1000;
         $n = 0;
         $lastIdx = count($imeis) - 1;
+        $failures = [];
         foreach ($imeis as $idx => $imei) {
             try {
                 $n += $collector->syncIncrementalForImei($imei);
                 $syncState->markIncrementalSuccessForImeis([$imei]);
             } catch (\Throwable $e) {
                 $syncState->recordFailureForImeis([$imei], $e);
+                $failures[] = [
+                    'imei' => $imei,
+                    'message' => $e->getMessage(),
+                ];
             }
             if ($pauseUs > 0 && $idx < $lastIdx) {
                 usleep($pauseUs);
@@ -85,6 +119,26 @@ class TelemetrySchedulerTickCommand extends Command
             now('UTC')->toIso8601String()
         );
         $this->line("Ran incremental telemetry sync ({$n} row(s), ".count($imeis).' IMEI(s) this tick).');
+
+        $status = TelemetrySyncEvent::STATUS_SUCCESS;
+        if ($failures !== []) {
+            $status = count($failures) === count($imeis) && $imeis !== []
+                ? TelemetrySyncEvent::STATUS_FAILED
+                : TelemetrySyncEvent::STATUS_PARTIAL;
+        }
+
+        TelemetrySyncEventRecorder::record(
+            TelemetrySyncEvent::SOURCE_SCHEDULER,
+            TelemetrySyncEvent::ACTION_INCREMENTAL_PULL,
+            $status,
+            'Scheduler: incremental ClickHouse → PostgreSQL ('.$n.' rows, '.count($imeis).' IMEI(s)).',
+            [
+                'imeis' => $imeis,
+                'rows' => $n,
+                'failures' => $failures,
+            ],
+            $failures !== [] ? implode('; ', array_column($failures, 'message')) : null,
+        );
     }
 
     private function maybeRunDailyJobs(): void
@@ -98,6 +152,13 @@ class TelemetrySchedulerTickCommand extends Command
                 Artisan::call('telemetry:build-stop-sessions', ['--date' => $yesterday]);
                 Cache::put($key, true, 86_400);
                 $this->line('Ran telemetry:build-stop-sessions for '.$yesterday);
+                TelemetrySyncEventRecorder::record(
+                    TelemetrySyncEvent::SOURCE_SCHEDULER,
+                    TelemetrySyncEvent::ACTION_BUILD_STOP_SESSIONS,
+                    TelemetrySyncEvent::STATUS_SUCCESS,
+                    'Scheduler: rebuilt stop/driving sessions for '.$yesterday.' (UTC).',
+                    ['date' => $yesterday],
+                );
             }
         }
 
@@ -107,6 +168,13 @@ class TelemetrySchedulerTickCommand extends Command
                 Artisan::call('telemetry:aggregate-daily', ['--date' => $yesterday]);
                 Cache::put($key, true, 86_400);
                 $this->line('Ran telemetry:aggregate-daily for '.$yesterday);
+                TelemetrySyncEventRecorder::record(
+                    TelemetrySyncEvent::SOURCE_SCHEDULER,
+                    TelemetrySyncEvent::ACTION_AGGREGATE_DAILY,
+                    TelemetrySyncEvent::STATUS_SUCCESS,
+                    'Scheduler: daily impressions aggregate for '.$yesterday.' (UTC).',
+                    ['date' => $yesterday],
+                );
             }
 
             $keyHeatmap = 'telemetry_tick_heatmap_rollup_'.$yesterday;
@@ -118,8 +186,23 @@ class TelemetrySchedulerTickCommand extends Command
                         '--all-modes' => true,
                     ]);
                     $this->line('Ran heatmap:aggregate (heatmap_cells_daily) for '.$yesterday);
+                    TelemetrySyncEventRecorder::record(
+                        TelemetrySyncEvent::SOURCE_SCHEDULER,
+                        TelemetrySyncEvent::ACTION_HEATMAP_ROLLUP,
+                        TelemetrySyncEvent::STATUS_SUCCESS,
+                        'Scheduler: heatmap_cells_daily rollup for '.$yesterday.' (UTC).',
+                        ['date' => $yesterday],
+                    );
                 } catch (\Throwable $e) {
                     $this->warn('heatmap:aggregate failed: '.$e->getMessage());
+                    TelemetrySyncEventRecorder::record(
+                        TelemetrySyncEvent::SOURCE_SCHEDULER,
+                        TelemetrySyncEvent::ACTION_HEATMAP_ROLLUP,
+                        TelemetrySyncEvent::STATUS_FAILED,
+                        'Scheduler: heatmap rollup failed for '.$yesterday.'.',
+                        ['date' => $yesterday],
+                        $e->getMessage(),
+                    );
                 } finally {
                     Cache::put($keyHeatmap, true, 86_400);
                 }

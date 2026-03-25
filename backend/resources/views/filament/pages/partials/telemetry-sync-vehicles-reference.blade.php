@@ -5,25 +5,10 @@
     /** @var string $refreshed_at */
 @endphp
 
-<div wire:poll.15s class="space-y-6">
+<div class="space-y-6">
     <p class="text-xs text-gray-500 dark:text-gray-400">
         {{ __('Last updated: :t', ['t' => $refreshed_at]) }}
     </p>
-
-    @unless ($summary['clickhouse_enabled'])
-        <div class="rounded-lg border-2 border-amber-500/80 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-400/60 dark:bg-amber-500/10 dark:text-amber-50">
-            <p class="font-semibold">{{ __('ClickHouse import is disabled — sync jobs do nothing') }}</p>
-            <p class="mt-2 leading-relaxed">
-                {{ __('Laravel reads TELEMETRY_CLICKHOUSE_ENABLED from .env (default false). While it is false, queued jobs return immediately: no GPS rows are loaded, timestamps in this log stay empty, and the queue worker may show no “Processing …” lines.') }}
-            </p>
-            <ol class="mt-3 list-decimal space-y-1 ps-5">
-                <li><code class="rounded bg-black/10 px-1 dark:bg-white/10">TELEMETRY_CLICKHOUSE_ENABLED=true</code></li>
-                <li><code class="rounded bg-black/10 px-1 dark:bg-white/10">TELEMETRY_CLICKHOUSE_URL=…</code> {{ __('(current config base URL: :u)', ['u' => $summary['clickhouse_base_url'] ?: '—']) }}</li>
-                <li>{{ __('Run') }} <code class="rounded bg-black/10 px-1 dark:bg-white/10">php artisan config:clear</code> {{ __('or') }} <code class="rounded bg-black/10 px-1 dark:bg-white/10">config:cache</code>, {{ __('then restart the queue worker.') }}</li>
-            </ol>
-            <p class="mt-2 text-xs opacity-90">{{ __('See backend/.env.production.example and docs/ARCHITECTURE/05_telemetry_pipeline.md') }}</p>
-        </div>
-    @endunless
 
     <div class="rounded-lg border border-gray-200 bg-gray-50/80 p-4 text-sm dark:border-white/10 dark:bg-white/5">
         <div class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ __('Effective automation (from database)') }}</div>
@@ -130,7 +115,7 @@
 
     <div>
         <h3 class="mb-2 text-sm font-semibold text-gray-950 dark:text-white">{{ __('Failed telemetry jobs (queue log)') }}</h3>
-        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{{ __('Latest failures whose payload matches ClickHouse sync jobs. Inspect with php artisan queue:failed, then retry or forget after fixing the cause.') }}</p>
+        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{{ __('Recent failures still stored in `failed_jobs` (newest first). Failures from the last 24 hours also appear in the timeline above.') }}</p>
         @if (count($failed_jobs) === 0)
             <p class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 dark:border-white/10 dark:bg-gray-900 dark:text-gray-400">{{ __('No matching failed jobs in the table (or none yet).') }}</p>
         @else

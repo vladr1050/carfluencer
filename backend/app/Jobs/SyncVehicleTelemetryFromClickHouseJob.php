@@ -2,8 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Models\TelemetrySyncEvent;
 use App\Models\Vehicle;
 use App\Services\Telemetry\ClickHouseLocationCollector;
+use App\Services\Telemetry\TelemetrySyncEventRecorder;
 use App\Services\Telemetry\TelemetryVehicleSyncState;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -50,6 +52,18 @@ class SyncVehicleTelemetryFromClickHouseJob implements ShouldQueue
                 $syncState->markIncrementalSuccess($vehicle);
 
                 Log::info('Telemetry incremental sync for vehicle', ['vehicle_id' => $this->vehicleId, 'imei' => $imei, 'rows' => $n]);
+                TelemetrySyncEventRecorder::record(
+                    TelemetrySyncEvent::SOURCE_ADMIN_QUEUE,
+                    TelemetrySyncEvent::ACTION_MANUAL_VEHICLE_SYNC,
+                    TelemetrySyncEvent::STATUS_SUCCESS,
+                    'Admin queue: incremental sync for vehicle '.$this->vehicleId.' ('.$n.' rows).',
+                    [
+                        'vehicle_id' => $this->vehicleId,
+                        'imei' => $imei,
+                        'mode' => 'incremental',
+                        'rows' => $n,
+                    ],
+                );
 
                 return;
             }
@@ -68,6 +82,20 @@ class SyncVehicleTelemetryFromClickHouseJob implements ShouldQueue
                     'to' => $this->dateTo,
                     'rows' => $n,
                 ]);
+                TelemetrySyncEventRecorder::record(
+                    TelemetrySyncEvent::SOURCE_ADMIN_QUEUE,
+                    TelemetrySyncEvent::ACTION_MANUAL_VEHICLE_SYNC,
+                    TelemetrySyncEvent::STATUS_SUCCESS,
+                    'Admin queue: historical sync for vehicle '.$this->vehicleId.' ('.$n.' rows).',
+                    [
+                        'vehicle_id' => $this->vehicleId,
+                        'imei' => $imei,
+                        'mode' => 'historical',
+                        'date_from' => $this->dateFrom,
+                        'date_to' => $this->dateTo,
+                        'rows' => $n,
+                    ],
+                );
             }
         } catch (Throwable $e) {
             $syncState->recordFailure($vehicle, $e);

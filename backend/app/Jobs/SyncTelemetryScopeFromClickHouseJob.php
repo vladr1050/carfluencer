@@ -2,7 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Models\TelemetrySyncEvent;
 use App\Services\Telemetry\ClickHouseLocationCollector;
+use App\Services\Telemetry\TelemetrySyncEventRecorder;
 use App\Services\Telemetry\TelemetrySyncImeiResolver;
 use App\Services\Telemetry\TelemetryVehicleSyncState;
 use Carbon\Carbon;
@@ -69,6 +71,18 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
                 'scope' => $this->scope,
                 'campaign_id' => $this->campaignId,
             ]);
+            TelemetrySyncEventRecorder::record(
+                TelemetrySyncEvent::SOURCE_ADMIN_QUEUE,
+                TelemetrySyncEvent::ACTION_MANUAL_SCOPE_SYNC,
+                TelemetrySyncEvent::STATUS_INFO,
+                'Admin queue: scoped sync — no IMEIs resolved ('.$this->scope.').',
+                [
+                    'mode' => $this->mode,
+                    'scope' => $this->scope,
+                    'campaign_id' => $this->campaignId,
+                    'vehicle_ids' => $this->vehicleIds,
+                ],
+            );
 
             return;
         }
@@ -78,12 +92,14 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
                 $pauseUs = ((int) config('telemetry.clickhouse.pause_ms_between_imei', 300)) * 1000;
                 $n = 0;
                 $lastIdx = count($imeis) - 1;
+                $failures = [];
                 foreach ($imeis as $idx => $imei) {
                     try {
                         $n += $collector->syncIncrementalForImei($imei);
                         $syncState->markIncrementalSuccessForImeis([$imei]);
                     } catch (Throwable $e) {
                         $syncState->recordFailureForImeis([$imei], $e);
+                        $failures[] = ['imei' => $imei, 'message' => $e->getMessage()];
                         Log::warning('Telemetry incremental sync: IMEI failed (scoped job continues)', [
                             'imei' => $imei,
                             'scope' => $this->scope,
@@ -101,6 +117,24 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
                     'imei_count' => count($imeis),
                     'rows' => $n,
                 ]);
+                $st = $failures === []
+                    ? TelemetrySyncEvent::STATUS_SUCCESS
+                    : (count($failures) === count($imeis) ? TelemetrySyncEvent::STATUS_FAILED : TelemetrySyncEvent::STATUS_PARTIAL);
+                TelemetrySyncEventRecorder::record(
+                    TelemetrySyncEvent::SOURCE_ADMIN_QUEUE,
+                    TelemetrySyncEvent::ACTION_MANUAL_SCOPE_SYNC,
+                    $st,
+                    'Admin queue: scoped incremental ('.$this->scope.', '.$n.' rows, '.count($imeis).' IMEI(s)).',
+                    [
+                        'mode' => 'incremental',
+                        'scope' => $this->scope,
+                        'campaign_id' => $this->campaignId,
+                        'imeis' => $imeis,
+                        'rows' => $n,
+                        'failures' => $failures,
+                    ],
+                    $failures !== [] ? implode('; ', array_column($failures, 'message')) : null,
+                );
 
                 return;
             }
@@ -119,6 +153,21 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
                     'to' => $this->dateTo,
                     'rows' => $n,
                 ]);
+                TelemetrySyncEventRecorder::record(
+                    TelemetrySyncEvent::SOURCE_ADMIN_QUEUE,
+                    TelemetrySyncEvent::ACTION_MANUAL_SCOPE_SYNC,
+                    TelemetrySyncEvent::STATUS_SUCCESS,
+                    'Admin queue: scoped historical ('.$this->scope.', '.$n.' rows).',
+                    [
+                        'mode' => 'historical',
+                        'scope' => $this->scope,
+                        'campaign_id' => $this->campaignId,
+                        'imeis' => $imeis,
+                        'date_from' => $this->dateFrom,
+                        'date_to' => $this->dateTo,
+                        'rows' => $n,
+                    ],
+                );
             }
         } catch (Throwable $e) {
             // Incremental path records per-IMEI above; only historical uses this bulk failure.

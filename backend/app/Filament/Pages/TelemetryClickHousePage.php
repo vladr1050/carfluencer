@@ -328,11 +328,36 @@ class TelemetryClickHousePage extends Page
     {
         return $schema
             ->components([
-                Section::make(__('Sync activity log'))
-                    ->description(__('Live snapshot: per-vehicle sync fields in PostgreSQL, scheduler tick, queue backlog, newest stored GPS row, global ClickHouse cursor, and recent failed telemetry jobs. Auto-refresh every 15 seconds.'))
+                Section::make(__('Telemetry timeline (last 24 hours)'))
+                    ->description(__('Chronological events: scheduler ticks (incremental + daily jobs), admin-queued syncs, and queue failures from the same window. Auto-refresh every 15 seconds.'))
                     ->schema([
-                        View::make('filament.pages.partials.telemetry-sync-activity')
-                            ->viewData(fn (): array => app(TelemetrySyncActivityPresenter::class)->forView()),
+                        View::make('filament.pages.partials.telemetry-sync-timeline')
+                            ->viewData(function (): array {
+                                $d = app(TelemetrySyncActivityPresenter::class)->forView();
+
+                                return [
+                                    'timeline' => $d['timeline'],
+                                    'summary' => $d['summary'],
+                                    'refreshed_at' => $d['refreshed_at'],
+                                ];
+                            }),
+                    ])
+                    ->columns(1),
+                Section::make(__('Per-vehicle status (reference)'))
+                    ->description(__('Current snapshot: automation settings, queue backlog, per-vehicle timestamps, and failed_jobs detail. Collapsed by default; open when you need a full table.'))
+                    ->collapsed()
+                    ->schema([
+                        View::make('filament.pages.partials.telemetry-sync-vehicles-reference')
+                            ->viewData(function (): array {
+                                $d = app(TelemetrySyncActivityPresenter::class)->forView();
+
+                                return [
+                                    'summary' => $d['summary'],
+                                    'vehicles' => $d['vehicles'],
+                                    'failed_jobs' => $d['failed_jobs'],
+                                    'refreshed_at' => $d['refreshed_at'],
+                                ];
+                            }),
                     ])
                     ->columns(1),
                 Callout::make(__('Telematics sync: how it works'))
