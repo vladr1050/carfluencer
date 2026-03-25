@@ -1,5 +1,6 @@
 @php
     $maptilerKey = filled(config('services.maptiler.api_key')) ? (string) config('services.maptiler.api_key') : '';
+    $heatmapShadowBootstrap = isset($heatmapShadow) && in_array($heatmapShadow, ['current', 'small', 'xsmall'], true) ? $heatmapShadow : 'current';
 @endphp
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
@@ -67,6 +68,9 @@
             <input type="checkbox" id="admin-hm-parking-contours" class="rounded border-gray-300" />
             <span>{{ __('Parking iso-rings (experimental)') }}</span>
         </label>
+        <p class="w-full text-xs text-gray-500 dark:text-gray-400 sm:w-auto sm:flex-none">
+            {{ __('Shadow size is set in the filters above (same as URL form[heatmap_shadow]).') }}
+        </p>
     </div>
     <div id="admin-hm-map-wrap">
         <div
@@ -86,13 +90,26 @@
     const GRADIENT_MOVING = { 0.0: '#440154', 0.25: '#3b528b', 0.5: '#21918c', 0.75: '#5ec962', 1.0: '#fde725' };
     /** Parking: Google-style traffic density (green → yellow → orange → red, no white peak). */
     const GRADIENT_STOPPED = { 0.0: '#1b5e20', 0.22: '#43a047', 0.45: '#c6d84a', 0.62: '#ffeb3b', 0.8: '#fb8c00', 1.0: '#c62828' };
-    const HEAT_RADIUS = 24;
-    const HEAT_BLUR = 14;
+    /**
+     * Leaflet.heat spot spread presets (moving + parking). Keys: current | small | xsmall.
+     * "current" matches historical production defaults.
+     */
+    const HEAT_SHADOW_PRESETS = {
+        current: {
+            moving: { radius: 24, blur: 14 },
+            parking: { radius: 40, blur: 21 },
+        },
+        small: {
+            moving: { radius: 20, blur: 9 },
+            parking: { radius: 32, blur: 16 },
+        },
+        xsmall: {
+            moving: { radius: 15, blur: 6 },
+            parking: { radius: 24, blur: 12 },
+        },
+    };
     const HEAT_MIN_OPACITY = 0.16;
     const HEAT_MAX_DENOM_MOVING = 2.15;
-    /** Parking: wider blend so full-city distribution reads through */
-    const PARKING_HEAT_RADIUS = 40;
-    const PARKING_HEAT_BLUR = 21;
     const PARKING_HEAT_MIN_OPACITY = 0.27;
     const PARKING_HEAT_MAX_DENOM = 1.82;
     /** Iso-ring stroke colors by intensity tier (green → red). */
@@ -119,6 +136,33 @@
         return 5;
     }
     const CELL_HALF = 0.0005;
+
+    if (typeof window.__heatmapShadowPreset === 'undefined' || window.__heatmapShadowPreset === null || window.__heatmapShadowPreset === '') {
+        window.__heatmapShadowPreset = {!! json_encode($heatmapShadowBootstrap) !!};
+    }
+
+    function heatmapShadowKey() {
+        const k = String(window.__heatmapShadowPreset || 'current');
+        if (k === 'small' || k === 'xsmall') {
+            return k;
+        }
+
+        return 'current';
+    }
+
+    function movingHeatDims() {
+        return HEAT_SHADOW_PRESETS[heatmapShadowKey()].moving;
+    }
+
+    function parkingHeatDims() {
+        return HEAT_SHADOW_PRESETS[heatmapShadowKey()].parking;
+    }
+
+    /** Scale parking contour circle radii relative to production parking heat radius. */
+    function parkingContourSizeFactor() {
+        const base = HEAT_SHADOW_PRESETS.current.parking.radius;
+        return parkingHeatDims().radius / base;
+    }
 
     let map = null;
     let heatLayerMoving = null;
@@ -464,9 +508,11 @@
                 return [Number(b.lat), Number(b.lng), Number(b.intensity_stopped) || 0];
             });
 
+            const pd = parkingHeatDims();
+            const md = movingHeatDims();
             const parkingHeatOpts = {
-                radius: PARKING_HEAT_RADIUS,
-                blur: PARKING_HEAT_BLUR,
+                radius: pd.radius,
+                blur: pd.blur,
                 maxZoom: 17,
                 minOpacity: PARKING_HEAT_MIN_OPACITY,
                 max: 1.0 / PARKING_HEAT_MAX_DENOM,
@@ -475,8 +521,8 @@
 
             if (motion === 'moving' && heatM.length && typeof L.heatLayer === 'function') {
                 heatLayerMoving = L.heatLayer(heatM, {
-                    radius: HEAT_RADIUS,
-                    blur: HEAT_BLUR,
+                    radius: md.radius,
+                    blur: md.blur,
                     maxZoom: 17,
                     minOpacity: HEAT_MIN_OPACITY,
                     max: 1.0 / HEAT_MAX_DENOM_MOVING,
@@ -492,6 +538,7 @@
             var contourOn = contourEl && contourEl.checked;
             if (contourOn && motion === 'stopped') {
                 parkingContourLayer = L.layerGroup();
+                var contourMul = parkingContourSizeFactor();
                 buckets.forEach(function (b) {
                     if ((b.w_stopped || 0) <= 0) {
                         return;
@@ -502,7 +549,7 @@
                     }
                     var color = PARKING_CONTOUR_COLORS[band];
                     var c = L.circle([Number(b.lat), Number(b.lng)], {
-                        radius: 36 + band * 30,
+                        radius: (36 + band * 30) * contourMul,
                         color: color,
                         weight: 1.5,
                         opacity: 0.45,
@@ -573,5 +620,8 @@
         bindToolbarOnce();
         redrawFromState();
     };
+
+    /** Redraw heatmap/grid from cached payload (e.g. shadow preset changed; no refetch). */
+    window.adminHeatmapRedrawFromCache = redrawFromState;
 })();
 </script>

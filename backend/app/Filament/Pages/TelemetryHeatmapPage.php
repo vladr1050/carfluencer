@@ -84,6 +84,7 @@ class TelemetryHeatmapPage extends Page
             'date_to' => now()->toDateString(),
             'motion' => 'moving',
             'heatmap_normalization' => 'p95',
+            'heatmap_shadow' => 'current',
         ];
 
         $defaults = $this->mergeHeatmapDefaultsFromRequest($defaults);
@@ -174,6 +175,8 @@ class TelemetryHeatmapPage extends Page
                 'form_date_from' => 'date_from',
                 'form.date_to' => 'date_to',
                 'form_date_to' => 'date_to',
+                'form.heatmap_shadow' => 'heatmap_shadow',
+                'form_heatmap_shadow' => 'heatmap_shadow',
             ];
             foreach ($flatAliases as $queryKey => $field) {
                 if (! request()->has($queryKey)) {
@@ -217,6 +220,10 @@ class TelemetryHeatmapPage extends Page
         if (($row['motion'] ?? '') === 'both') {
             $row['motion'] = 'moving';
         }
+
+        $allowedShadow = ['current', 'small', 'xsmall'];
+        $sh = $row['heatmap_shadow'] ?? 'current';
+        $row['heatmap_shadow'] = in_array($sh, $allowedShadow, true) ? $sh : 'current';
 
         return $row;
     }
@@ -271,7 +278,7 @@ class TelemetryHeatmapPage extends Page
     private function onlyHeatmapUrlPersistedKeys(array $merged): array
     {
         $out = [];
-        foreach (['map_scope', 'campaign_id', 'vehicle_id', 'date_from', 'date_to', 'motion'] as $k) {
+        foreach (['map_scope', 'campaign_id', 'vehicle_id', 'date_from', 'date_to', 'motion', 'heatmap_normalization', 'heatmap_shadow'] as $k) {
             if (! array_key_exists($k, $merged)) {
                 continue;
             }
@@ -307,6 +314,7 @@ class TelemetryHeatmapPage extends Page
             'date_to',
             'motion',
             'heatmap_normalization',
+            'heatmap_shadow',
         ] as $key) {
             if (! array_key_exists($key, $pairs)) {
                 continue;
@@ -320,6 +328,9 @@ class TelemetryHeatmapPage extends Page
                     : array_values(array_filter([(int) $v]));
             } elseif ($key === 'date_from' || $key === 'date_to') {
                 $defaults[$key] = $this->normalizeHeatmapDateInput($v);
+            } elseif ($key === 'heatmap_shadow') {
+                $allowed = ['current', 'small', 'xsmall'];
+                $defaults[$key] = in_array((string) $v, $allowed, true) ? (string) $v : 'current';
             } else {
                 $defaults[$key] = $v;
             }
@@ -490,6 +501,24 @@ class TelemetryHeatmapPage extends Page
                     ])
                     ->native(false)
                     ->helperText(__('p95/p99 cap the scale so one hotspot does not flatten mid-density areas. Values above the cap map to peak color.')),
+                ToggleButtons::make('heatmap_shadow')
+                    ->label(__('Shadow size'))
+                    ->options([
+                        'current' => __('Current'),
+                        'small' => __('Smaller'),
+                        'xsmall' => __('Very small'),
+                    ])
+                    ->inline()
+                    ->default('current')
+                    ->live()
+                    ->helperText(__('Spot spread for Leaflet.heat (radius / blur) on this map only; does not change server rollups.'))
+                    ->afterStateUpdated(function (mixed $state): void {
+                        $preset = in_array($state, ['current', 'small', 'xsmall'], true) ? $state : 'current';
+                        $this->js(
+                            'window.__heatmapShadowPreset = '.Js::from($preset).';'
+                            .'if (typeof window.adminHeatmapRedrawFromCache === "function") { window.adminHeatmapRedrawFromCache(); }'
+                        );
+                    }),
             ]);
     }
 
@@ -590,8 +619,14 @@ class TelemetryHeatmapPage extends Page
 
         $query = $this->heatmapQueryParams();
         $url = route('internal.admin.telemetry.heatmap-data');
+        $shadow = is_array($this->data) ? ($this->data['heatmap_shadow'] ?? 'current') : 'current';
+        if (! in_array($shadow, ['current', 'small', 'xsmall'], true)) {
+            $shadow = 'current';
+        }
+
         $this->js(
-            'window.__adminHeatmapBaseQuery = '.Js::from($query).';'
+            'window.__heatmapShadowPreset = '.Js::from($shadow).';'
+            .'window.__adminHeatmapBaseQuery = '.Js::from($query).';'
             .'window.__adminHeatmapDataUrl = '.Js::from($url).';'
             .'window.__adminHeatmapShowToast = '.Js::from($withSuccessToast).';'
             .'if (typeof window.adminHeatmapFetchWithViewport === "function") { window.adminHeatmapFetchWithViewport(); }'
@@ -617,7 +652,10 @@ class TelemetryHeatmapPage extends Page
                             ]),
                     ])
                     ->columns(1),
-                SchemaView::make('filament.pages.telemetry-heatmap-body'),
+                SchemaView::make('filament.pages.telemetry-heatmap-body')
+                    ->viewData(fn (): array => [
+                        'heatmapShadow' => is_array($this->data) ? ($this->data['heatmap_shadow'] ?? 'current') : 'current',
+                    ]),
                 Section::make(__('Heatmap display'))
                     ->description(__('How strongly the densest location buckets stand out (shared with the advertiser heatmap).'))
                     ->collapsed()
