@@ -2,10 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Http\Controllers\Admin\AdminTelemetryHeatmapController;
 use App\Models\Campaign;
 use App\Models\Vehicle;
-use App\Services\Telemetry\AdminHeatmapDataService;
 use App\Services\Telemetry\TelemetryHeatmapConfig;
 use BackedEnum;
 use DateTimeInterface;
@@ -27,7 +25,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Js;
@@ -85,7 +82,7 @@ class TelemetryHeatmapPage extends Page
             'vehicle_ids' => [],
             'date_from' => now()->subDays(7)->toDateString(),
             'date_to' => now()->toDateString(),
-            'motion' => 'both',
+            'motion' => 'moving',
             'heatmap_normalization' => 'p95',
         ];
 
@@ -215,6 +212,10 @@ class TelemetryHeatmapPage extends Page
         } elseif ($scope === 'vehicles') {
             $row['campaign_id'] = null;
             $row['vehicle_id'] = null;
+        }
+
+        if (($row['motion'] ?? '') === 'both') {
+            $row['motion'] = 'moving';
         }
 
         return $row;
@@ -474,13 +475,12 @@ class TelemetryHeatmapPage extends Page
                 ToggleButtons::make('motion')
                     ->label(__('Point type'))
                     ->options([
-                        'moving' => __('Moving'),
-                        'stopped' => __('Stopped'),
-                        'both' => __('Both'),
+                        'moving' => __('Moving (driving)'),
+                        'stopped' => __('Stopped (parking)'),
                     ])
                     ->inline()
                     ->required()
-                    ->helperText(__('Moving / stopped uses speed and ignition (same rules as stop-session builder). “Both” draws two analytical layers (no mixed gradient).')),
+                    ->helperText(__('One layer at a time: driving vs parking density. Same speed/ignition rules as stop-session builder. Map loads data for the current viewport and zoom from daily rollups when available.')),
                 Select::make('heatmap_normalization')
                     ->label(__('Intensity normalization'))
                     ->options([
@@ -529,7 +529,7 @@ class TelemetryHeatmapPage extends Page
 
         $params = [
             'scope' => $s['map_scope'] ?? 'vehicle',
-            'motion' => $s['motion'] ?? 'both',
+            'motion' => ($s['motion'] ?? 'both') === 'both' ? 'moving' : ($s['motion'] ?? 'moving'),
             'normalization' => $s['heatmap_normalization'] ?? 'p95',
             'date_from' => array_key_exists('date_from', $s) ? $this->scalarForHttpQuery($s['date_from']) : null,
             'date_to' => array_key_exists('date_to', $s) ? $this->scalarForHttpQuery($s['date_to']) : null,
@@ -588,49 +588,14 @@ class TelemetryHeatmapPage extends Page
             return;
         }
 
-        // Never use http_build_query() here: it drops DateTime/Carbon values, so date filters were lost.
         $query = $this->heatmapQueryParams();
-        $sub = Request::create(route('internal.admin.telemetry.heatmap-data'), 'GET', $query);
-        $sub->setUserResolver(fn () => auth()->user());
-
-        $response = app(AdminTelemetryHeatmapController::class)->data(
-            $sub,
-            app(AdminHeatmapDataService::class),
+        $url = route('internal.admin.telemetry.heatmap-data');
+        $this->js(
+            'window.__adminHeatmapBaseQuery = '.Js::from($query).';'
+            .'window.__adminHeatmapDataUrl = '.Js::from($url).';'
+            .'window.__adminHeatmapShowToast = '.Js::from($withSuccessToast).';'
+            .'if (typeof window.adminHeatmapFetchWithViewport === "function") { window.adminHeatmapFetchWithViewport(); }'
         );
-        if ($response->getStatusCode() === 422) {
-            $json = json_decode($response->getContent(), true);
-            Notification::make()->title($json['error'] ?? __('Invalid request'))->danger()->send();
-
-            return;
-        }
-
-        $payload = json_decode($response->getContent(), true);
-        if (! is_array($payload)) {
-            Notification::make()->title(__('Failed to load data'))->danger()->send();
-
-            return;
-        }
-
-        $count = count($payload['heatmap']['buckets'] ?? $payload['heatmap']['points'] ?? []);
-        $samples = (int) ($payload['heatmap']['metrics']['location_samples'] ?? 0);
-        if ($withSuccessToast) {
-            $gamma = $payload['heatmap']['metrics']['intensity_gamma'] ?? null;
-            $norm = $payload['heatmap']['metrics']['normalization'] ?? null;
-            $body = __('Clusters: :clusters · GPS samples in range: :samples', ['clusters' => $count, 'samples' => $samples]);
-            if (is_numeric($gamma)) {
-                $body .= ' · γ='.(string) $gamma;
-            }
-            if (is_string($norm) && $norm !== '') {
-                $body .= ' · '.$norm;
-            }
-            Notification::make()
-                ->title(__('Heatmap updated'))
-                ->body($body)
-                ->success()
-                ->send();
-        }
-
-        $this->js('window.renderAdminTelemetryHeatmap('.Js::from($payload).')');
     }
 
     public function content(Schema $schema): Schema
@@ -638,7 +603,7 @@ class TelemetryHeatmapPage extends Page
         return $schema
             ->components([
                 Section::make(__('Heatmap & ClickHouse'))
-                    ->description(__('Choose campaign, one vehicle, or a group; period and point type (moving / stopped / both). Data comes from PostgreSQL device_locations after ClickHouse import. OSM base map loads immediately; the coloured heat layer loads after "Load / refresh", or automatically on page open when filters are complete. URLs: use only form[…]=… . PHP rewrites form.map_scope into form_map_scope=…; mixing that with form[map_scope]=… breaks filters — the page will redirect once to a clean form[…] URL. Campaign mode needs form[campaign_id] or a selected campaign.'))
+                    ->description(__('Choose campaign, one vehicle, or a group; period; moving (driving) or stopped (parking) — one layer at a time. The map requests heatmap data for the visible bounds and zoom (daily rollups when populated). OSM base map loads immediately; use “Load / refresh heatmap” or open the page with complete filters. URLs: use only form[…]=… .'))
                     ->schema([
                         Form::make([EmbeddedSchema::make('form')])
                             ->id('heatmap-main-form')

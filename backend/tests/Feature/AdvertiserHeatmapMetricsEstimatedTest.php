@@ -109,7 +109,9 @@ class AdvertiserHeatmapMetricsEstimatedTest extends TestCase
 
         Sanctum::actingAs($advertiser);
 
-        $url = '/api/advertiser/heatmap?campaign_id='.$campaign->id.'&date_from=2026-03-01&date_to=2026-03-31&mode=both';
+        $url = '/api/advertiser/heatmap?campaign_id='.$campaign->id
+            .'&date_from=2026-03-01&date_to=2026-03-31&mode=driving'
+            .'&south=54&north=55&west=25&east=26&zoom=11';
         $res = $this->getJson($url)->assertOk();
 
         $this->assertSame(500, $res->json('heatmap.metrics.impressions'));

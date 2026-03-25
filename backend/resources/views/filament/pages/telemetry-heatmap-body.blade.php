@@ -63,16 +63,6 @@
                 <option value="stopped">{{ __('Stopped samples') }}</option>
             </select>
         </label>
-        <span id="admin-hm-both-wrap" class="hidden inline-flex flex-wrap items-center gap-4">
-            <label class="inline-flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="admin-hm-layer-moving" checked class="rounded border-gray-300" />
-                <span>{{ __('Moving layer') }}</span>
-            </label>
-            <label class="inline-flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="admin-hm-layer-stopped" checked class="rounded border-gray-300" />
-                <span>{{ __('Stopped layer') }}</span>
-            </label>
-        </span>
         <label id="admin-hm-contour-wrap" class="hidden inline-flex items-center gap-2 cursor-pointer">
             <input type="checkbox" id="admin-hm-parking-contours" class="rounded border-gray-300" />
             <span>{{ __('Parking iso-rings (experimental)') }}</span>
@@ -136,7 +126,8 @@
     let parkingContourLayer = null;
     let gridLayer = null;
     let resizeObserver = null;
-    let toolbarBound = false;
+        let toolbarBound = false;
+        let heatmapRefetchTimer = null;
     const defaultCenter = [56.88, 24.6];
     const defaultZoom = 7;
     const maptilerKey = {!! json_encode($maptilerKey) !!};
@@ -163,6 +154,8 @@
             return true;
         }
         map = L.map(el, { preferCanvas: true }).setView(defaultCenter, defaultZoom);
+        map.on('moveend', scheduleAdminHeatmapRefetch);
+        map.on('zoomend', scheduleAdminHeatmapRefetch);
         L.tileLayer(positronTileUrl, maptilerKey ? {
             maxZoom: 20,
             attribution: positronAttribution,
@@ -288,22 +281,15 @@
         let title = '{{ __('Heat intensity') }}';
         if (motion === 'moving') {
             title = '{{ __('Moving — sample density') }}';
-        } else if (motion === 'stopped') {
-            title = '{{ __('Parking — city density (green → red)') }}';
         } else {
-            title = '{{ __('Layers: moving (flow) + parking (density)') }}';
+            title = '{{ __('Parking — city density (green → red)') }}';
         }
 
         const barMoving = 'linear-gradient(90deg, #440154 0%, #3b528b 25%, #21918c 50%, #5ec962 75%, #fde725 100%)';
         const barStopped = 'linear-gradient(90deg, #1b5e20 0%, #43a047 22%, #c6d84a 45%, #ffeb3b 62%, #fb8c00 80%, #c62828 100%)';
 
         let bars = '';
-        if (motion === 'both') {
-            bars = '<div class="font-semibold mt-1">{{ __('Moving') }}</div><div class="hm-leg-bar" style="background:' + barMoving + ';"></div>'
-                + '<div class="text-[10px] opacity-80">{{ __('Low') }} → {{ __('Peak') }} (γ=' + (metrics.intensity_gamma ?? '—') + ')</div>'
-                + '<div class="font-semibold mt-2">{{ __('Parking / stopped') }}</div><div class="hm-leg-bar" style="background:' + barStopped + ';"></div>'
-                + '<div class="text-[10px] opacity-80">{{ __('Continuous green→red; parking uses ratio^0.7 after percentile cap.') }}</div>';
-        } else if (motion === 'stopped') {
+        if (motion === 'stopped') {
             bars = '<div class="hm-leg-bar" style="background:' + barStopped + ';"></div>'
                 + '<div class="text-[10px] flex flex-wrap gap-x-1 justify-between"><span>{{ __('Low') }}</span><span>{{ __('Mid') }}</span><span>{{ __('High') }}</span><span>{{ __('Peak') }}</span></div>'
                 + '<div class="text-[10px] opacity-75 mt-1">{{ __('Intensity: min(1, w/cap) then ^0.7 (cap = p95/p99 or max).') }}</div>';
@@ -313,7 +299,7 @@
         }
 
         const gridNote = viewMode === 'grid'
-            ? '<div class="mt-2 text-[10px] opacity-80">{{ __('Grid cells match server buckets (≈0.001°).') }}</div>'
+            ? '<div class="mt-2 text-[10px] opacity-80">{{ __('Grid uses the same bucket resolution as the current zoom tier (rollup).') }}</div>'
             : '';
 
         return '<div class="font-semibold">' + title + '</div>'
@@ -358,20 +344,84 @@
         return layer;
     }
 
+    function scheduleAdminHeatmapRefetch() {
+        if (!window.__adminHeatmapBaseQuery || !window.__adminHeatmapDataUrl) {
+            return;
+        }
+        const last = window.__adminHeatmapLastPayload;
+        if (!last || !last.heatmap || !last.heatmap.metrics || !last.heatmap.metrics.heatmap_rollup) {
+            return;
+        }
+        if (heatmapRefetchTimer) {
+            clearTimeout(heatmapRefetchTimer);
+        }
+        heatmapRefetchTimer = setTimeout(function () {
+            heatmapRefetchTimer = null;
+            if (typeof window.adminHeatmapFetchWithViewport === 'function') {
+                window.adminHeatmapFetchWithViewport(true);
+            }
+        }, 480);
+    }
+
+    window.adminHeatmapFetchWithViewport = function (isAuto) {
+        const base = window.__adminHeatmapBaseQuery;
+        const urlBase = window.__adminHeatmapDataUrl;
+        if (!base || !urlBase || !map) {
+            return;
+        }
+        const b = map.getBounds();
+        const params = new URLSearchParams();
+        Object.keys(base).forEach(function (k) {
+            const v = base[k];
+            if (v === null || v === undefined || v === '') {
+                return;
+            }
+            if (Array.isArray(v)) {
+                v.forEach(function (x) {
+                    params.append(k + '[]', String(x));
+                });
+            } else {
+                params.set(k, String(v));
+            }
+        });
+        params.set('south', String(b.getSouth()));
+        params.set('west', String(b.getWest()));
+        params.set('north', String(b.getNorth()));
+        params.set('east', String(b.getEast()));
+        params.set('zoom', String(map.getZoom()));
+        fetch(urlBase + '?' + params.toString(), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) {
+            if (!r.ok) {
+                return r.json().then(function (j) {
+                    throw new Error(j.error || j.message || String(r.status));
+                });
+            }
+            return r.json();
+        }).then(function (payload) {
+            window.renderAdminTelemetryHeatmap(payload);
+        }).catch(function (e) {
+            console.error('admin heatmap fetch', e);
+        });
+    };
+
     function redrawFromState() {
         const payload = window.__adminHeatmapLastPayload;
         if (!payload || !map) {
             return;
         }
-        const motion = (payload.filter && payload.filter.motion) ? payload.filter.motion : 'both';
+        const motion = (payload.filter && payload.filter.motion) ? payload.filter.motion : 'moving';
         const metrics = (payload.heatmap && payload.heatmap.metrics) ? payload.heatmap.metrics : {};
         const buckets = (payload.heatmap && payload.heatmap.buckets) ? payload.heatmap.buckets : [];
+        const rollup = !!(metrics && metrics.heatmap_rollup);
         const viewModeEl = document.getElementById('admin-hm-view-mode');
         const viewMode = viewModeEl ? viewModeEl.value : 'heatmap';
         const gridMetricEl = document.getElementById('admin-hm-grid-metric');
+        if (gridMetricEl) {
+            gridMetricEl.value = motion === 'stopped' ? 'stopped' : 'moving';
+        }
         const gridMetric = gridMetricEl ? gridMetricEl.value : 'moving';
-        const showM = !document.getElementById('admin-hm-layer-moving') || document.getElementById('admin-hm-layer-moving').checked;
-        const showS = !document.getElementById('admin-hm-layer-stopped') || document.getElementById('admin-hm-layer-stopped').checked;
 
         clearHeatmapLayers();
 
@@ -399,10 +449,12 @@
         if (viewMode === 'grid') {
             gridLayer = renderGrid(buckets, gridMetric, capM, capS, gamma);
             gridLayer.addTo(map);
-            try {
-                map.fitBounds(gridLayer.getBounds(), { padding: [48, 48], maxZoom: 16 });
-            } catch (e) {
-                map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
+            if (!rollup) {
+                try {
+                    map.fitBounds(gridLayer.getBounds(), { padding: [48, 48], maxZoom: 16 });
+                } catch (e) {
+                    map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
+                }
             }
         } else {
             const heatM = buckets.filter(function (b) { return (b.w_moving || 0) > 0; }).map(function (b) {
@@ -421,7 +473,7 @@
                 gradient: GRADIENT_STOPPED,
             };
 
-            if (motion === 'moving' && showM && heatM.length && typeof L.heatLayer === 'function') {
+            if (motion === 'moving' && heatM.length && typeof L.heatLayer === 'function') {
                 heatLayerMoving = L.heatLayer(heatM, {
                     radius: HEAT_RADIUS,
                     blur: HEAT_BLUR,
@@ -431,30 +483,14 @@
                     gradient: GRADIENT_MOVING,
                 });
                 heatLayerMoving.addTo(map);
-            } else if (motion === 'stopped' && showS && heatS.length && typeof L.heatLayer === 'function') {
+            } else if (motion === 'stopped' && heatS.length && typeof L.heatLayer === 'function') {
                 heatLayerStopped = L.heatLayer(heatS, parkingHeatOpts);
                 heatLayerStopped.addTo(map);
-            } else if (motion === 'both') {
-                if (showM && heatM.length && typeof L.heatLayer === 'function') {
-                    heatLayerMoving = L.heatLayer(heatM, {
-                        radius: HEAT_RADIUS,
-                        blur: HEAT_BLUR,
-                        maxZoom: 17,
-                        minOpacity: HEAT_MIN_OPACITY,
-                        max: 1.0 / HEAT_MAX_DENOM_MOVING,
-                        gradient: GRADIENT_MOVING,
-                    });
-                    heatLayerMoving.addTo(map);
-                }
-                if (showS && heatS.length && typeof L.heatLayer === 'function') {
-                    heatLayerStopped = L.heatLayer(heatS, parkingHeatOpts);
-                    heatLayerStopped.addTo(map);
-                }
             }
 
             var contourEl = document.getElementById('admin-hm-parking-contours');
             var contourOn = contourEl && contourEl.checked;
-            if (contourOn && ((motion === 'stopped' && showS) || (motion === 'both' && showS))) {
+            if (contourOn && motion === 'stopped') {
                 parkingContourLayer = L.layerGroup();
                 buckets.forEach(function (b) {
                     if ((b.w_stopped || 0) <= 0) {
@@ -490,15 +526,17 @@
             if (heatLayerStopped) {
                 layers.push(heatLayerStopped);
             }
-            if (layers.length) {
-                try {
-                    const fg = L.featureGroup(layers);
-                    map.fitBounds(fg.getBounds(), { padding: [56, 56], maxZoom: 16 });
-                } catch (e) {
+            if (!rollup) {
+                if (layers.length) {
+                    try {
+                        const fg = L.featureGroup(layers);
+                        map.fitBounds(fg.getBounds(), { padding: [56, 56], maxZoom: 16 });
+                    } catch (e) {
+                        map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
+                    }
+                } else {
                     map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
                 }
-            } else {
-                map.setView([Number(buckets[0].lat), Number(buckets[0].lng)], 11);
             }
 
         }
@@ -512,7 +550,7 @@
             return;
         }
         toolbarBound = true;
-        ['admin-hm-view-mode', 'admin-hm-grid-metric', 'admin-hm-layer-moving', 'admin-hm-layer-stopped', 'admin-hm-parking-contours'].forEach(function (id) {
+        ['admin-hm-view-mode', 'admin-hm-grid-metric', 'admin-hm-parking-contours'].forEach(function (id) {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', redrawFromState);
@@ -523,14 +561,10 @@
 
     window.renderAdminTelemetryHeatmap = function (payload) {
         window.__adminHeatmapLastPayload = payload;
-        const motion = (payload.filter && payload.filter.motion) ? payload.filter.motion : 'both';
-        const bothWrap = document.getElementById('admin-hm-both-wrap');
-        if (bothWrap) {
-            bothWrap.classList.toggle('hidden', motion !== 'both');
-        }
+        const motion = (payload.filter && payload.filter.motion) ? payload.filter.motion : 'moving';
         const contourWrap = document.getElementById('admin-hm-contour-wrap');
         if (contourWrap) {
-            contourWrap.classList.toggle('hidden', motion !== 'stopped' && motion !== 'both');
+            contourWrap.classList.toggle('hidden', motion !== 'stopped');
         }
 
         if (!ensureBaseMap()) {

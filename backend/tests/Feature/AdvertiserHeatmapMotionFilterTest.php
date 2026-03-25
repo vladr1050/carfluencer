@@ -91,8 +91,6 @@ class AdvertiserHeatmapMotionFilterTest extends TestCase
         $this->assertNotContains(54.5, $drivingLats);
         $this->assertSame('moving', $driving->json('heatmap.metrics.heatmap_motion'));
 
-        $both = $this->getJson($base.'&mode=both')->assertOk();
-        $this->assertCount(2, $both->json('heatmap.points'));
-        $this->assertSame('both', $both->json('heatmap.metrics.heatmap_motion'));
+        $this->getJson($base.'&mode=both')->assertUnprocessable();
     }
 }

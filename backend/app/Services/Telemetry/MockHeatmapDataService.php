@@ -9,7 +9,13 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
 {
     public function fetchHeatmapData(int $campaignId, array $filters = []): array
     {
-        $mode = $filters['mode'] ?? 'both';
+        $mode = $filters['mode'] ?? 'driving';
+        if ($mode === 'both') {
+            $mode = 'driving';
+        }
+        if (! in_array($mode, ['driving', 'parking'], true)) {
+            $mode = 'driving';
+        }
 
         $points = [
             ['lat' => 51.505, 'lng' => -0.09, 'intensity' => 0.8],
@@ -32,18 +38,15 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
                 'driving_time_hours' => 82,
                 'parking_time_hours' => 156,
                 'mode' => $mode,
-                'heatmap_motion' => match ($mode) {
-                    'parking' => 'stopped',
-                    'driving' => 'moving',
-                    default => 'both',
-                },
+                'heatmap_motion' => $mode === 'parking' ? 'stopped' : 'moving',
                 'campaign_id' => $campaignId,
                 'intensity_gamma' => TelemetryHeatmapConfig::intensityGamma(),
                 'intensity_stopped_power' => HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER,
                 'normalization' => 'p95',
                 'cap_moving' => 100,
                 'cap_stopped' => 20,
-                'cap_total' => 110,
+                'cap_total' => 100,
+                'heatmap_rollup' => false,
                 'data_source' => 'mock',
             ],
         ];

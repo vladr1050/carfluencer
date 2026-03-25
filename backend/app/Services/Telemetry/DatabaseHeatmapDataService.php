@@ -10,9 +10,19 @@ use Illuminate\Support\Collection;
 
 class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
 {
+    public function __construct(
+        private readonly HeatmapRollupQueryService $rollupQuery,
+    ) {}
+
     public function fetchHeatmapData(int $campaignId, array $filters = []): array
     {
-        $mode = $filters['mode'] ?? 'both';
+        $mode = $filters['mode'] ?? 'driving';
+        if ($mode === 'both') {
+            $mode = 'driving';
+        }
+        if (! in_array($mode, ['driving', 'parking'], true)) {
+            $mode = 'driving';
+        }
 
         $vehicleIds = $this->heatmapVehicleIds($campaignId, $filters);
 
@@ -31,6 +41,137 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             $normalization = 'p95';
         }
 
+        $viewport = HeatmapViewport::parse($filters);
+        if (HeatmapViewport::shouldReadRollup($filters) && $viewport !== null) {
+            $from = $filters['date_from'] ?? null;
+            $to = $filters['date_to'] ?? null;
+            if ($from && $to) {
+                return $this->fetchFromRollup(
+                    $campaignId,
+                    $filters,
+                    $imeis,
+                    $mode,
+                    $normalization,
+                    $viewport
+                );
+            }
+        }
+
+        if (! HeatmapViewport::legacyFallbackAllowed()) {
+            $metrics = $this->emptyMetrics($campaignId, $mode);
+            $metrics['heatmap_error'] = 'viewport_required';
+            $metrics['heatmap_error_detail'] = 'Send south, west, north, east, zoom with the heatmap request, or enable TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT.';
+
+            return [
+                'points' => [],
+                'buckets' => [],
+                'metrics' => $metrics,
+            ];
+        }
+
+        return $this->fetchLegacyGrouped($campaignId, $filters, $imeis, $mode, $normalization);
+    }
+
+    /**
+     * @param  list<string>  $imeis
+     * @param  array{min_lat: float, max_lat: float, min_lng: float, max_lng: float, zoom: int}  $viewport
+     * @return array{points: list<array<string, mixed>>, buckets: list<array<string, mixed>>, metrics: array<string, mixed>}
+     */
+    private function fetchFromRollup(
+        int $campaignId,
+        array $filters,
+        array $imeis,
+        string $mode,
+        string $normalization,
+        array $viewport
+    ): array {
+        $from = (string) $filters['date_from'];
+        $to = (string) $filters['date_to'];
+        $bbox = [
+            'min_lat' => $viewport['min_lat'],
+            'max_lat' => $viewport['max_lat'],
+            'min_lng' => $viewport['min_lng'],
+            'max_lng' => $viewport['max_lng'],
+        ];
+        $zoom = $viewport['zoom'];
+
+        $rows = $this->rollupQuery->fetchBuckets($imeis, $from, $to, $mode, $zoom, $bbox, $normalization);
+        $gamma = TelemetryHeatmapConfig::intensityGamma();
+        $weights = array_column($rows, 'w');
+        $rankBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($weights);
+        $capMoving = $mode === 'driving'
+            ? HeatmapIntensityNormalizer::capFromWeights($weights, $normalization)
+            : 1;
+        $capStopped = $mode === 'parking'
+            ? HeatmapIntensityNormalizer::capFromWeights($weights, $normalization)
+            : 1;
+
+        $bucketsOut = [];
+        $points = [];
+        foreach ($rows as $idx => $row) {
+            $lat = $row['lat'];
+            $lng = $row['lng'];
+            $w = $row['w'];
+            $intensity = $row['intensity'];
+            $wm = $mode === 'driving' ? $w : 0;
+            $ws = $mode === 'parking' ? $w : 0;
+
+            $bucketsOut[] = [
+                'lat' => $lat,
+                'lng' => $lng,
+                'w_moving' => $wm,
+                'w_stopped' => $ws,
+                'w_total' => $w,
+                'intensity_moving' => $mode === 'driving' ? $intensity : 0.0,
+                'intensity_stopped' => $mode === 'parking' ? $intensity : 0.0,
+                'rank_moving_pct' => $mode === 'driving' ? ($rankBatch[$idx] ?? 0.0) : null,
+                'rank_stopped_pct' => $mode === 'parking' ? ($rankBatch[$idx] ?? 0.0) : null,
+            ];
+
+            $points[] = [
+                'lat' => $lat,
+                'lng' => $lng,
+                'intensity' => $intensity,
+                'w' => $w,
+                'w_moving' => $wm,
+                'w_stopped' => $ws,
+            ];
+        }
+
+        $metrics = $this->resolveMetrics($campaignId, $filters);
+        $samplesTotal = $this->rollupQuery->sumSamplesInRange($imeis, $from, $to, $mode, $zoom);
+        $metrics['mode'] = $mode;
+        $metrics['heatmap_motion'] = self::heatmapMotionLabel($mode);
+        $metrics['campaign_id'] = $campaignId;
+        $metrics['intensity_gamma'] = $gamma;
+        $metrics['intensity_stopped_power'] = HeatmapIntensityNormalizer::STOPPED_INTENSITY_POWER;
+        $metrics['normalization'] = $normalization;
+        $metrics['cap_moving'] = $capMoving;
+        $metrics['cap_stopped'] = $capStopped;
+        $metrics['cap_total'] = max($capMoving, $capStopped);
+        $metrics['location_samples'] = $samplesTotal;
+        $metrics['heatmap_rollup'] = true;
+        $metrics['heatmap_zoom_tier'] = HeatmapBucketStrategy::tierFromMapZoom($zoom);
+        $metrics['location_samples_viewport'] = array_sum($weights);
+
+        return [
+            'points' => $points,
+            'buckets' => $bucketsOut,
+            'metrics' => $metrics,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $imeis
+     * @return array{points: list<array<string, mixed>>, buckets: list<array<string, mixed>>, metrics: array<string, mixed>}
+     */
+    private function fetchLegacyGrouped(
+        int $campaignId,
+        array $filters,
+        array $imeis,
+        string $mode,
+        string $normalization
+    ): array {
         $q = DeviceLocation::query()->whereIn('device_id', $imeis);
         DeviceLocationEventAtRange::apply($q, $filters['date_from'] ?? null, $filters['date_to'] ?? null);
 
@@ -39,11 +180,9 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $gamma = TelemetryHeatmapConfig::intensityGamma();
         $wMoving = $bucketsRaw->map(fn ($r) => (int) $r->w_moving)->all();
         $wStopped = $bucketsRaw->map(fn ($r) => (int) $r->w_stopped)->all();
-        $wTotals = $bucketsRaw->map(fn ($r) => (int) $r->w_moving + (int) $r->w_stopped)->all();
 
         $capMoving = HeatmapIntensityNormalizer::capFromWeights($wMoving, $normalization);
         $capStopped = HeatmapIntensityNormalizer::capFromWeights($wStopped, $normalization);
-        $capTotal = HeatmapIntensityNormalizer::capFromWeights($wTotals, $normalization);
 
         $rankMovingBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($wMoving);
         $rankStoppedBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($wStopped);
@@ -60,7 +199,6 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
 
             $im = HeatmapIntensityNormalizer::normalize($wm, $capMoving, $gamma);
             $is = HeatmapIntensityNormalizer::normalizeStopped($ws, $capStopped);
-            $it = HeatmapIntensityNormalizer::normalize($wt, $capTotal, $gamma);
 
             $bucketsOut[] = [
                 'lat' => $lat,
@@ -74,16 +212,10 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
                 'rank_stopped_pct' => $rankStoppedBatch[$idx],
             ];
 
-            if ($mode === 'driving') {
-                if ($wm > 0) {
-                    $points[] = ['lat' => $lat, 'lng' => $lng, 'intensity' => $im, 'w' => $wm, 'w_moving' => $wm, 'w_stopped' => $ws];
-                }
-            } elseif ($mode === 'parking') {
-                if ($ws > 0) {
-                    $points[] = ['lat' => $lat, 'lng' => $lng, 'intensity' => $is, 'w' => $ws, 'w_moving' => $wm, 'w_stopped' => $ws];
-                }
-            } elseif ($wt > 0) {
-                $points[] = ['lat' => $lat, 'lng' => $lng, 'intensity' => $it, 'w' => $wt, 'w_moving' => $wm, 'w_stopped' => $ws];
+            if ($mode === 'driving' && $wm > 0) {
+                $points[] = ['lat' => $lat, 'lng' => $lng, 'intensity' => $im, 'w' => $wm, 'w_moving' => $wm, 'w_stopped' => $ws];
+            } elseif ($mode === 'parking' && $ws > 0) {
+                $points[] = ['lat' => $lat, 'lng' => $lng, 'intensity' => $is, 'w' => $ws, 'w_moving' => $wm, 'w_stopped' => $ws];
             }
         }
 
@@ -96,7 +228,8 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
         $metrics['normalization'] = $normalization;
         $metrics['cap_moving'] = $capMoving;
         $metrics['cap_stopped'] = $capStopped;
-        $metrics['cap_total'] = $capTotal;
+        $metrics['cap_total'] = max($capMoving, $capStopped);
+        $metrics['heatmap_rollup'] = false;
 
         return [
             'points' => $points,
@@ -319,6 +452,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
             'cap_moving' => 1,
             'cap_stopped' => 1,
             'cap_total' => 1,
+            'heatmap_rollup' => false,
         ];
     }
 
@@ -326,8 +460,7 @@ class DatabaseHeatmapDataService implements HeatmapDataServiceInterface
     {
         return match ($mode) {
             'parking' => 'stopped',
-            'driving' => 'moving',
-            default => 'both',
+            default => 'moving',
         };
     }
 }

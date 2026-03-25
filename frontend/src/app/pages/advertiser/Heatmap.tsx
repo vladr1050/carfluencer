@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { Calendar, Navigation, Clock, Eye, ChevronDown, ChevronUp, X, RotateCcw, AlertCircle } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
@@ -146,13 +146,13 @@ type HeatmapBucket = {
   rank_stopped_pct?: number;
 };
 
-function FitBounds({ buckets }: { buckets: HeatmapBucket[] }) {
+function FitBounds({ buckets, enabled }: { buckets: HeatmapBucket[]; enabled: boolean }) {
   const map = useMap();
   useEffect(() => {
-    if (!buckets.length) return;
+    if (!enabled || !buckets.length) return;
     const ll = buckets.map((b) => L.latLng(b.lat, b.lng));
     map.fitBounds(L.latLngBounds(ll), { padding: [48, 48], maxZoom: 16 });
-  }, [map, buckets]);
+  }, [map, buckets, enabled]);
   return null;
 }
 
@@ -161,16 +161,12 @@ function AnalyticsMapLayers({
   mode,
   viewMode,
   gridMetric,
-  showMoving,
-  showStopped,
   showParkingContours,
 }: {
   buckets: HeatmapBucket[];
-  mode: 'driving' | 'parking' | 'both';
+  mode: 'driving' | 'parking';
   viewMode: 'heatmap' | 'grid';
   gridMetric: 'moving' | 'stopped';
-  showMoving: boolean;
-  showStopped: boolean;
   showParkingContours: boolean;
 }) {
   const map = useMap();
@@ -254,21 +250,13 @@ function AnalyticsMapLayers({
         add(h);
       };
 
-      if (mode === 'driving' && showMoving) {
+      if (mode === 'driving') {
         addHeat(heatM, GRADIENT_MOVING, HEAT_MAX_DENOM_MOVING, HEAT_RADIUS, HEAT_BLUR);
-      } else if (mode === 'parking' && showStopped) {
+      } else {
         addParkingHeat(heatS);
-      } else if (mode === 'both') {
-        if (showMoving) addHeat(heatM, GRADIENT_MOVING, HEAT_MAX_DENOM_MOVING, HEAT_RADIUS, HEAT_BLUR);
-        if (showStopped) addParkingHeat(heatS);
       }
 
-      if (
-        showParkingContours &&
-        viewMode === 'heatmap' &&
-        showStopped &&
-        (mode === 'parking' || mode === 'both')
-      ) {
+      if (showParkingContours && viewMode === 'heatmap' && mode === 'parking') {
         const g = L.layerGroup();
         buckets.forEach((b) => {
           if (b.w_stopped <= 0) return;
@@ -307,7 +295,7 @@ function AnalyticsMapLayers({
         if (map.hasLayer(ly)) map.removeLayer(ly);
       });
     };
-  }, [map, buckets, mode, viewMode, gridMetric, showMoving, showStopped, showParkingContours]);
+  }, [map, buckets, mode, viewMode, gridMetric, showParkingContours]);
 
   return null;
 }
@@ -334,18 +322,16 @@ function MapContent({
   basemap,
   viewMode,
   gridMetric,
-  showMoving,
-  showStopped,
   showParkingContours,
+  skipAutoFitBounds,
 }: {
   buckets: HeatmapBucket[];
-  mode: 'driving' | 'parking' | 'both';
+  mode: 'driving' | 'parking';
   basemap: AdvertiserMapBasemap;
   viewMode: 'heatmap' | 'grid';
   gridMetric: 'moving' | 'stopped';
-  showMoving: boolean;
-  showStopped: boolean;
   showParkingContours: boolean;
+  skipAutoFitBounds: boolean;
 }) {
   return (
     <>
@@ -357,18 +343,103 @@ function MapContent({
         {...(basemap.subdomains ? { subdomains: basemap.subdomains } : {})}
       />
       <MapInvalidateOnResize />
-      {buckets.length > 0 ? <FitBounds buckets={buckets} /> : null}
+      {buckets.length > 0 ? <FitBounds buckets={buckets} enabled={!skipAutoFitBounds} /> : null}
       <AnalyticsMapLayers
         buckets={buckets}
         mode={mode}
         viewMode={viewMode}
         gridMetric={gridMetric}
-        showMoving={showMoving}
-        showStopped={showStopped}
         showParkingContours={showParkingContours}
       />
     </>
   );
+}
+
+function HeatmapApiLoader({
+  selectedCampaignId,
+  selectedVehicle,
+  dateFrom,
+  dateTo,
+  mode,
+  normalization,
+  setHeatmapPayload,
+  setIsLoading,
+  setApiError,
+}: {
+  selectedCampaignId: string;
+  selectedVehicle: string;
+  dateFrom?: string;
+  dateTo?: string;
+  mode: 'driving' | 'parking';
+  normalization: string;
+  setHeatmapPayload: (d: HeatmapApi | null) => void;
+  setIsLoading: (v: boolean) => void;
+  setApiError: (v: string | null) => void;
+}) {
+  const map = useMap();
+
+  const fetchHeatmap = useCallback(async () => {
+    if (!selectedCampaignId) {
+      setHeatmapPayload(null);
+      return;
+    }
+    setIsLoading(true);
+    setApiError(null);
+    const b = map.getBounds();
+    const qs = new URLSearchParams();
+    qs.set('campaign_id', selectedCampaignId);
+    if (selectedVehicle !== 'all') qs.set('vehicle_id', selectedVehicle);
+    if (dateFrom) qs.set('date_from', dateFrom);
+    if (dateTo) qs.set('date_to', dateTo);
+    qs.set('mode', mode);
+    qs.set('normalization', normalization);
+    qs.set('south', String(b.getSouth()));
+    qs.set('west', String(b.getWest()));
+    qs.set('north', String(b.getNorth()));
+    qs.set('east', String(b.getEast()));
+    qs.set('zoom', String(map.getZoom()));
+    try {
+      const data = await apiJson<HeatmapApi>(`/api/advertiser/heatmap?${qs.toString()}`);
+      setHeatmapPayload(data);
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : 'Failed to load heatmap');
+      setHeatmapPayload(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    map,
+    selectedCampaignId,
+    selectedVehicle,
+    dateFrom,
+    dateTo,
+    mode,
+    normalization,
+    setHeatmapPayload,
+    setIsLoading,
+    setApiError,
+  ]);
+
+  useEffect(() => {
+    void fetchHeatmap();
+  }, [fetchHeatmap]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const debounced = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void fetchHeatmap(), 480);
+    };
+    map.on('moveend', debounced);
+    map.on('zoomend', debounced);
+    return () => {
+      map.off('moveend', debounced);
+      map.off('zoomend', debounced);
+      if (timer) clearTimeout(timer);
+    };
+  }, [map, fetchHeatmap]);
+
+  return null;
 }
 
 function resolveDates(
@@ -421,6 +492,7 @@ type HeatmapApi = {
       cap_moving?: number;
       cap_stopped?: number;
       cap_total?: number;
+      heatmap_rollup?: boolean;
     };
   };
 };
@@ -444,12 +516,10 @@ export function AdvertiserHeatmap() {
   });
   const [customDateFrom, setCustomDateFrom] = useState(dateFromUrl || '');
   const [customDateTo, setCustomDateTo] = useState(dateToUrl || '');
-  const [mode, setMode] = useState<'driving' | 'parking' | 'both'>('both');
+  const [mode, setMode] = useState<'driving' | 'parking'>('driving');
   const [normalization, setNormalization] = useState<'p95' | 'p99' | 'max'>('p95');
   const [mapView, setMapView] = useState<'heatmap' | 'grid'>('heatmap');
   const [gridMetric, setGridMetric] = useState<'moving' | 'stopped'>('moving');
-  const [showLayerMoving, setShowLayerMoving] = useState(true);
-  const [showLayerStopped, setShowLayerStopped] = useState(true);
   const [showParkingContours, setShowParkingContours] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -492,35 +562,14 @@ export function AdvertiserHeatmap() {
 
   const hasCampaignContext = !!campaignIdFromUrl;
 
-  const loadHeatmap = useCallback(async () => {
-    if (!selectedCampaignId) {
-      setHeatmapPayload(null);
-      return;
-    }
-    setIsLoading(true);
-    setApiError(null);
-    const { from, to } = resolveDates(dateRange, customDateFrom, customDateTo);
-    const qs = new URLSearchParams();
-    qs.set('campaign_id', selectedCampaignId);
-    if (selectedVehicle !== 'all') qs.set('vehicle_id', selectedVehicle);
-    if (from) qs.set('date_from', from);
-    if (to) qs.set('date_to', to);
-    qs.set('mode', mode);
-    qs.set('normalization', normalization);
-    try {
-      const data = await apiJson<HeatmapApi>(`/api/advertiser/heatmap?${qs.toString()}`);
-      setHeatmapPayload(data);
-    } catch (e) {
-      setApiError(e instanceof Error ? e.message : 'Failed to load heatmap');
-      setHeatmapPayload(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedCampaignId, selectedVehicle, dateRange, customDateFrom, customDateTo, mode, normalization]);
+  const { from: dateFrom, to: dateTo } = useMemo(
+    () => resolveDates(dateRange, customDateFrom, customDateTo),
+    [dateRange, customDateFrom, customDateTo],
+  );
 
   useEffect(() => {
-    void loadHeatmap();
-  }, [loadHeatmap]);
+    setGridMetric(mode === 'parking' ? 'stopped' : 'moving');
+  }, [mode]);
 
   const buckets: HeatmapBucket[] = heatmapPayload?.heatmap.buckets ?? [];
 
@@ -532,7 +581,7 @@ export function AdvertiserHeatmap() {
   const drivingTime = metrics?.driving_time_hours ?? 0;
   const parkingTime = metrics?.parking_time_hours ?? 0;
 
-  const handleModeChange = (newMode: 'driving' | 'parking' | 'both') => {
+  const handleModeChange = (newMode: 'driving' | 'parking') => {
     setMode(newMode);
   };
 
@@ -541,12 +590,10 @@ export function AdvertiserHeatmap() {
     setDateRange('last-7-days');
     setCustomDateFrom('');
     setCustomDateTo('');
-    setMode('both');
+    setMode('driving');
     setNormalization('p95');
     setMapView('heatmap');
     setGridMetric('moving');
-    setShowLayerMoving(true);
-    setShowLayerStopped(true);
     setShowParkingContours(false);
     setSearchParams({});
   };
@@ -684,7 +731,6 @@ export function AdvertiserHeatmap() {
                   options={[
                     { value: 'driving', label: 'Driving' },
                     { value: 'parking', label: 'Parking' },
-                    { value: 'both', label: 'Both' },
                   ]}
                 />
               </div>
@@ -726,29 +772,7 @@ export function AdvertiserHeatmap() {
                   </select>
                 </div>
               )}
-              {mode === 'both' && mapView === 'heatmap' && (
-                <div className="flex flex-wrap items-center gap-4 text-sm">
-                  <label className="inline-flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showLayerMoving}
-                      onChange={(e) => setShowLayerMoving(e.target.checked)}
-                      className="rounded border-border"
-                    />
-                    Moving layer
-                  </label>
-                  <label className="inline-flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showLayerStopped}
-                      onChange={(e) => setShowLayerStopped(e.target.checked)}
-                      className="rounded border-border"
-                    />
-                    Stopped layer
-                  </label>
-                </div>
-              )}
-              {(mode === 'parking' || mode === 'both') && mapView === 'heatmap' && (
+              {mode === 'parking' && mapView === 'heatmap' && (
                 <label className="inline-flex items-center gap-2 cursor-pointer text-sm">
                   <input
                     type="checkbox"
@@ -810,28 +834,31 @@ export function AdvertiserHeatmap() {
           className="z-0 h-full w-full min-h-[280px] bg-[#e8e8e8]"
           style={{ height: '100%', width: '100%', minHeight: '280px', background: '#e8e8e8' }}
         >
+          <HeatmapApiLoader
+            selectedCampaignId={selectedCampaignId}
+            selectedVehicle={selectedVehicle}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            mode={mode}
+            normalization={normalization}
+            setHeatmapPayload={setHeatmapPayload}
+            setIsLoading={setIsLoading}
+            setApiError={setApiError}
+          />
           <MapContent
             buckets={buckets}
             mode={mode}
             basemap={mapBasemap}
             viewMode={mapView}
             gridMetric={gridMetric}
-            showMoving={mode === 'parking' ? false : showLayerMoving}
-            showStopped={mode === 'driving' ? false : showLayerStopped}
             showParkingContours={showParkingContours}
+            skipAutoFitBounds={metrics?.heatmap_rollup === true}
           />
         </MapContainer>
 
         <div className="absolute top-4 right-4 bg-card border border-border rounded-lg p-4 shadow-lg z-[1000] max-w-[220px] text-xs leading-snug">
           <div className="font-semibold text-sm mb-2">Activity scale</div>
-          {mode === 'both' ? (
-            <>
-              <div className="font-medium mt-1">Moving</div>
-              <div className="h-2.5 rounded mt-1 border border-border/50" style={{ background: legendGradientMoving }} />
-              <div className="font-medium mt-2">Parking (density)</div>
-              <div className="h-2.5 rounded mt-1 border border-border/50" style={{ background: legendGradientStopped }} />
-            </>
-          ) : mode === 'parking' ? (
+          {mode === 'parking' ? (
             <>
               <div className="h-3 rounded border border-border/50" style={{ background: legendGradientStopped }} />
               <div className="mt-1 text-muted-foreground text-[10px]">
@@ -843,8 +870,8 @@ export function AdvertiserHeatmap() {
           )}
           <div className="mt-2 text-muted-foreground">
             {normLabel === 'max' ? 'Absolute max per layer' : normLabel === 'p99' ? 'Capped at p99' : 'Capped at p95'}
-            {(mode === 'driving' || mode === 'both') && metrics?.intensity_gamma != null ? ` · moving γ=${metrics.intensity_gamma}` : ''}
-            {(mode === 'parking' || mode === 'both') ? ` · parking ^${metrics?.intensity_stopped_power ?? 0.7}` : ''}
+            {mode === 'driving' && metrics?.intensity_gamma != null ? ` · moving γ=${metrics.intensity_gamma}` : ''}
+            {mode === 'parking' ? ` · parking ^${metrics?.intensity_stopped_power ?? 0.7}` : ''}
           </div>
           <div className="mt-1 text-muted-foreground text-[10px]">
             Parking boosts mid-density (capped ratio to power below 1).

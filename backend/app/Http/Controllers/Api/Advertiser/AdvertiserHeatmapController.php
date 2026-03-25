@@ -23,8 +23,13 @@ class AdvertiserHeatmapController extends Controller
             'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
-            'mode' => ['nullable', 'string', 'in:driving,parking,both'],
+            'mode' => ['nullable', 'string', 'in:driving,parking'],
             'normalization' => ['nullable', 'string', Rule::in(['max', 'p95', 'p99'])],
+            'south' => ['nullable', 'numeric', 'between:-90,90'],
+            'west' => ['nullable', 'numeric', 'between:-180,180'],
+            'north' => ['nullable', 'numeric', 'between:-90,90'],
+            'east' => ['nullable', 'numeric', 'between:-180,180'],
+            'zoom' => ['nullable', 'integer', 'min:1', 'max:22'],
         ]);
 
         HeatmapRequestDateRange::assertWithinConfiguredLimit($data['date_from'] ?? null, $data['date_to'] ?? null);
@@ -32,12 +37,22 @@ class AdvertiserHeatmapController extends Controller
         $campaign = Campaign::query()->findOrFail($data['campaign_id']);
         $this->authorize('viewAnalytics', $campaign);
 
+        $mode = $data['mode'] ?? 'driving';
+        if ($mode === 'both') {
+            $mode = 'driving';
+        }
+
         $filters = [
             'vehicle_ids' => isset($data['vehicle_id']) ? [(int) $data['vehicle_id']] : [],
             'date_from' => $data['date_from'] ?? null,
             'date_to' => $data['date_to'] ?? null,
-            'mode' => $data['mode'] ?? 'both',
+            'mode' => $mode,
             'normalization' => $data['normalization'] ?? 'p95',
+            'south' => $data['south'] ?? null,
+            'west' => $data['west'] ?? null,
+            'north' => $data['north'] ?? null,
+            'east' => $data['east'] ?? null,
+            'zoom' => $data['zoom'] ?? null,
         ];
 
         $payload = $this->heatmapData->fetchHeatmapData((int) $campaign->id, $filters);

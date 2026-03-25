@@ -90,6 +90,27 @@ return [
         'max_date_range_days' => ($raw = env('TELEMETRY_HEATMAP_MAX_DATE_RANGE_DAYS')) !== null && $raw !== ''
             ? max(1, min(3660, (int) $raw))
             : null,
+        /**
+         * Daily rollup table heatmap_cells_daily: write path (artisan heatmap:aggregate) and read path (API when bbox+zoom set).
+         */
+        'rollup' => [
+            'read_enabled' => filter_var(env('TELEMETRY_HEATMAP_ROLLUP_READ', true), FILTER_VALIDATE_BOOLEAN),
+            /**
+             * When true and bbox+zoom are missing, fall back to legacy on-the-fly GROUP BY on device_locations.
+             * Prefer false in production so clients always send viewport + zoom.
+             */
+            'legacy_fallback_without_viewport' => filter_var(env('TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT', true), FILTER_VALIDATE_BOOLEAN),
+            /**
+             * Map zoom (Leaflet) → tier index. Each tier uses `decimals` for ROUND(lat/lng, decimals).
+             * max_zoom inclusive: first matching tier wins (list order matters).
+             */
+            'zoom_tiers' => [
+                ['max_zoom' => 10, 'decimals' => 2],
+                ['max_zoom' => 12, 'decimals' => 3],
+                ['max_zoom' => 14, 'decimals' => 4],
+                ['max_zoom' => 22, 'decimals' => 5],
+            ],
+        ],
     ],
 
     /*

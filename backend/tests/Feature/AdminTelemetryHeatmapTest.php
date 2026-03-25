@@ -34,7 +34,7 @@ class AdminTelemetryHeatmapTest extends TestCase
         ]);
 
         $this->actingAs($advertiser);
-        $this->getJson('/internal/admin/telemetry/heatmap-data?scope=vehicle&vehicle_id='.$vehicle->id.'&motion=both')
+        $this->getJson('/internal/admin/telemetry/heatmap-data?scope=vehicle&vehicle_id='.$vehicle->id.'&motion=moving')
             ->assertForbidden();
     }
 
@@ -67,7 +67,7 @@ class AdminTelemetryHeatmapTest extends TestCase
         ]);
 
         $this->actingAs($admin);
-        $this->getJson('/internal/admin/telemetry/heatmap-data?scope=vehicle&vehicle_id='.$vehicle->id.'&date_from=2026-03-01&date_to=2026-03-31&motion=both')
+        $this->getJson('/internal/admin/telemetry/heatmap-data?scope=vehicle&vehicle_id='.$vehicle->id.'&date_from=2026-03-01&date_to=2026-03-31&motion=moving')
             ->assertOk()
             ->assertJsonPath('vehicles.0.imei', $vehicle->imei)
             ->assertJsonStructure(['heatmap' => ['points', 'buckets', 'metrics'], 'filter']);
@@ -170,7 +170,7 @@ class AdminTelemetryHeatmapTest extends TestCase
         ]);
 
         $this->actingAs($admin);
-        $this->getJson('/internal/admin/telemetry/heatmap-data?scope=campaign&campaign_id='.$campaign->id.'&motion=both')
+        $this->getJson('/internal/admin/telemetry/heatmap-data?scope=campaign&campaign_id='.$campaign->id.'&motion=moving')
             ->assertOk()
             ->assertJsonPath('vehicles.0.id', $v->id);
     }
@@ -208,7 +208,7 @@ class AdminTelemetryHeatmapTest extends TestCase
             'vehicle_id' => $vehicle->id,
             'date_from' => Carbon::parse('2026-03-01'),
             'date_to' => Carbon::parse('2026-03-31'),
-            'motion' => 'both',
+            'motion' => 'moving',
         ]);
         $req->setUserResolver(fn () => $admin);
 

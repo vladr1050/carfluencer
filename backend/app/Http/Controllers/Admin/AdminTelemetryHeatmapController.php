@@ -27,8 +27,13 @@ class AdminTelemetryHeatmapController extends Controller
             'vehicle_ids.*' => ['integer', 'exists:vehicles,id'],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
-            'motion' => ['nullable', 'string', Rule::in(['moving', 'stopped', 'both'])],
+            'motion' => ['nullable', 'string', Rule::in(['moving', 'stopped'])],
             'normalization' => ['nullable', 'string', Rule::in(['max', 'p95', 'p99'])],
+            'south' => ['nullable', 'numeric', 'between:-90,90'],
+            'west' => ['nullable', 'numeric', 'between:-180,180'],
+            'north' => ['nullable', 'numeric', 'between:-90,90'],
+            'east' => ['nullable', 'numeric', 'between:-180,180'],
+            'zoom' => ['nullable', 'integer', 'min:1', 'max:22'],
         ]);
 
         HeatmapRequestDateRange::assertWithinConfiguredLimit($data['date_from'] ?? null, $data['date_to'] ?? null);
@@ -43,7 +48,10 @@ class AdminTelemetryHeatmapController extends Controller
             $data['vehicle_ids'] = $ids;
         }
 
-        $motion = $data['motion'] ?? 'both';
+        $motion = $data['motion'] ?? 'moving';
+        if ($motion === 'both') {
+            $motion = 'moving';
+        }
         $normalization = $data['normalization'] ?? 'p95';
 
         $result = $heatmap->build([
@@ -55,6 +63,11 @@ class AdminTelemetryHeatmapController extends Controller
             'date_to' => $data['date_to'] ?? null,
             'motion' => $motion,
             'normalization' => $normalization,
+            'south' => $data['south'] ?? null,
+            'west' => $data['west'] ?? null,
+            'north' => $data['north'] ?? null,
+            'east' => $data['east'] ?? null,
+            'zoom' => $data['zoom'] ?? null,
         ]);
 
         $vehiclesPayload = $this->resolveVehiclesPayload($data);
