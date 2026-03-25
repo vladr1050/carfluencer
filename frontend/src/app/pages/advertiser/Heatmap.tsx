@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { Calendar, Navigation, Clock, Eye, ChevronDown, ChevronUp, X, RotateCcw, AlertCircle } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
@@ -377,12 +377,22 @@ function HeatmapApiLoader({
   setApiError: (v: string | null) => void;
 }) {
   const map = useMap();
+  const heatmapRequestIdRef = useRef(0);
+  const heatmapAbortRef = useRef<AbortController | null>(null);
 
   const fetchHeatmap = useCallback(async () => {
     if (!selectedCampaignId) {
+      heatmapAbortRef.current?.abort();
+      heatmapAbortRef.current = null;
       setHeatmapPayload(null);
+      setIsLoading(false);
       return;
     }
+    heatmapAbortRef.current?.abort();
+    const ac = new AbortController();
+    heatmapAbortRef.current = ac;
+    const requestId = ++heatmapRequestIdRef.current;
+
     setIsLoading(true);
     setApiError(null);
     const b = map.getBounds();
@@ -399,13 +409,24 @@ function HeatmapApiLoader({
     qs.set('east', String(b.getEast()));
     qs.set('zoom', String(map.getZoom()));
     try {
-      const data = await apiJson<HeatmapApi>(`/api/advertiser/heatmap?${qs.toString()}`);
+      const data = await apiJson<HeatmapApi>(`/api/advertiser/heatmap?${qs.toString()}`, { signal: ac.signal });
+      if (requestId !== heatmapRequestIdRef.current) {
+        return;
+      }
       setHeatmapPayload(data);
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        return;
+      }
+      if (requestId !== heatmapRequestIdRef.current) {
+        return;
+      }
       setApiError(e instanceof Error ? e.message : 'Failed to load heatmap');
       setHeatmapPayload(null);
     } finally {
-      setIsLoading(false);
+      if (requestId === heatmapRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [
     map,

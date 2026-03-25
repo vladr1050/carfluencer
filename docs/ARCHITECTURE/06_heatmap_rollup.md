@@ -38,3 +38,11 @@ If `TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT` is true (default), missing vi
 - `TELEMETRY_HEATMAP_ROLLUP_READ` — enable rollup reads (default true).
 - `TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT` — allow legacy path without viewport (default true for dev).
 - `telemetry.heatmap.rollup.zoom_tiers` — tier definitions.
+
+## Ongoing operations
+
+- **New telemetry** in `device_locations` does not automatically appear in `heatmap_cells_daily`. After the daily (or hourly) sync from ClickHouse, run aggregation for new calendar days, e.g. cron:
+  - `php artisan heatmap:aggregate-day $(date -u +%F)` (UTC), or
+  - `php artisan heatmap:aggregate --from=YESTERDAY --to=YESTERDAY --all-modes` with dates your pipeline expects.
+- Re-running `heatmap:aggregate` for a range is **idempotent** (delete-then-insert per day/tier/mode).
+- **Advertiser heatmap JSON** includes map buckets from rollup (viewport + zoom) and **KPI block** (`impressions`, `driving_distance_km`, `driving_time_hours`, `parking_time_hours`) from `resolveMetrics()` over the same `date_from` / `date_to` and vehicles — i.e. daily_impressions / stop_sessions / GPS estimates, not the rollup cells. If KPIs look wrong after changing dates, hard-refresh once; the SPA also aborts superseded fetches so pan/zoom cannot overwrite a newer period’s response.
