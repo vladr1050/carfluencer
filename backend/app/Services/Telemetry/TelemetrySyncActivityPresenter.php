@@ -67,6 +67,9 @@ final class TelemetrySyncActivityPresenter
         return [
             'clickhouse_enabled' => $this->collector->isEnabled(),
             'clickhouse_base_url' => (string) config('telemetry.clickhouse.base_url'),
+            'automation_incremental_minutes' => TelemetrySchedulerConfig::incrementalIntervalMinutes(),
+            'automation_build_sessions_utc' => TelemetrySchedulerConfig::buildSessionsAt(),
+            'automation_aggregate_daily_utc' => TelemetrySchedulerConfig::aggregateDailyAt(),
             'last_scheduler_tick' => $this->formatDbDatetime($lastTickRaw),
             'vehicles_total' => Vehicle::query()->count(),
             'vehicles_scheduled_pull' => Vehicle::query()->where('telemetry_pull_enabled', true)->count(),

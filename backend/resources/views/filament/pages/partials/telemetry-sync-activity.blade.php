@@ -25,6 +25,27 @@
         </div>
     @endunless
 
+    <div class="rounded-lg border border-gray-200 bg-gray-50/80 p-4 text-sm dark:border-white/10 dark:bg-white/5">
+        <div class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ __('Effective automation (from database)') }}</div>
+        <dl class="mt-2 grid gap-2 sm:grid-cols-3">
+            <div>
+                <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Incremental pull interval (minutes)') }}</dt>
+                <dd class="mt-0.5 font-mono font-semibold text-gray-950 dark:text-white">{{ (int) ($summary['automation_incremental_minutes'] ?? 0) }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Daily stop/sessions (UTC)') }}</dt>
+                <dd class="mt-0.5 font-mono font-semibold text-gray-950 dark:text-white">{{ $summary['automation_build_sessions_utc'] ?? '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Daily aggregates (UTC)') }}</dt>
+                <dd class="mt-0.5 font-mono font-semibold text-gray-950 dark:text-white">{{ $summary['automation_aggregate_daily_utc'] ?? '—' }}</dd>
+            </div>
+        </dl>
+        <p class="mt-3 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+            {{ __('These values are what the scheduler uses after you click “Save automation settings”. If the tick runs hourly (`0 * * * *` cron), incremental pull cannot happen more than once per hour regardless of this number. Daily UTC times mean “after this moment”; jobs run on the first scheduler pass after that (often at :00).') }}
+        </p>
+    </div>
+
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
             <div class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ __('ClickHouse pull') }}</div>
