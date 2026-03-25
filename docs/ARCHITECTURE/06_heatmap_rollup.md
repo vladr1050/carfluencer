@@ -41,8 +41,8 @@ If `TELEMETRY_HEATMAP_LEGACY_FALLBACK_NO_VIEWPORT` is true (default), missing vi
 
 ## Ongoing operations
 
-- **New telemetry** in `device_locations` does not automatically appear in `heatmap_cells_daily`. After the daily (or hourly) sync from ClickHouse, run aggregation for new calendar days, e.g. cron:
-  - `php artisan heatmap:aggregate-day $(date -u +%F)` (UTC), or
-  - `php artisan heatmap:aggregate --from=YESTERDAY --to=YESTERDAY --all-modes` with dates your pipeline expects.
+- **New telemetry** in `device_locations` must be rolled into `heatmap_cells_daily` by running `heatmap:aggregate` (or `heatmap:aggregate-day`).
+- **Automated (when ClickHouse telemetry sync is enabled):** `telemetry:scheduler-tick` runs every minute; at the admin-configured **`aggregateDailyAt`** time (same slot as `telemetry:aggregate-daily`), it also runs `heatmap:aggregate --from=yesterday --to=yesterday --all-modes` on **PostgreSQL** once per UTC calendar day (cache key `telemetry_tick_heatmap_rollup_{date}`). Ensure the server cron runs `* * * * * php artisan schedule:run` (see Laravel docs).
+- **Manual / extra backfill:** e.g. `php artisan heatmap:aggregate-day $(date -u +%F)` or a `--from`/`--to` range with `--all-modes`.
 - Re-running `heatmap:aggregate` for a range is **idempotent** (delete-then-insert per day/tier/mode).
 - **Advertiser heatmap JSON** includes map buckets from rollup (viewport + zoom) and **KPI block** (`impressions`, `driving_distance_km`, `driving_time_hours`, `parking_time_hours`) from `resolveMetrics()` over the same `date_from` / `date_to` and vehicles — i.e. daily_impressions / stop_sessions / GPS estimates, not the rollup cells. If KPIs look wrong after changing dates, hard-refresh once; the SPA also aborts superseded fetches so pan/zoom cannot overwrite a newer period’s response.

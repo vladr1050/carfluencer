@@ -11,12 +11,13 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class TelemetrySchedulerTickCommand extends Command
 {
     protected $signature = 'telemetry:scheduler-tick';
 
-    protected $description = 'Run due telemetry tasks (incremental sync + daily analytics) using admin-configured intervals.';
+    protected $description = 'Run due telemetry tasks (incremental sync, daily analytics, heatmap_cells_daily rollup) using admin-configured intervals.';
 
     public function handle(): int
     {
@@ -106,6 +107,22 @@ class TelemetrySchedulerTickCommand extends Command
                 Artisan::call('telemetry:aggregate-daily', ['--date' => $yesterday]);
                 Cache::put($key, true, 86_400);
                 $this->line('Ran telemetry:aggregate-daily for '.$yesterday);
+            }
+
+            $keyHeatmap = 'telemetry_tick_heatmap_rollup_'.$yesterday;
+            if (! Cache::has($keyHeatmap) && DB::getDriverName() === 'pgsql') {
+                try {
+                    Artisan::call('heatmap:aggregate', [
+                        '--from' => $yesterday,
+                        '--to' => $yesterday,
+                        '--all-modes' => true,
+                    ]);
+                    $this->line('Ran heatmap:aggregate (heatmap_cells_daily) for '.$yesterday);
+                } catch (\Throwable $e) {
+                    $this->warn('heatmap:aggregate failed: '.$e->getMessage());
+                } finally {
+                    Cache::put($keyHeatmap, true, 86_400);
+                }
             }
         }
     }
