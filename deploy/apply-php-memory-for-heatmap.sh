@@ -27,6 +27,22 @@ for INI in "/etc/php/${PHP_VER}/fpm/php.ini" "/etc/php/${PHP_VER}/cli/php.ini"; 
   fi
 done
 
+# В pool.d часто стоит php_admin_value[memory_limit] = 128M — это ПЕРЕБИВАЕТ php.ini для веб-запросов
+POOL_DIR="/etc/php/${PHP_VER}/fpm/pool.d"
+if [[ -d "$POOL_DIR" ]]; then
+  shopt -s nullglob
+  for POOL in "$POOL_DIR"/*.conf; do
+    if grep -qE '^[;[:space:]]*php_(admin_)?value\[memory_limit\]' "$POOL"; then
+      sed -ri \
+        -e 's/^;?[[:space:]]*php_admin_value\[memory_limit\][[:space:]]*=.*/php_admin_value[memory_limit] = '"${MEM}"'/' \
+        -e 's/^;?[[:space:]]*php_value\[memory_limit\][[:space:]]*=.*/php_admin_value[memory_limit] = '"${MEM}"'/' \
+        "$POOL"
+      echo "  updated pool: $POOL (php_admin_value[memory_limit])"
+    fi
+  done
+  shopt -u nullglob
+fi
+
 if systemctl is-active --quiet "php${PHP_VER}-fpm" 2>/dev/null; then
   systemctl reload "php${PHP_VER}-fpm"
   echo "  reloaded: php${PHP_VER}-fpm"
@@ -54,5 +70,8 @@ if command -v supervisorctl >/dev/null 2>&1; then
 fi
 
 echo ""
-echo "Готово. Проверка: php -i | grep memory_limit"
+echo "Готово. CLI: php -i | grep memory_limit"
 php -i 2>/dev/null | grep -i '^memory_limit' || true
+echo ""
+echo "FPM pool (если пусто — лимит только из php.ini):"
+grep -hE 'php_(admin_)?value\[memory_limit\]|^memory_limit' /etc/php/${PHP_VER}/fpm/pool.d/*.conf 2>/dev/null || true
