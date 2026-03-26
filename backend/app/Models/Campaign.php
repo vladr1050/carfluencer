@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 class Campaign extends Model
 {
@@ -66,6 +67,11 @@ class Campaign extends Model
         return $this->hasMany(CampaignProof::class);
     }
 
+    public function reports(): HasMany
+    {
+        return $this->hasMany(CampaignReport::class);
+    }
+
     /**
      * Aggregated ClickHouse → PostgreSQL sync stats for vehicles on this campaign (admin UX).
      */
@@ -86,7 +92,7 @@ class Campaign extends Model
         $withError = (clone $q)->whereNotNull('telemetry_last_error')->count();
         $lastRaw = (clone $q)->max('telemetry_last_success_at');
         $last = $lastRaw !== null
-            ? \Illuminate\Support\Carbon::parse($lastRaw)->timezone(config('app.timezone'))->format('Y-m-d H:i')
+            ? Carbon::parse($lastRaw)->timezone(config('app.timezone'))->format('Y-m-d H:i')
             : '—';
 
         return __(':total vehicle(s): :on with scheduled pull; :err with last error; last success: :last', [

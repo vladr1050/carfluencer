@@ -44,7 +44,21 @@ apt-get install -y -qq \
   postgresql postgresql-contrib \
   php8.4-fpm php8.4-cli php8.4-pgsql php8.4-xml php8.4-mbstring \
   php8.4-curl php8.4-zip php8.4-bcmath php8.4-intl php8.4-gd \
-  git unzip curl composer python3 supervisor
+  git unzip curl composer python3 supervisor \
+  ca-certificates gnupg
+
+# Node.js 22 + Chromium (Campaign PDF / Browsershot; тот же PHP-процесс, что и Supervisor queue:work)
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt-get update -qq
+apt-get install -y -qq nodejs
+if ! apt-get install -y -qq chromium; then
+  apt-get install -y -qq chromium-browser || true
+fi
+apt-get install -y -qq \
+  fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 \
+  libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libnspr4 libnss3 libpango-1.0-0 \
+  libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 \
+  || true
 
 systemctl enable --now php8.4-fpm postgresql
 
@@ -80,6 +94,18 @@ if raw.endswith('\n') and not text.endswith('\n'):
 text = text.replace('CHANGE_ME_DB_PASSWORD', sys.argv[3])
 p.write_text(text)
 " "$ENV_FILE" "$APP_URL" "$DB_PASS"
+
+CHROME_BIN="$(command -v chromium 2>/dev/null || command -v chromium-browser 2>/dev/null || command -v google-chrome-stable 2>/dev/null || true)"
+if [[ -n "$CHROME_BIN" ]]; then
+  {
+    echo ''
+    echo '# Campaign PDF reports (Browsershot; queue worker)'
+    echo 'CAMPAIGN_REPORT_BROWSER_DRIVER=browsershot'
+    echo "CAMPAIGN_REPORT_CHROME_PATH=$CHROME_BIN"
+  } >> "$ENV_FILE"
+else
+  echo "Предупреждение: Chromium не найден — задай CAMPAIGN_REPORT_CHROME_PATH вручную в $ENV_FILE" >&2
+fi
 
 # Чтение .env для www-data (очередь + cron)
 chgrp www-data "$ENV_FILE"

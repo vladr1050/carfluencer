@@ -32,6 +32,9 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+    environment:
+      CAMPAIGN_REPORT_BROWSER_DRIVER: browsershot
+      CAMPAIGN_REPORT_CHROME_PATH: /usr/bin/chromium
     volumes:
       - ./backend:/var/www/html
     depends_on:
@@ -54,6 +57,9 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+    environment:
+      CAMPAIGN_REPORT_BROWSER_DRIVER: browsershot
+      CAMPAIGN_REPORT_CHROME_PATH: /usr/bin/chromium
     working_dir: /var/www/html
     command: php artisan queue:work database --sleep=3 --tries=3 --no-interaction
     volumes:
@@ -69,6 +75,9 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+    environment:
+      CAMPAIGN_REPORT_BROWSER_DRIVER: browsershot
+      CAMPAIGN_REPORT_CHROME_PATH: /usr/bin/chromium
     working_dir: /var/www/html
     command: php artisan schedule:work --no-interaction
     volumes:

@@ -4,6 +4,14 @@ namespace App\Providers;
 
 use App\Models\CampaignVehicle;
 use App\Observers\CampaignVehicleObserver;
+use App\Services\Reports\BrowsershotCampaignReportPdfService;
+use App\Services\Reports\BrowsershotHeatmapImageService;
+use App\Services\Reports\CampaignReportMetricsService;
+use App\Services\Reports\Contracts\CampaignReportMetricsServiceInterface;
+use App\Services\Reports\Contracts\CampaignReportPdfServiceInterface;
+use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
+use App\Services\Reports\FakeCampaignReportPdfService;
+use App\Services\Reports\FakeHeatmapImageService;
 use App\Services\Telemetry\DashboardMetricsServiceInterface;
 use App\Services\Telemetry\DatabaseDashboardMetricsService;
 use App\Services\Telemetry\DatabaseHeatmapDataService;
@@ -20,6 +28,24 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(CampaignReportMetricsServiceInterface::class, CampaignReportMetricsService::class);
+
+        $this->app->bind(HeatmapImageServiceInterface::class, function ($app) {
+            if (config('reports.browser_driver') === 'fake') {
+                return new FakeHeatmapImageService;
+            }
+
+            return $app->make(BrowsershotHeatmapImageService::class);
+        });
+
+        $this->app->bind(CampaignReportPdfServiceInterface::class, function ($app) {
+            if (config('reports.browser_driver') === 'fake') {
+                return new FakeCampaignReportPdfService;
+            }
+
+            return $app->make(BrowsershotCampaignReportPdfService::class);
+        });
+
         $this->app->bind(
             HeatmapDataServiceInterface::class,
             function ($app) {

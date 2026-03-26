@@ -1,0 +1,71 @@
+<?php
+
+namespace App\Services\Reports;
+
+use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
+use App\Services\Telemetry\HeatmapDataServiceInterface;
+use Illuminate\Support\Facades\View;
+use Spatie\Browsershot\Browsershot;
+
+final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterface
+{
+    public function __construct(
+        private readonly HeatmapDataServiceInterface $heatmapData,
+    ) {}
+
+    public function renderPng(
+        int $campaignId,
+        string $dateFrom,
+        string $dateTo,
+        array $vehicleIds,
+        string $mode,
+        string $absolutePath
+    ): void {
+        if (! in_array($mode, ['driving', 'parking'], true)) {
+            $mode = 'driving';
+        }
+
+        $norm = (string) config('reports.normalization', 'max');
+        if (! in_array($norm, ['max', 'p95', 'p99'], true)) {
+            $norm = 'max';
+        }
+
+        $filters = [
+            'vehicle_ids' => $vehicleIds,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'mode' => $mode,
+            'normalization' => $norm,
+        ];
+
+        $bundle = $this->heatmapData->fetchHeatmapData($campaignId, $filters);
+        $points = $bundle['map']['points'] ?? [];
+        $heatData = [];
+        foreach ($points as $p) {
+            if (! isset($p['lat'], $p['lng'], $p['intensity'])) {
+                continue;
+            }
+            $heatData[] = [(float) $p['lat'], (float) $p['lng'], (float) $p['intensity']];
+        }
+
+        $html = View::make('reports.heatmap-export', [
+            'heatData' => $heatData,
+            'modeLabel' => $mode === 'parking' ? 'Parking' : 'Driving',
+            'periodLabel' => $dateFrom.' — '.$dateTo,
+            'vehicleCount' => count($vehicleIds),
+        ])->render();
+
+        $w = (int) config('reports.heatmap_image.width', 1280);
+        $h = (int) config('reports.heatmap_image.height', 720);
+
+        $shot = Browsershot::html($html)
+            ->windowSize($w, $h)
+            ->deviceScaleFactor(1)
+            ->waitUntilNetworkIdle()
+            ->setScreenshotType('png');
+
+        BrowsershotConfigurator::apply($shot);
+
+        $shot->save($absolutePath);
+    }
+}
