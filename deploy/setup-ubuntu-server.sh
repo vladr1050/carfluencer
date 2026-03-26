@@ -54,8 +54,10 @@ apt-get install -y -qq nodejs
 if ! apt-get install -y -qq chromium; then
   apt-get install -y -qq chromium-browser || true
 fi
+apt-get install -y -qq libasound2 2>/dev/null || apt-get install -y -qq libasound2t64 2>/dev/null || true
+
 apt-get install -y -qq \
-  fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 \
+  fonts-liberation libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 \
   libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libnspr4 libnss3 libpango-1.0-0 \
   libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 \
   || true
