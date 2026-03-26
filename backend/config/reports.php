@@ -31,4 +31,7 @@ return [
     | unless you override with CAMPAIGN_REPORT_CHROME_NO_SANDBOX=false.
     */
     'chrome_no_sandbox' => env('CAMPAIGN_REPORT_CHROME_NO_SANDBOX'),
+
+    /** Applied at start of GenerateCampaignReportJob (heatmap + PDF are heavy). */
+    'php_memory_limit' => env('CAMPAIGN_REPORT_PHP_MEMORY_LIMIT', '512M'),
 ];

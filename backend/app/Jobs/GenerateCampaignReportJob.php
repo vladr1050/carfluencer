@@ -29,6 +29,11 @@ class GenerateCampaignReportJob implements ShouldQueue
         HeatmapImageServiceInterface $heatmapImages,
         CampaignReportPdfServiceInterface $pdfService,
     ): void {
+        $mem = (string) config('reports.php_memory_limit', '512M');
+        if ($mem !== '' && $mem !== '0') {
+            @ini_set('memory_limit', $mem);
+        }
+
         $report = CampaignReport::query()->findOrFail($this->campaignReportId);
         $report->update([
             'status' => CampaignReportStatus::Processing,

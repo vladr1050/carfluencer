@@ -64,6 +64,15 @@ apt-get install -y -qq \
 
 systemctl enable --now php8.4-fpm postgresql
 
+# Heatmap / большие JSON в админке упираются в memory_limit=128M по умолчанию
+PHP_VER=8.4
+for INI in "/etc/php/${PHP_VER}/fpm/php.ini" "/etc/php/${PHP_VER}/cli/php.ini"; do
+  if [[ -f "$INI" ]]; then
+    sed -ri 's/^;?[[:space:]]*memory_limit[[:space:]]*=.*/memory_limit = 512M/' "$INI"
+  fi
+done
+systemctl reload "php${PHP_VER}-fpm"
+
 DB_PASS="$(openssl rand -hex 16)"
 
 sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE USER evo WITH PASSWORD '$DB_PASS';" 2>/dev/null \
