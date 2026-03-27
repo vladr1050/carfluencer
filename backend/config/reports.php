@@ -18,6 +18,19 @@ return [
         'height' => (int) env('CAMPAIGN_REPORT_HEATMAP_HEIGHT', 720),
     ],
 
+    /*
+    | Экспорт теплокарты в PDF: отсечь мусорные GPS и ограничить регион (по умолчанию EE/LV/LT).
+    */
+    'heatmap_export' => [
+        'clip_to_bounds' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_CLIP_TO_BOUNDS', true), FILTER_VALIDATE_BOOLEAN),
+        'bounds' => [
+            'south' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_SOUTH', 53.70),
+            'north' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_NORTH', 59.75),
+            'west' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_WEST', 20.70),
+            'east' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_EAST', 28.52),
+        ],
+    ],
+
     'normalization' => env('CAMPAIGN_REPORT_HEATMAP_NORMALIZATION', 'max'),
 
     'chrome_path' => env('CAMPAIGN_REPORT_CHROME_PATH'),

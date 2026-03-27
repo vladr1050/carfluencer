@@ -40,12 +40,10 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
 
         $bundle = $this->heatmapData->fetchHeatmapData($campaignId, $filters);
         $points = $bundle['map']['points'] ?? [];
+        $filtered = ReportHeatmapExportPointFilter::filter($points);
         $heatData = [];
-        foreach ($points as $p) {
-            if (! isset($p['lat'], $p['lng'], $p['intensity'])) {
-                continue;
-            }
-            $heatData[] = [(float) $p['lat'], (float) $p['lng'], (float) $p['intensity']];
+        foreach ($filtered as $p) {
+            $heatData[] = [$p['lat'], $p['lng'], $p['intensity']];
         }
 
         $html = View::make('reports.heatmap-export', [
