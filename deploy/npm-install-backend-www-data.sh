@@ -27,6 +27,16 @@ fi
 mkdir -p "$BACKEND/.npm-cache"
 chown -R www-data:www-data "$BACKEND/.npm-cache"
 
+# После git pull каталог backend часто root:root — www-data не может создать node_modules.
+chown www-data:www-data "$BACKEND/package.json" 2>/dev/null || true
+if [[ -f "$BACKEND/package-lock.json" ]]; then
+  chown www-data:www-data "$BACKEND/package-lock.json"
+fi
+if [[ -d "$BACKEND/node_modules" ]]; then
+  chown -R www-data:www-data "$BACKEND/node_modules"
+fi
+chown www-data:www-data "$BACKEND"
+
 WWW_HOME="$(getent passwd www-data | cut -d: -f6)"
 if [[ -n "${WWW_HOME:-}" && -d "$WWW_HOME/.npm" ]]; then
   chown -R www-data:www-data "$WWW_HOME/.npm" || true
