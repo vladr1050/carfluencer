@@ -4,13 +4,16 @@ namespace App\Jobs;
 
 use App\Enums\CampaignReportStatus;
 use App\Models\CampaignReport;
+use App\Services\Reports\CampaignReportDateSpan;
 use App\Services\Reports\CampaignReportVehicleResolver;
 use App\Services\Reports\Contracts\CampaignReportMetricsServiceInterface;
 use App\Services\Reports\Contracts\CampaignReportPdfServiceInterface;
 use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class GenerateCampaignReportJob implements ShouldQueue
@@ -35,6 +38,20 @@ class GenerateCampaignReportJob implements ShouldQueue
         }
 
         $report = CampaignReport::query()->findOrFail($this->campaignReportId);
+        $from = $report->date_from->format('Y-m-d');
+        $to = $report->date_to->format('Y-m-d');
+
+        try {
+            CampaignReportDateSpan::assertWithinLimits($from, $to);
+        } catch (ValidationException $e) {
+            $report->update([
+                'status' => CampaignReportStatus::Failed,
+                'error_message' => collect($e->errors())->flatten()->first() ?? $e->getMessage(),
+            ]);
+
+            return;
+        }
+
         $report->update([
             'status' => CampaignReportStatus::Processing,
             'error_message' => null,
@@ -43,8 +60,6 @@ class GenerateCampaignReportJob implements ShouldQueue
         try {
             $campaign = $report->campaign()->with(['advertiser.advertiserProfile'])->firstOrFail();
             $vehicleIds = $vehicleResolver->resolveForCampaign($campaign->id);
-            $from = $report->date_from->format('Y-m-d');
-            $to = $report->date_to->format('Y-m-d');
 
             $kpis = $metrics->getKpis($campaign->id, $from, $to, $vehicleIds);
 
@@ -121,9 +136,21 @@ class GenerateCampaignReportJob implements ShouldQueue
                 'status' => CampaignReportStatus::Done,
             ]);
         } catch (Throwable $e) {
+            if ($e instanceof ValidationException) {
+                $message = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            } else {
+                $message = trim($e->getMessage()) !== ''
+                    ? $e::class.': '.$e->getMessage()
+                    : $e::class;
+                Log::error('Campaign report generation failed', [
+                    'campaign_report_id' => $this->campaignReportId,
+                    'exception' => $e,
+                ]);
+            }
+
             $report->update([
                 'status' => CampaignReportStatus::Failed,
-                'error_message' => $e->getMessage(),
+                'error_message' => $message,
             ]);
         }
     }

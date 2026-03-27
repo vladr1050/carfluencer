@@ -4,8 +4,8 @@
 
 [program:carfluencer-queue]
 process_name=%(program_name)s_%(process_num)02d
-; Heatmap / отчёты могут превышать дефолтные 128M — держим выше, чем php-fpm (см. также memory_limit в php.ini).
-command=/usr/bin/php8.4 -d memory_limit=512M /var/www/carfluencer/backend/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+; Воркер очереди: лимит не ниже job (CAMPAIGN_REPORT_PHP_MEMORY_LIMIT), иначе ini_set в job не поможет.
+command=/usr/bin/php8.4 -d memory_limit=1024M /var/www/carfluencer/backend/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
 autostart=true
 autorestart=true
 stopasgroup=true

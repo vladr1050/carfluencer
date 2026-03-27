@@ -47,9 +47,10 @@ class CampaignReportsTable
                     ->label('Created by')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('error_message')
-                    ->limit(40)
+                    ->wrap()
+                    ->limit(120)
                     ->tooltip(fn (?string $state): ?string => $state)
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
             ])
             ->defaultSort('id', 'desc')
             ->recordActions([

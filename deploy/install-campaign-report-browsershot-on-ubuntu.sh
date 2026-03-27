@@ -42,6 +42,20 @@ if [[ -z "$CHROME_BIN" ]]; then
   exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BACKEND="$REPO_ROOT/backend"
+
+if [[ ! -f "$BACKEND/package.json" ]]; then
+  echo "Не найден $BACKEND/package.json — проверь путь к репозиторию."
+  exit 1
+fi
+
+# Browsershot: require('puppeteer') из backend/node_modules (ставит deploy/npm-install-backend-www-data.sh).
+echo ""
+echo "Устанавливаю npm-зависимости backend/ (puppeteer, кэш в backend/.npm-cache)..."
+bash "$SCRIPT_DIR/npm-install-backend-www-data.sh" "$REPO_ROOT"
+
 echo ""
 echo "Добавь в backend/.env (или раскомментируй в .env.production.example):"
 echo "CAMPAIGN_REPORT_BROWSER_DRIVER=browsershot"

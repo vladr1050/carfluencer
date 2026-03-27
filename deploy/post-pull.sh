@@ -39,4 +39,13 @@ if [[ "${CARFLUENCER_FRONTEND_BUILD:-0}" == "1" ]] && command -v npm >/dev/null 
   echo "[post-pull] frontend/dist updated."
 fi
 
+# Browsershot / PDF отчёты: puppeteer в backend/node_modules (нужен root для chown кэша).
+if [[ "${CARFLUENCER_BACKEND_NPM:-1}" == "1" ]]; then
+  if [[ "${EUID:-0}" -eq 0 ]] && command -v npm >/dev/null 2>&1; then
+    bash "$ROOT/deploy/npm-install-backend-www-data.sh" "$ROOT" || echo "[post-pull] Warning: backend npm install failed (campaign reports / Browsershot)."
+  elif [[ "${EUID:-0}" -ne 0 ]]; then
+    echo "[post-pull] Для отчётов PDF: sudo bash deploy/npm-install-backend-www-data.sh"
+  fi
+fi
+
 echo "Deploy script finished OK."

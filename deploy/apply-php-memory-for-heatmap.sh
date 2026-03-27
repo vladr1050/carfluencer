@@ -6,6 +6,9 @@
 # Запуск на сервере из корня репозитория:
 #   cd /var/www/carfluencer && sudo bash deploy/apply-php-memory-for-heatmap.sh
 #
+# PHP_MEMORY_LIMIT — FPM + CLI php.ini (по умолчанию 512M).
+# QUEUE_PHP_MEMORY_LIMIT — только строка command= в Supervisor для queue:work (по умолчанию 1024M).
+#
 set -euo pipefail
 
 if [[ "${EUID:-0}" -ne 0 ]]; then
@@ -15,8 +18,9 @@ fi
 
 PHP_VER="${PHP_VERSION:-8.4}"
 MEM="${PHP_MEMORY_LIMIT:-512M}"
+QUEUE_MEM="${QUEUE_PHP_MEMORY_LIMIT:-1024M}"
 
-echo "PHP ${PHP_VER}, memory_limit=${MEM}"
+echo "PHP ${PHP_VER}, memory_limit=${MEM} (FPM/CLI), queue worker -d memory_limit=${QUEUE_MEM}"
 
 for INI in "/etc/php/${PHP_VER}/fpm/php.ini" "/etc/php/${PHP_VER}/cli/php.ini"; do
   if [[ -f "$INI" ]]; then
@@ -51,10 +55,11 @@ fi
 SUP_CONF="${SUPERVISOR_QUEUE_CONF:-/etc/supervisor/conf.d/carfluencer-queue.conf}"
 if [[ -f "$SUP_CONF" ]]; then
   if grep -qE '^command=.*/php8\.4[[:space:]]+' "$SUP_CONF" && ! grep -qE '^command=.*php8\.4[[:space:]]+-d[[:space:]]+memory_limit=' "$SUP_CONF"; then
-    sed -ri 's#^command=(/usr/bin/php8\.4)[[:space:]]+#command=\1 -d memory_limit='"${MEM}"' #' "$SUP_CONF"
+    sed -ri 's#^command=(/usr/bin/php8\.4)[[:space:]]+#command=\1 -d memory_limit='"${QUEUE_MEM}"' #' "$SUP_CONF"
     echo "  updated supervisor: $SUP_CONF"
   elif grep -qE '^command=.*-d[[:space:]]+memory_limit=' "$SUP_CONF"; then
-    echo "  supervisor уже с -d memory_limit: $SUP_CONF"
+    sed -ri 's/(\-d[[:space:]]+memory_limit=)[^[:space:]]+/\1'"${QUEUE_MEM}"'/' "$SUP_CONF"
+    echo "  updated supervisor -d memory_limit -> ${QUEUE_MEM}: $SUP_CONF"
   else
     echo "  supervisor: не распознана command= (правь вручную): $SUP_CONF"
   fi
