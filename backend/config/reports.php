@@ -27,10 +27,16 @@ return [
     'npm_binary' => env('CAMPAIGN_REPORT_NPM_BINARY'),
 
     /*
-    | Headless Chrome in Docker often requires --no-sandbox. Also enabled when /.dockerenv exists
-    | unless you override with CAMPAIGN_REPORT_CHROME_NO_SANDBOX=false.
+    | null = auto: enable for Docker (/.dockerenv) and snap Chromium paths (/snap/).
+    | true/false = force (see CAMPAIGN_REPORT_CHROME_NO_SANDBOX).
     */
     'chrome_no_sandbox' => env('CAMPAIGN_REPORT_CHROME_NO_SANDBOX'),
+
+    /** Browsershot navigation/screenshot timeout (seconds). */
+    'browsershot_timeout' => (int) env('CAMPAIGN_REPORT_BROWSERSHOT_TIMEOUT', 180),
+
+    /** After DOM load, wait for map tiles/CDN (heatmap PNG only). */
+    'heatmap_render_delay_ms' => (int) env('CAMPAIGN_REPORT_HEATMAP_DELAY_MS', 3500),
 
     /** Applied at start of GenerateCampaignReportJob (heatmap + PDF are heavy). */
     'php_memory_limit' => env('CAMPAIGN_REPORT_PHP_MEMORY_LIMIT', '1024M'),

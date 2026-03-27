@@ -26,8 +26,13 @@ final class BrowsershotConfigurator
             $b->setNpmBinary($npmBinary);
         }
 
-        $noSandbox = filter_var(config('reports.chrome_no_sandbox'), FILTER_VALIDATE_BOOLEAN)
-            || file_exists('/.dockerenv');
+        $explicit = config('reports.chrome_no_sandbox');
+        if ($explicit !== null && $explicit !== '') {
+            $noSandbox = filter_var($explicit, FILTER_VALIDATE_BOOLEAN);
+        } else {
+            $noSandbox = file_exists('/.dockerenv')
+                || (is_string($chromePath) && str_contains($chromePath, '/snap/'));
+        }
 
         if ($noSandbox) {
             $b->noSandbox();

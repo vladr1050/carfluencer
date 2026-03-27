@@ -57,12 +57,16 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
 
         $w = (int) config('reports.heatmap_image.width', 1280);
         $h = (int) config('reports.heatmap_image.height', 720);
+        $timeout = (int) config('reports.browsershot_timeout', 180);
+        $delayMs = (int) config('reports.heatmap_render_delay_ms', 3500);
 
+        // Без networkidle0: unpkg + тайлы карт часто не доходят до «idle» на сервере → таймаут.
         $shot = Browsershot::html($html)
             ->windowSize($w, $h)
             ->deviceScaleFactor(1)
-            ->waitUntilNetworkIdle()
-            ->setScreenshotType('png');
+            ->setScreenshotType('png')
+            ->timeout(max(30, $timeout))
+            ->delay(max(0, $delayMs));
 
         BrowsershotConfigurator::apply($shot);
 

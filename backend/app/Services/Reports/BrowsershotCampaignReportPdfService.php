@@ -30,9 +30,13 @@ final class BrowsershotCampaignReportPdfService implements CampaignReportPdfServ
             'parkingImageBase64' => $parkingB64,
         ])->render();
 
+        $timeout = (int) config('reports.browsershot_timeout', 180);
+
         $shot = Browsershot::html($html)
             ->format('A4')
-            ->margins(12, 12, 12, 12);
+            ->margins(12, 12, 12, 12)
+            ->timeout(max(30, $timeout))
+            ->delay(500);
 
         BrowsershotConfigurator::apply($shot);
 
