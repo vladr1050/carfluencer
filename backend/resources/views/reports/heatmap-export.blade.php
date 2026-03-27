@@ -30,18 +30,26 @@
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
     const heatData = @json($heatData);
+    const tile = @json($tileLayer);
+    const heatOpts = @json($heatLayerOptions);
     const map = L.map('map', { zoomControl: false, attributionControl: true });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap &copy; CARTO'
-    }).addTo(map);
+    const tileOptions = {
+        maxZoom: Math.min(19, tile.max_zoom || 20),
+        attribution: tile.attribution || ''
+    };
+    if (tile.subdomains) {
+        tileOptions.subdomains = tile.subdomains;
+    }
+    L.tileLayer(tile.url, tileOptions).addTo(map);
 
     if (!heatData.length) {
         map.setView([56.95, 24.11], 11);
     } else {
         const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
         map.fitBounds(bounds.pad(0.12));
-        L.heatLayer(heatData, { radius: 28, blur: 22, maxZoom: 17, max: 1.0 }).addTo(map);
+        if (typeof L.heatLayer === 'function') {
+            L.heatLayer(heatData, heatOpts).addTo(map);
+        }
     }
 </script>
 </body>

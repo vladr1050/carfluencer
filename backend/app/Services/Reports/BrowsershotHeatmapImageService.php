@@ -4,6 +4,7 @@ namespace App\Services\Reports;
 
 use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
 use App\Services\Telemetry\HeatmapDataServiceInterface;
+use App\Services\Telemetry\HeatmapLeafletStyle;
 use Illuminate\Support\Facades\View;
 use Spatie\Browsershot\Browsershot;
 
@@ -51,6 +52,8 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             'modeLabel' => $mode === 'parking' ? 'Parking' : 'Driving',
             'periodLabel' => $dateFrom.' — '.$dateTo,
             'vehicleCount' => count($vehicleIds),
+            'tileLayer' => HeatmapLeafletStyle::tileLayerConfig(),
+            'heatLayerOptions' => HeatmapLeafletStyle::heatLayerOptionsForExport($mode),
         ])->render();
 
         $w = (int) config('reports.heatmap_image.width', 1280);

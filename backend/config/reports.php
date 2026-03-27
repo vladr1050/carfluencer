@@ -22,6 +22,13 @@ return [
     | Экспорт теплокарты в PDF: отсечь мусорные GPS и ограничить регион (по умолчанию EE/LV/LT).
     */
     'heatmap_export' => [
+        /**
+         * null / пусто = как у портала (platform_settings / telemetry.global_default_shadow).
+         * Иначе: current | small | xsmall — те же пресеты, что в админке и Advertiser heatmap.
+         */
+        'shadow_preset' => ($s = env('CAMPAIGN_REPORT_HEATMAP_SHADOW')) !== null && $s !== '' && in_array($s, ['current', 'small', 'xsmall'], true)
+            ? $s
+            : null,
         'clip_to_bounds' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_CLIP_TO_BOUNDS', true), FILTER_VALIDATE_BOOLEAN),
         'bounds' => [
             'south' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_SOUTH', 53.70),
