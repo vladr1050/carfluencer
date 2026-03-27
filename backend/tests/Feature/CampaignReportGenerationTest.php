@@ -8,7 +8,6 @@ use App\Models\Campaign;
 use App\Models\CampaignReport;
 use App\Models\CampaignVehicle;
 use App\Models\DailyImpression;
-use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -61,12 +60,6 @@ class CampaignReportGenerationTest extends TestCase
             'parking_minutes' => 30,
         ]);
 
-        Trip::query()->create([
-            'vehicle_id' => $vehicle->id,
-            'trip_status' => Trip::STATUS_COMPLETED,
-            'trip_end' => '2026-03-10 14:00:00',
-        ]);
-
         $report = CampaignReport::query()->create([
             'campaign_id' => $campaign->id,
             'advertiser_id' => $advertiser->id,
@@ -89,7 +82,8 @@ class CampaignReportGenerationTest extends TestCase
         $this->assertNotNull($report->report_data_json);
         $this->assertSame(1, $report->report_data_json['schema_version']);
         $this->assertSame([$vehicle->id], $report->report_data_json['vehicle_ids']);
-        $this->assertSame(1, $report->report_data_json['kpis']['carfluencers']);
+        // Как на портале: 1 vehicle × 31 inclusive day (Mar 1–31) × default 1.0 trips/vehicle/day
+        $this->assertSame(31, $report->report_data_json['kpis']['carfluencers']);
         $this->assertSame(100, $report->report_data_json['kpis']['impressions']);
 
         $this->assertFileExists(Storage::disk('local')->path($report->file_path));

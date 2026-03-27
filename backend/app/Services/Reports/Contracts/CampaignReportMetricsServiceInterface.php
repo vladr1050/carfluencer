@@ -3,7 +3,8 @@
 namespace App\Services\Reports\Contracts;
 
 /**
- * Single entry point for campaign PDF KPIs (telemetry via heatmap summary + trips for Carfluencers).
+ * Single entry point for campaign PDF KPIs (telemetry via heatmap summary).
+ * Carfluencers = same formula as Advertiser portal «trips» (trips_per_vehicle_full_day × vehicles × calendar days).
  *
  * @phpstan-type ReportKpis array{
  *     impressions: int|float|null,

@@ -2,12 +2,10 @@
 
 namespace App\Services\Reports;
 
-use App\Models\Trip;
 use App\Services\Reports\Contracts\CampaignReportMetricsServiceInterface;
 use App\Services\Telemetry\HeatmapPageQuery;
 use App\Services\Telemetry\HeatmapRequestDateRange;
 use App\Services\Telemetry\HeatmapSummaryMetricsService;
-use Illuminate\Support\Carbon;
 
 final class CampaignReportMetricsService implements CampaignReportMetricsServiceInterface
 {
@@ -39,7 +37,9 @@ final class CampaignReportMetricsService implements CampaignReportMetricsService
         );
 
         $summary = $this->heatmapSummary->fetchForAdvertiser($query);
-        $carfluencers = $this->countCarfluencers($vehicleIds, $dateFrom, $dateTo);
+
+        // Как в Advertiser heatmap: summary_metrics.trips = TelemetryHeatmapConfig::computeAdvertiserTripsKpi(...)
+        $carfluencers = (int) ($summary['trips'] ?? 0);
 
         return [
             'impressions' => $summary['impressions'],
@@ -50,25 +50,5 @@ final class CampaignReportMetricsService implements CampaignReportMetricsService
             'data_source' => $summary['data_source'],
             'is_estimated' => (bool) $summary['is_estimated'],
         ];
-    }
-
-    /**
-     * @param  list<int>  $vehicleIds
-     */
-    private function countCarfluencers(array $vehicleIds, string $dateFrom, string $dateTo): int
-    {
-        if ($vehicleIds === []) {
-            return 0;
-        }
-
-        return Trip::query()
-            ->where('trip_status', Trip::STATUS_COMPLETED)
-            ->whereIn('vehicle_id', $vehicleIds)
-            ->whereNotNull('trip_end')
-            ->whereBetween('trip_end', [
-                Carbon::parse($dateFrom)->startOfDay(),
-                Carbon::parse($dateTo)->endOfDay(),
-            ])
-            ->count();
     }
 }
