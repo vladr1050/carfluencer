@@ -3,7 +3,9 @@
 | Файл | Назначение |
 |------|------------|
 | **`setup-ubuntu-server.sh`** | Первичная настройка VPS (PHP 8.4, Postgres, Nginx, `.env`, Composer, миграции, **Supervisor**, **cron**, **Node 22 + Chromium** для PDF-отчётов Browsershot). Запуск: `sudo bash deploy/setup-ubuntu-server.sh 'https://www.carplace.lv'` |
-| **`install-campaign-report-browsershot-on-ubuntu.sh`** | На уже развёрнутом Ubuntu: только Node + Chromium и подсказка для `CAMPAIGN_REPORT_*` в `.env`. `sudo bash deploy/install-campaign-report-browsershot-on-ubuntu.sh` |
+| **`install-campaign-report-browsershot-on-ubuntu.sh`** | На уже развёрнутом Ubuntu: Node + Chromium и подсказка для `CAMPAIGN_REPORT_*` в `.env`. `sudo bash deploy/install-campaign-report-browsershot-on-ubuntu.sh` |
+| **`npm-install-backend-www-data.sh`** | `npm install` в `backend/` от root, затем `chown` `node_modules` → **www-data** (puppeteer). |
+| **`install-google-chrome-for-browsershot.sh`** | **Google Chrome .deb** для отчётов: **snap Chromium под Supervisor не работает** — `sudo bash deploy/install-google-chrome-for-browsershot.sh`, в `.env`: `CAMPAIGN_REPORT_CHROME_PATH=/usr/bin/google-chrome-stable`. |
 | **`apply-php-memory-for-heatmap.sh`** | Поднять `memory_limit` в **php-fpm + cli** и добавить `-d memory_limit=512M` в **Supervisor** для `carfluencer-queue`. `cd /var/www/carfluencer && sudo bash deploy/apply-php-memory-for-heatmap.sh` |
 | **`apply-carplace-lv-on-server.sh`** | На уже развёрнутом VPS: **.env** под **www.carplace.lv**, Nginx из примера с подстановкой пути, `config:cache`. `sudo bash deploy/apply-carplace-lv-on-server.sh` из корня клона. См. **`docs/DEPLOY/16_carplace_lv.md`**. |
 | **`post-pull.sh`** | После `git pull`: зависимости, миграции, **`php artisan telemetry:ensure-env`** (добавляет в `.env` только отсутствующие ключи из **`telemetry.env.fragment`**), кэши, `queue:restart`, при `TELEMETRY_CLICKHOUSE_ENABLED=true` — **`telemetry:test-clickhouse`**. |

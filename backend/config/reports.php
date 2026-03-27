@@ -22,6 +22,11 @@ return [
 
     'chrome_path' => env('CAMPAIGN_REPORT_CHROME_PATH'),
 
+    /**
+     * Snap Chromium under PHP/queue/Supervisor usually fails (snap cgroup, /var/www/snap). False = fail fast with a clear error.
+     */
+    'allow_snap_chrome' => filter_var(env('CAMPAIGN_REPORT_ALLOW_SNAP_CHROME'), FILTER_VALIDATE_BOOLEAN),
+
     'node_binary' => env('CAMPAIGN_REPORT_NODE_BINARY'),
 
     'npm_binary' => env('CAMPAIGN_REPORT_NPM_BINARY'),

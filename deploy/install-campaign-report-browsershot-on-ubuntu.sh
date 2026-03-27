@@ -56,6 +56,14 @@ echo ""
 echo "Устанавливаю npm-зависимости backend/ (puppeteer, кэш в backend/.npm-cache)..."
 bash "$SCRIPT_DIR/npm-install-backend-www-data.sh" "$REPO_ROOT"
 
+if [[ "$CHROME_BIN" == *"/snap/"* ]]; then
+  echo ""
+  echo "ВНИМАНИЕ: найден Chromium из snap — под PHP/очередью он обычно не стартует."
+  echo "Поставь Chrome .deb и укажи путь в .env:"
+  echo "  sudo bash $SCRIPT_DIR/install-google-chrome-for-browsershot.sh"
+  echo "  CAMPAIGN_REPORT_CHROME_PATH=/usr/bin/google-chrome-stable"
+fi
+
 echo ""
 echo "Добавь в backend/.env (или раскомментируй в .env.production.example):"
 echo "CAMPAIGN_REPORT_BROWSER_DRIVER=browsershot"
