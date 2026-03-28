@@ -65,6 +65,7 @@
 <script>
     const heatData = @json($heatData);
     const viewport = @json($viewport);
+    const mapFitMaxZoom = @json((int) ($mapFitMaxZoom ?? 15));
     const tile = @json($tileLayer);
     const heatOpts = @json($heatLayerOptions);
     const map = L.map('map', { zoomControl: false, attributionControl: true });
@@ -81,7 +82,7 @@
         if (viewport.fit_to_data) {
             if (heatData.length) {
                 const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
-                map.fitBounds(bounds.pad(0.12), { maxZoom: 16, animate: false });
+                map.fitBounds(bounds.pad(0.12), { maxZoom: Math.min(17, mapFitMaxZoom + 1), animate: false });
             } else {
                 map.setView([56.95, 24.11], 11);
             }
@@ -91,7 +92,7 @@
             [viewport.south, viewport.west],
             [viewport.north, viewport.east]
         );
-        map.fitBounds(b.pad(0.06), { maxZoom: 15, animate: false });
+        map.fitBounds(b.pad(0.06), { maxZoom: mapFitMaxZoom, animate: false });
     }
 
     applyViewport();

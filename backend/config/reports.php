@@ -65,7 +65,10 @@ return [
                 'east' => 24.128,
             ],
         ],
-        /** Leaflet zoom for reading heatmap_cells_daily tier (same mapping as portal). */
+        /**
+         * Base Leaflet zoom for rollup tier on wide frames. Tight PDF viewports (e.g. Rīga centrs)
+         * auto-use a higher zoom — see {@see ReportHeatmapExportRollupZoom::forViewport}.
+         */
         'rollup_read_zoom' => (int) env('CAMPAIGN_REPORT_HEATMAP_ROLLUP_ZOOM', 12),
         /** Cap distinct cells sent to the browser for PNG (keeps heaviest tail). */
         'max_cells' => (int) env('CAMPAIGN_REPORT_HEATMAP_MAX_CELLS', 50000),
