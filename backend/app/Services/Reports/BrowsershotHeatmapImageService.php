@@ -37,7 +37,6 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
         $bbox = ReportHeatmapExportBBox::forRollup($viewport);
         $zoom = ReportHeatmapExportRollupZoom::forViewport($viewport, $bbox);
         $zoom = max(1, min(22, $zoom));
-        $mapFitMaxZoom = ReportHeatmapExportRollupZoom::mapFitMaxZoom($viewport, $bbox);
 
         $norm = (string) config('reports.normalization', 'p95');
         if (! in_array($norm, ['max', 'p95', 'p99'], true)) {
@@ -72,7 +71,6 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             'exportMode' => 'heatmap',
             'legendVariant' => $legendVariant,
             'heatData' => $heatData,
-            'mapFitMaxZoom' => $mapFitMaxZoom,
             'modeLabel' => $mode === 'parking' ? 'Parking' : 'Driving',
             'viewportLabel' => $viewport['label'],
             'periodLabel' => $dateFrom.' — '.$dateTo,

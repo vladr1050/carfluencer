@@ -65,12 +65,12 @@
 <script>
     const heatData = @json($heatData);
     const viewport = @json($viewport);
-    const mapFitMaxZoom = @json((int) ($mapFitMaxZoom ?? 15));
     const tile = @json($tileLayer);
     const heatOpts = @json($heatLayerOptions);
     const map = L.map('map', { zoomControl: false, attributionControl: true });
+    const tileMax = Math.min(19, parseInt(tile.max_zoom, 10) || 20);
     const tileOptions = {
-        maxZoom: Math.min(19, tile.max_zoom || 20),
+        maxZoom: tileMax,
         attribution: tile.attribution || ''
     };
     if (tile.subdomains) {
@@ -78,16 +78,16 @@
     }
     L.tileLayer(tile.url, tileOptions).addTo(map);
 
+    /** Fill the PNG with the frame: tight geographic bounds + minimal pixel inset only. */
+    const insetPx = 8;
+
     function applyViewport() {
-        // Pixel padding so leaflet.heat radius/blur is not clipped at PNG edges (fixed frames + regional).
-        const padFixedPx = [110, 110];
-        const padFitDataPx = [64, 64];
         if (viewport.fit_to_data) {
             if (heatData.length) {
                 const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
-                map.fitBounds(bounds.pad(0.14), {
-                    padding: padFitDataPx,
-                    maxZoom: Math.min(17, mapFitMaxZoom + 1),
+                map.fitBounds(bounds.pad(0.04), {
+                    padding: [insetPx, insetPx],
+                    maxZoom: tileMax,
                     animate: false
                 });
             } else {
@@ -98,8 +98,8 @@
         const b = L.latLngBounds(
             [viewport.south, viewport.west],
             [viewport.north, viewport.east]
-        ).pad(0.14);
-        map.fitBounds(b, { padding: padFixedPx, maxZoom: mapFitMaxZoom, animate: false });
+        );
+        map.fitBounds(b, { padding: [insetPx, insetPx], maxZoom: tileMax, animate: false });
     }
 
     applyViewport();
