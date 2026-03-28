@@ -39,6 +39,7 @@
     $aExposure = $analytics['exposure_split'] ?? [];
     $aTopLocs = $analytics['top_locations'] ?? [];
     $aInsights = $analytics['insights'] ?? [];
+    $aCoverage = is_array($analytics['coverage'] ?? null) ? $analytics['coverage'] : [];
 @endphp
 
 <section>
@@ -65,6 +66,17 @@
         <div><strong>Parking:</strong> {{ number_format((float)($aExposure['parking_share'] ?? 0) * 100, 2) }}%</div>
     </div>
     <p class="note">Share of driving vs parking hours (same basis as key metrics).</p>
+
+    <h2>Footprint (driving)</h2>
+    <div class="meta">
+        <div><strong>Distinct driving grid cells:</strong> {{ $aCoverage['unique_cells'] ?? '—' }}</div>
+        <div><strong>Reference grid cells (operational bounds):</strong> {{ $aCoverage['reference_cells'] ?? '—' }}</div>
+        <div><strong>Footprint coverage ratio:</strong> @if(isset($aCoverage['coverage_ratio'])){{ number_format((float)$aCoverage['coverage_ratio'] * 100, 2) }}%@else—@endif</div>
+        @if(!empty($aCoverage['coverage_pattern']))
+            <div><strong>Spatial pattern:</strong> {{ $aCoverage['coverage_pattern'] }}</div>
+        @endif
+    </div>
+    <p class="note">Ratio = distinct driving rollup cells ÷ cells in the configured export bounds at the report coverage zoom tier (not “share of a city”). Denominator: operational_bounds_grid.</p>
 
     <h2>Campaign insights</h2>
     @if(!empty($aInsights['summary']))

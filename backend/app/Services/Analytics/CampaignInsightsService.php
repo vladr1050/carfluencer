@@ -45,8 +45,14 @@ final class CampaignInsightsService
         $locationPattern = $this->classifyLocationPattern($topLocations);
         $zonePhrase = $this->buildZonePhrase($topLocations);
 
+        /** @var array<string, mixed> $coverage */
+        $coverage = $analyticsSnapshot['coverage'] ?? [];
+        if (! is_array($coverage)) {
+            $coverage = [];
+        }
+
         $summary = $this->buildSummary($exposurePattern, $locationPattern, $zonePhrase, $parkingShare, $drivingShare);
-        $highlights = $this->buildHighlights($exposurePattern, $locationPattern, $zonePhrase, $topLocations);
+        $highlights = $this->buildHighlights($exposurePattern, $locationPattern, $zonePhrase, $topLocations, $coverage);
 
         return [
             'summary' => $summary,
@@ -220,13 +226,15 @@ final class CampaignInsightsService
 
     /**
      * @param  list<array<string, mixed>>  $topLocations
+     * @param  array<string, mixed>  $coverage  {@see CampaignCoverageService::buildCoverage}
      * @return list<string>
      */
     private function buildHighlights(
         ?string $exposurePattern,
         ?string $locationPattern,
         string $zonePhrase,
-        array $topLocations
+        array $topLocations,
+        array $coverage = []
     ): array {
         $out = [];
 
@@ -252,10 +260,22 @@ final class CampaignInsightsService
             $out[] = 'Signals indicate a distributed footprint across multiple city areas.';
         }
 
+        $covPattern = $coverage['coverage_pattern'] ?? null;
+        if (is_string($covPattern) && $covPattern !== '') {
+            if ($covPattern === 'focused') {
+                $out[] = 'Spatial coverage of driving activity was narrow relative to the configured operational map grid (see footprint metrics).';
+            } elseif ($covPattern === 'balanced') {
+                $out[] = 'Spatial coverage of driving activity was moderate relative to the configured operational map grid (see footprint metrics).';
+            } elseif ($covPattern === 'wide') {
+                $out[] = 'Spatial coverage of driving activity was broad relative to the configured operational map grid (see footprint metrics).';
+            }
+        }
+
         $out = array_values(array_unique(array_filter($out, fn ($s) => is_string($s) && $s !== '')));
 
-        if (count($out) > 4) {
-            $out = array_slice($out, 0, 4);
+        $maxHighlights = (is_string($covPattern ?? null) && $covPattern !== '') ? 5 : 4;
+        if (count($out) > $maxHighlights) {
+            $out = array_slice($out, 0, $maxHighlights);
         }
 
         if (count($out) === 1) {

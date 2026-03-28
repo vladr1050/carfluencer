@@ -23,6 +23,7 @@ final class CampaignAnalyticsService
         private readonly HeatmapRollupQueryService $rollupQuery,
         private readonly TopLocationLabelResolver $topLocationLabelResolver,
         private readonly CampaignInsightsService $campaignInsightsService,
+        private readonly CampaignCoverageService $campaignCoverageService,
     ) {}
 
     /**
@@ -41,6 +42,7 @@ final class CampaignAnalyticsService
      *     top_locations: list<array{lat: float, lng: float, samples: int, dwell_proxy: int, label: string|null}>,
      *     time_distribution: array{day_vs_night: array{day: float, night: float, is_stub: bool}},
      *     meta: array{campaign_id: int, date_from: string, date_to: string, vehicle_ids: list<int>, schema_version: string, data_source: string, is_estimated: bool},
+     *     coverage: array{unique_cells: int, reference_cells: int, coverage_ratio: float, coverage_pattern: string|null, method: string, denominator_scope: string, rollup_tier_index: int, map_zoom_used: int},
      *     insights: array{summary: string|null, highlights: list<string>, exposure_pattern: string|null, location_pattern: string|null}
      * }
      */
@@ -119,6 +121,14 @@ final class CampaignAnalyticsService
 
         $topLocations = $this->topLocationLabelResolver->enrichTopLocations($topLocations);
 
+        $coverageMapZoom = (int) config('reports.coverage.map_zoom', 12);
+        $coverage = $this->campaignCoverageService->buildCoverage(
+            $dateFrom,
+            $dateTo,
+            $imeis,
+            $coverageMapZoom
+        );
+
         $snapshot = [
             'kpis' => [
                 'impressions' => $impressions,
@@ -148,6 +158,7 @@ final class CampaignAnalyticsService
                 'data_source' => (string) ($kpisRaw['data_source'] ?? 'none'),
                 'is_estimated' => (bool) ($kpisRaw['is_estimated'] ?? false),
             ],
+            'coverage' => $coverage,
         ];
 
         $snapshot['insights'] = $this->campaignInsightsService->buildInsights($snapshot);

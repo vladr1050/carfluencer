@@ -117,6 +117,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Driving spatial coverage (CampaignCoverageService, heatmap_cells_daily)
+    |--------------------------------------------------------------------------
+    |
+    | map_zoom — Leaflet-style zoom; converted via HeatmapBucketStrategy::tierFromMapZoom
+    | to heatmap_cells_daily.zoom_tier (not the tier index you pass manually elsewhere).
+    | Denominator = grid cell count inside reports.heatmap_export.bounds at that tier's
+    | decimal precision (operational_bounds_grid).
+    |
+    */
+    'coverage' => [
+        'map_zoom' => (int) env('CAMPAIGN_REPORT_COVERAGE_MAP_ZOOM', 12),
+        'patterns' => [
+            'focused_max' => (float) env('CAMPAIGN_REPORT_COVERAGE_FOCUSED_MAX', 0.20),
+            'balanced_max' => (float) env('CAMPAIGN_REPORT_COVERAGE_BALANCED_MAX', 0.50),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Deterministic campaign insights (PDF snapshot; hours-based exposure wording)
     |--------------------------------------------------------------------------
     */

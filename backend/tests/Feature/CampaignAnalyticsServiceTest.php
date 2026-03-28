@@ -56,6 +56,16 @@ class CampaignAnalyticsServiceTest extends TestCase
         $this->assertArrayHasKey('highlights', $snap['insights']);
         $this->assertArrayHasKey('exposure_pattern', $snap['insights']);
         $this->assertArrayHasKey('location_pattern', $snap['insights']);
+
+        $this->assertIsArray($snap['coverage']);
+        $this->assertArrayHasKey('unique_cells', $snap['coverage']);
+        $this->assertArrayHasKey('reference_cells', $snap['coverage']);
+        $this->assertArrayHasKey('coverage_ratio', $snap['coverage']);
+        $this->assertArrayHasKey('coverage_pattern', $snap['coverage']);
+        $this->assertArrayHasKey('method', $snap['coverage']);
+        $this->assertArrayHasKey('denominator_scope', $snap['coverage']);
+        $this->assertSame(0, $snap['coverage']['unique_cells']);
+        $this->assertNull($snap['coverage']['coverage_pattern']);
     }
 
     public function test_top_locations_from_heatmap_cells_daily_parking_and_kpis_from_daily_impressions(): void
