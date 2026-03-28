@@ -10,8 +10,8 @@ final class BrowsershotCampaignReportPdfService implements CampaignReportPdfServ
 {
     public function renderPdf(array $snapshot, array $heatmapPngAbsolutePaths, string $absolutePdfPath): void
     {
-        $drivingB64 = $this->fileToBase64($heatmapPngAbsolutePaths['driving'] ?? null);
-        $parkingB64 = $this->fileToBase64($heatmapPngAbsolutePaths['parking'] ?? null);
+        $drivingViews = $this->viewportImagesToRows($heatmapPngAbsolutePaths['driving'] ?? null);
+        $parkingViews = $this->viewportImagesToRows($heatmapPngAbsolutePaths['parking'] ?? null);
 
         $kpis = $snapshot['kpis'] ?? [];
 
@@ -26,8 +26,8 @@ final class BrowsershotCampaignReportPdfService implements CampaignReportPdfServ
             'kpis' => $kpis,
             'includeDriving' => ! empty($snapshot['settings']['include_driving_heatmap']),
             'includeParking' => ! empty($snapshot['settings']['include_parking_heatmap']),
-            'drivingImageBase64' => $drivingB64,
-            'parkingImageBase64' => $parkingB64,
+            'drivingViewports' => $drivingViews,
+            'parkingViewports' => $parkingViews,
         ])->render();
 
         $timeout = (int) config('reports.browsershot_timeout', 180);
@@ -47,6 +47,31 @@ final class BrowsershotCampaignReportPdfService implements CampaignReportPdfServ
             mkdir($dir, 0755, true);
         }
         file_put_contents($absolutePdfPath, $pdf);
+    }
+
+    /**
+     * @param  array<string, string>|null  $idToPath
+     * @return list<array{label: string, base64: string|null}>
+     */
+    private function viewportImagesToRows(?array $idToPath): array
+    {
+        if ($idToPath === null || $idToPath === []) {
+            return [];
+        }
+
+        $ordered = [];
+        foreach (ReportHeatmapViewports::all() as $vp) {
+            $id = $vp['id'];
+            if (! isset($idToPath[$id])) {
+                continue;
+            }
+            $ordered[] = [
+                'label' => $vp['label'],
+                'base64' => $this->fileToBase64($idToPath[$id]),
+            ];
+        }
+
+        return $ordered;
     }
 
     private function fileToBase64(?string $path): ?string

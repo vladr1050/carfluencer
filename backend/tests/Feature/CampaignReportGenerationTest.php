@@ -80,7 +80,10 @@ class CampaignReportGenerationTest extends TestCase
         $this->assertSame(CampaignReportStatus::Done, $report->status);
         $this->assertNotNull($report->file_path);
         $this->assertNotNull($report->report_data_json);
-        $this->assertSame(1, $report->report_data_json['schema_version']);
+        $this->assertSame(2, $report->report_data_json['schema_version']);
+        $this->assertArrayHasKey('heatmap_pngs', $report->report_data_json['assets']);
+        $this->assertCount(3, $report->report_data_json['assets']['heatmap_pngs']['driving']);
+        $this->assertCount(3, $report->report_data_json['assets']['heatmap_pngs']['parking']);
         $this->assertSame([$vehicle->id], $report->report_data_json['vehicle_ids']);
         // Как на портале: 1 vehicle × 31 inclusive day (Mar 1–31) × default 1.0 trips/vehicle/day
         $this->assertSame(31, $report->report_data_json['kpis']['carfluencers']);

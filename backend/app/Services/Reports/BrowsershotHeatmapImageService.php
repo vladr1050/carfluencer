@@ -20,7 +20,8 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
         string $dateTo,
         array $vehicleIds,
         string $mode,
-        string $absolutePath
+        string $absolutePath,
+        string $viewportId = 'full',
     ): void {
         if (! in_array($mode, ['driving', 'parking'], true)) {
             $mode = 'driving';
@@ -47,11 +48,15 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             $heatData[] = [$p['lat'], $p['lng'], $p['intensity']];
         }
 
+        $viewport = ReportHeatmapViewports::byId($viewportId) ?? ReportHeatmapViewports::all()[0];
+
         $html = View::make('reports.heatmap-export', [
             'heatData' => $heatData,
             'modeLabel' => $mode === 'parking' ? 'Parking' : 'Driving',
+            'viewportLabel' => $viewport['label'],
             'periodLabel' => $dateFrom.' — '.$dateTo,
             'vehicleCount' => count($vehicleIds),
+            'viewport' => $viewport,
             'tileLayer' => HeatmapLeafletStyle::tileLayerConfig(),
             'heatLayerOptions' => HeatmapLeafletStyle::heatLayerOptionsForExport($mode),
         ])->render();

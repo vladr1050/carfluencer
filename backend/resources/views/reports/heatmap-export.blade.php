@@ -24,12 +24,14 @@
 <div id="map"></div>
 <div class="legend">
     <strong>{{ $modeLabel }}</strong><br>
+    <span style="color:#333;">{{ $viewportLabel }}</span><br>
     {{ $periodLabel }} · {{ $vehicleCount }} vehicles
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
     const heatData = @json($heatData);
+    const viewport = @json($viewport);
     const tile = @json($tileLayer);
     const heatOpts = @json($heatLayerOptions);
     const map = L.map('map', { zoomControl: false, attributionControl: true });
@@ -42,14 +44,27 @@
     }
     L.tileLayer(tile.url, tileOptions).addTo(map);
 
-    if (!heatData.length) {
-        map.setView([56.95, 24.11], 11);
-    } else {
-        const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
-        map.fitBounds(bounds.pad(0.12));
-        if (typeof L.heatLayer === 'function') {
-            L.heatLayer(heatData, heatOpts).addTo(map);
+    function applyViewport() {
+        if (viewport.fit_to_data) {
+            if (heatData.length) {
+                const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
+                map.fitBounds(bounds.pad(0.12), { maxZoom: 16 });
+            } else {
+                map.setView([56.95, 24.11], 11);
+            }
+            return;
         }
+        const b = L.latLngBounds(
+            [viewport.south, viewport.west],
+            [viewport.north, viewport.east]
+        );
+        map.fitBounds(b.pad(0.06), { maxZoom: 15, animate: false });
+    }
+
+    applyViewport();
+
+    if (heatData.length && typeof L.heatLayer === 'function') {
+        L.heatLayer(heatData, heatOpts).addTo(map);
     }
 </script>
 </body>

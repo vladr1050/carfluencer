@@ -9,6 +9,7 @@ use App\Services\Reports\CampaignReportVehicleResolver;
 use App\Services\Reports\Contracts\CampaignReportMetricsServiceInterface;
 use App\Services\Reports\Contracts\CampaignReportPdfServiceInterface;
 use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
+use App\Services\Reports\ReportHeatmapViewports;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -68,29 +69,48 @@ class GenerateCampaignReportJob implements ShouldQueue
             $disk->makeDirectory($baseRel);
 
             $baseAbs = $disk->path($baseRel);
-            $drivingPath = $baseAbs.'/driving.png';
-            $parkingPath = $baseAbs.'/parking.png';
+            $viewports = ReportHeatmapViewports::all();
+            $drivingPaths = [];
+            $parkingPaths = [];
+            $drivingRel = [];
+            $parkingRel = [];
 
             if ($report->include_driving_heatmap) {
-                $heatmapImages->renderPng($campaign->id, $from, $to, $vehicleIds, 'driving', $drivingPath);
+                foreach ($viewports as $vp) {
+                    $id = $vp['id'];
+                    $fname = 'driving_'.$id.'.png';
+                    $abs = $baseAbs.'/'.$fname;
+                    $heatmapImages->renderPng($campaign->id, $from, $to, $vehicleIds, 'driving', $abs, $id);
+                    $drivingPaths[$id] = $abs;
+                    $drivingRel[$id] = $baseRel.'/'.$fname;
+                }
             }
             if ($report->include_parking_heatmap) {
-                $heatmapImages->renderPng($campaign->id, $from, $to, $vehicleIds, 'parking', $parkingPath);
+                foreach ($viewports as $vp) {
+                    $id = $vp['id'];
+                    $fname = 'parking_'.$id.'.png';
+                    $abs = $baseAbs.'/'.$fname;
+                    $heatmapImages->renderPng($campaign->id, $from, $to, $vehicleIds, 'parking', $abs, $id);
+                    $parkingPaths[$id] = $abs;
+                    $parkingRel[$id] = $baseRel.'/'.$fname;
+                }
             }
 
             $advertiserName = $campaign->advertiser?->advertiserProfile?->company_name
                 ?? $campaign->advertiser?->name
                 ?? '—';
 
+            $viewportIds = array_map(static fn (array $v): string => $v['id'], $viewports);
             $inputHash = hash('sha256', json_encode([
                 $campaign->id,
                 $from,
                 $to,
                 $vehicleIds,
+                $viewportIds,
             ], JSON_THROW_ON_ERROR));
 
             $snapshot = [
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'campaign_id' => $campaign->id,
                 'date_from' => $from,
                 'date_to' => $to,
@@ -103,8 +123,10 @@ class GenerateCampaignReportJob implements ShouldQueue
                     'advertiser_name' => $advertiserName,
                 ],
                 'assets' => [
-                    'driving_png' => $report->include_driving_heatmap ? $baseRel.'/driving.png' : null,
-                    'parking_png' => $report->include_parking_heatmap ? $baseRel.'/parking.png' : null,
+                    'heatmap_pngs' => [
+                        'driving' => $report->include_driving_heatmap ? $drivingRel : [],
+                        'parking' => $report->include_parking_heatmap ? $parkingRel : [],
+                    ],
                 ],
                 'settings' => [
                     'include_driving_heatmap' => $report->include_driving_heatmap,
@@ -115,12 +137,19 @@ class GenerateCampaignReportJob implements ShouldQueue
             $pdfRel = $baseRel.'/report.pdf';
             $pdfAbs = $disk->path($pdfRel);
 
-            $heatmapPaths = [];
-            if ($report->include_driving_heatmap && is_file($drivingPath)) {
-                $heatmapPaths['driving'] = $drivingPath;
+            $heatmapPaths = [
+                'driving' => [],
+                'parking' => [],
+            ];
+            foreach ($drivingPaths as $id => $abs) {
+                if (is_file($abs)) {
+                    $heatmapPaths['driving'][$id] = $abs;
+                }
             }
-            if ($report->include_parking_heatmap && is_file($parkingPath)) {
-                $heatmapPaths['parking'] = $parkingPath;
+            foreach ($parkingPaths as $id => $abs) {
+                if (is_file($abs)) {
+                    $heatmapPaths['parking'][$id] = $abs;
+                }
             }
 
             $pdfService->renderPdf($snapshot, $heatmapPaths, $pdfAbs);

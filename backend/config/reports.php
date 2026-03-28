@@ -36,6 +36,34 @@ return [
             'west' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_WEST', 20.70),
             'east' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_EAST', 28.52),
         ],
+        /*
+        | Три (или больше) кадра в PDF: fit_to_data = по точкам; иначе фикс. bbox.
+        */
+        'viewports' => [
+            [
+                'id' => 'full',
+                'label' => 'Full coverage',
+                'fit_to_data' => true,
+            ],
+            [
+                'id' => 'riga_jurmala',
+                'label' => 'Rīga + Jūrmala',
+                'fit_to_data' => false,
+                'south' => 56.81,
+                'west' => 23.42,
+                'north' => 57.10,
+                'east' => 24.42,
+            ],
+            [
+                'id' => 'riga_center',
+                'label' => 'Rīga centrs',
+                'fit_to_data' => false,
+                'south' => 56.914,
+                'west' => 23.985,
+                'north' => 56.992,
+                'east' => 24.178,
+            ],
+        ],
     ],
 
     'normalization' => env('CAMPAIGN_REPORT_HEATMAP_NORMALIZATION', 'max'),

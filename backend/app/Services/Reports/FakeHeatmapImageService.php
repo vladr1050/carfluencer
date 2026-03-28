@@ -15,7 +15,8 @@ final class FakeHeatmapImageService implements HeatmapImageServiceInterface
         string $dateTo,
         array $vehicleIds,
         string $mode,
-        string $absolutePath
+        string $absolutePath,
+        string $viewportId = 'full',
     ): void {
         $dir = dirname($absolutePath);
         if (! is_dir($dir)) {
