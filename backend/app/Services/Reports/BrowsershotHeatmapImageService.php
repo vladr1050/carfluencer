@@ -3,14 +3,19 @@
 namespace App\Services\Reports;
 
 use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
+use App\Services\Telemetry\HeatmapDataServiceInterface;
 use App\Services\Telemetry\HeatmapLeafletStyle;
 use Illuminate\Support\Facades\View;
 use Spatie\Browsershot\Browsershot;
 
+/**
+ * PNG heatmaps for PDF: same API payload and Leaflet.heat options as the Advertiser portal
+ * ({@see HeatmapLeafletStyle::heatLayerOptionsForExport} + {@see HeatmapDataServiceInterface::fetchHeatmapData}).
+ */
 final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterface
 {
     public function __construct(
-        private readonly ReportHeatmapRollupExportBuilder $rollupExportBuilder,
+        private readonly HeatmapDataServiceInterface $heatmapData,
     ) {}
 
     public function renderPng(
@@ -29,30 +34,50 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
 
         $viewport = ReportHeatmapViewports::byId($viewportId) ?? ReportHeatmapViewports::all()[0];
 
-        $built = $this->rollupExportBuilder->build(
-            $campaignId,
-            $dateFrom,
-            $dateTo,
-            $vehicleIds,
-            $mode,
-            $viewport,
-            $parkingTopLocations
-        );
+        $bbox = ReportHeatmapExportBBox::forRollup($viewport);
+        $zoom = (int) config('reports.heatmap_export.rollup_read_zoom', 12);
+        $zoom = max(1, min(22, $zoom));
+
+        $norm = (string) config('reports.normalization', 'p95');
+        if (! in_array($norm, ['max', 'p95', 'p99'], true)) {
+            $norm = 'p95';
+        }
+
+        $filters = [
+            'vehicle_ids' => $vehicleIds,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'mode' => $mode,
+            'normalization' => $norm,
+            'south' => $bbox['min_lat'],
+            'west' => $bbox['min_lng'],
+            'north' => $bbox['max_lat'],
+            'east' => $bbox['max_lng'],
+            'zoom' => $zoom,
+        ];
+
+        $bundle = $this->heatmapData->fetchHeatmapData($campaignId, $filters);
+        $points = $bundle['map']['points'] ?? [];
+        $filtered = ReportHeatmapExportPointFilter::filter($points);
+
+        $heatData = [];
+        foreach ($filtered as $p) {
+            $heatData[] = [(float) $p['lat'], (float) $p['lng'], (float) $p['intensity']];
+        }
 
         $legendVariant = $mode === 'parking' ? 'parking_heat' : 'driving_heat';
 
         $html = View::make('reports.heatmap-export', [
             'exportMode' => 'heatmap',
             'legendVariant' => $legendVariant,
-            'heatData' => $built['heatData'],
-            'hotspots' => $built['hotspots'],
+            'heatData' => $heatData,
             'modeLabel' => $mode === 'parking' ? 'Parking' : 'Driving',
             'viewportLabel' => $viewport['label'],
             'periodLabel' => $dateFrom.' — '.$dateTo,
             'vehicleCount' => count($vehicleIds),
             'viewport' => $viewport,
             'tileLayer' => HeatmapLeafletStyle::tileLayerConfig(),
-            'heatLayerOptions' => $built['heatLayerOptions'],
+            'heatLayerOptions' => HeatmapLeafletStyle::heatLayerOptionsForExport($mode),
         ])->render();
 
         $this->captureHtmlToPng($html, $absolutePath);

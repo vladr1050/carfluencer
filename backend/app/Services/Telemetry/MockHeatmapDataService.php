@@ -17,16 +17,17 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
             $mode = 'driving';
         }
 
+        // Coordinates inside default report / advertiser map bounds (Baltics) so PDF export filter keeps points.
         $points = [
-            ['lat' => 51.505, 'lng' => -0.09, 'intensity' => 0.8],
-            ['lat' => 51.51, 'lng' => -0.1, 'intensity' => 0.85],
-            ['lat' => 51.515, 'lng' => -0.095, 'intensity' => 0.9],
+            ['lat' => 56.951, 'lng' => 24.106, 'intensity' => 0.8],
+            ['lat' => 56.953, 'lng' => 24.112, 'intensity' => 0.85],
+            ['lat' => 56.948, 'lng' => 24.098, 'intensity' => 0.9],
         ];
 
         $buckets = [
-            ['lat' => 51.505, 'lng' => -0.09, 'w_moving' => 80, 'w_stopped' => 10, 'w_total' => 90, 'intensity_moving' => 0.8, 'intensity_stopped' => 0.5, 'rank_moving_pct' => 0.0, 'rank_stopped_pct' => 33.0],
-            ['lat' => 51.51, 'lng' => -0.1, 'w_moving' => 85, 'w_stopped' => 12, 'w_total' => 97, 'intensity_moving' => 0.85, 'intensity_stopped' => 0.55, 'rank_moving_pct' => 33.0, 'rank_stopped_pct' => 66.0],
-            ['lat' => 51.515, 'lng' => -0.095, 'w_moving' => 90, 'w_stopped' => 15, 'w_total' => 105, 'intensity_moving' => 0.9, 'intensity_stopped' => 0.6, 'rank_moving_pct' => 66.0, 'rank_stopped_pct' => 0.0],
+            ['lat' => 56.951, 'lng' => 24.106, 'w_moving' => 80, 'w_stopped' => 10, 'w_total' => 90, 'intensity_moving' => 0.8, 'intensity_stopped' => 0.5, 'rank_moving_pct' => 0.0, 'rank_stopped_pct' => 33.0],
+            ['lat' => 56.953, 'lng' => 24.112, 'w_moving' => 85, 'w_stopped' => 12, 'w_total' => 97, 'intensity_moving' => 0.85, 'intensity_stopped' => 0.55, 'rank_moving_pct' => 33.0, 'rank_stopped_pct' => 66.0],
+            ['lat' => 56.948, 'lng' => 24.098, 'w_moving' => 90, 'w_stopped' => 15, 'w_total' => 105, 'intensity_moving' => 0.9, 'intensity_stopped' => 0.6, 'rank_moving_pct' => 66.0, 'rank_stopped_pct' => 0.0],
         ];
 
         $dateFrom = isset($filters['date_from']) ? (string) $filters['date_from'] : '';

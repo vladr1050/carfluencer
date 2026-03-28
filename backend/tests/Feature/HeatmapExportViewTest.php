@@ -7,13 +7,12 @@ use Tests\TestCase;
 
 class HeatmapExportViewTest extends TestCase
 {
-    public function test_driving_export_template_includes_activity_legend_and_heat(): void
+    public function test_driving_export_template_matches_portal_legend(): void
     {
         $html = View::make('reports.heatmap-export', [
             'exportMode' => 'heatmap',
             'legendVariant' => 'driving_heat',
             'heatData' => [],
-            'hotspots' => [],
             'modeLabel' => 'Driving',
             'viewportLabel' => 'Full',
             'periodLabel' => '2026-03-01 — 2026-03-31',
@@ -26,30 +25,26 @@ class HeatmapExportViewTest extends TestCase
                 'max_zoom' => 19,
             ],
             'heatLayerOptions' => [
-                'radius' => 14,
-                'blur' => 24,
-                'maxZoom' => 14,
-                'minOpacity' => 0.42,
-                'max' => 1.0,
-                'gradient' => ['0' => '#2c7bb6', '1' => '#d73027'],
+                'radius' => 24,
+                'blur' => 14,
+                'maxZoom' => 17,
+                'minOpacity' => 0.16,
+                'max' => 1.0 / 2.15,
+                'gradient' => ['0' => '#440154', '1' => '#fde725'],
             ],
         ])->render();
 
-        $this->assertStringContainsString('Low', $html);
-        $this->assertStringContainsString('High', $html);
+        $this->assertStringContainsString('same as advertiser portal', $html);
         $this->assertStringContainsString('leaflet.heat', $html);
-        $this->assertStringContainsString('hotspots', $html);
+        $this->assertStringContainsString('#440154', $html);
     }
 
-    public function test_parking_export_uses_density_legend_and_heat(): void
+    public function test_parking_export_template_matches_portal_legend(): void
     {
         $html = View::make('reports.heatmap-export', [
             'exportMode' => 'heatmap',
             'legendVariant' => 'parking_heat',
             'heatData' => [[56.95, 24.1, 0.5]],
-            'hotspots' => [
-                ['lat' => 56.95, 'lng' => 24.1, 'title' => 'Zone A', 'subtitle' => 'Relative dwell: 100%'],
-            ],
             'modeLabel' => 'Parking',
             'viewportLabel' => 'Full',
             'periodLabel' => '2026-03-01 — 2026-03-31',
@@ -62,17 +57,16 @@ class HeatmapExportViewTest extends TestCase
                 'max_zoom' => 19,
             ],
             'heatLayerOptions' => [
-                'radius' => 26,
-                'blur' => 30,
-                'maxZoom' => 15,
-                'minOpacity' => 0.38,
-                'max' => 1.0,
-                'gradient' => ['0' => '#edf8fb', '1' => '#006d2c'],
+                'radius' => 40,
+                'blur' => 21,
+                'maxZoom' => 17,
+                'minOpacity' => 0.27,
+                'max' => 1.0 / 1.82,
+                'gradient' => ['0' => '#1b5e20', '1' => '#c62828'],
             ],
         ])->render();
 
-        $this->assertStringContainsString('Short stay', $html);
-        $this->assertStringContainsString('Long stay', $html);
+        $this->assertStringContainsString('same as advertiser portal', $html);
         $this->assertStringContainsString('leaflet.heat', $html);
         $this->assertStringNotContainsString('circleMarker', $html);
     }

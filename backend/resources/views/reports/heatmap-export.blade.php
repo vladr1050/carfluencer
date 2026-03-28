@@ -21,24 +21,16 @@
         .legend-activity {
             left: auto;
             right: 12px;
-            max-width: 220px;
+            max-width: 240px;
         }
         .legend-activity .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 11px; }
         .legend-activity .swatch { width: 28px; height: 10px; border-radius: 2px; border: 1px solid rgba(0,0,0,0.15); }
-        .hotspot-pin .hotspot-card {
-            background: rgba(255,255,255,0.94);
-            border: 1px solid rgba(0,0,0,0.12);
-            border-radius: 6px;
-            padding: 4px 8px;
-            font: 11px/1.35 system-ui, sans-serif;
-            color: #111;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-            white-space: nowrap;
-            max-width: 200px;
-            white-space: normal;
+        .legend-activity .swatch-wide {
+            width: 120px;
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.15);
         }
-        .hotspot-pin .hotspot-card strong { display: block; font-size: 11px; }
-        .hotspot-pin .hotspot-card span { font-size: 10px; color: #444; }
     </style>
 </head>
 <body>
@@ -53,25 +45,25 @@
 @endphp
 @if($lv === 'parking_heat')
 <div class="legend legend-activity">
-    <strong>Parking density</strong>
-    <p style="font-size:10px;color:#555;margin:4px 0 6px;">Cell weight = rollup samples (dwell proxy; not exact minutes).</p>
-    <div class="row"><span class="swatch" style="background:#edf8fb;"></span> Short stay</div>
-    <div class="row"><span class="swatch" style="background:#66c2a4;"></span> Medium</div>
-    <div class="row"><span class="swatch" style="background:#006d2c;"></span> Long stay</div>
+    <strong>Parking (same as advertiser portal)</strong>
+    <div class="row" style="margin-top:6px;">
+        <span class="swatch-wide" style="background:linear-gradient(to right,#1b5e20 0%,#43a047 22%,#c6d84a 45%,#ffeb3b 62%,#fb8c00 80%,#c62828 100%);"></span>
+    </div>
+    <div class="row" style="margin-top:6px;">Low → high stopped intensity</div>
 </div>
 @else
 <div class="legend legend-activity">
-    <strong>Driving activity</strong>
-    <div class="row"><span class="swatch" style="background:#2c7bb6;"></span> Low</div>
-    <div class="row"><span class="swatch" style="background:#ffffbf;"></span> Medium</div>
-    <div class="row"><span class="swatch" style="background:#d73027;"></span> High</div>
+    <strong>Driving (same as advertiser portal)</strong>
+    <div class="row" style="margin-top:6px;">
+        <span class="swatch-wide" style="background:linear-gradient(to right,#440154,#3b528b,#21918c,#5ec962,#fde725);"></span>
+    </div>
+    <div class="row" style="margin-top:6px;">Low → high movement intensity</div>
 </div>
 @endif
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
     const heatData = @json($heatData);
-    const hotspots = @json($hotspots ?? []);
     const viewport = @json($viewport);
     const tile = @json($tileLayer);
     const heatOpts = @json($heatLayerOptions);
@@ -85,19 +77,11 @@
     }
     L.tileLayer(tile.url, tileOptions).addTo(map);
 
-    function escapeHtml(s) {
-        return String(s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
     function applyViewport() {
         if (viewport.fit_to_data) {
             if (heatData.length) {
                 const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
-                map.fitBounds(bounds.pad(0.14), { maxZoom: 15, animate: false });
+                map.fitBounds(bounds.pad(0.12), { maxZoom: 16, animate: false });
             } else {
                 map.setView([56.95, 24.11], 11);
             }
@@ -107,7 +91,7 @@
             [viewport.south, viewport.west],
             [viewport.north, viewport.east]
         );
-        map.fitBounds(b.pad(0.08), { maxZoom: 15, animate: false });
+        map.fitBounds(b.pad(0.06), { maxZoom: 15, animate: false });
     }
 
     applyViewport();
@@ -115,20 +99,6 @@
     if (heatData.length && typeof L.heatLayer === 'function') {
         L.heatLayer(heatData, heatOpts).addTo(map);
     }
-
-    (hotspots || []).forEach(function (h) {
-        if (h == null || typeof h.lat !== 'number' || typeof h.lng !== 'number') return;
-        const html = '<div class="hotspot-card"><strong>' + escapeHtml(h.title || '') + '</strong>'
-            + (h.subtitle ? '<span>' + escapeHtml(h.subtitle) + '</span>' : '') + '</div>';
-        L.marker([h.lat, h.lng], {
-            icon: L.divIcon({
-                className: 'hotspot-pin',
-                html: html,
-                iconSize: [200, 52],
-                iconAnchor: [100, 52]
-            })
-        }).addTo(map);
-    });
 </script>
 </body>
 </html>

@@ -57,31 +57,33 @@ final class HeatmapLeafletStyle
     }
 
     /**
-     * @return array<float, string>
+     * String keys — PHP casts float array keys to int and would collapse 0.25/0.5/0.75 to 0.
+     *
+     * @return array<string, string>
      */
     public static function gradientMoving(): array
     {
         return [
-            0.0 => '#440154',
-            0.25 => '#3b528b',
-            0.5 => '#21918c',
-            0.75 => '#5ec962',
-            1.0 => '#fde725',
+            '0' => '#440154',
+            '0.25' => '#3b528b',
+            '0.5' => '#21918c',
+            '0.75' => '#5ec962',
+            '1' => '#fde725',
         ];
     }
 
     /**
-     * @return array<float, string>
+     * @return array<string, string>
      */
     public static function gradientStopped(): array
     {
         return [
-            0.0 => '#1b5e20',
-            0.22 => '#43a047',
-            0.45 => '#c6d84a',
-            0.62 => '#ffeb3b',
-            0.8 => '#fb8c00',
-            1.0 => '#c62828',
+            '0' => '#1b5e20',
+            '0.22' => '#43a047',
+            '0.45' => '#c6d84a',
+            '0.62' => '#ffeb3b',
+            '0.8' => '#fb8c00',
+            '1' => '#c62828',
         ];
     }
 
@@ -131,26 +133,7 @@ final class HeatmapLeafletStyle
             ];
         }
 
-        /** Report export driving: dedicated config (premium contrast), not portal presets. */
-        $drivingCfg = config('reports.heatmaps.driving', []);
-        if (is_array($drivingCfg) && $drivingCfg !== []) {
-            $g = is_array($drivingCfg['gradient'] ?? null) ? $drivingCfg['gradient'] : self::gradientMoving();
-            $radius = (int) ($drivingCfg['radius'] ?? 14);
-            $blur = (int) ($drivingCfg['blur'] ?? 24);
-            $opacity = (float) ($drivingCfg['export_min_opacity'] ?? $drivingCfg['opacity'] ?? 0.42);
-            $opacity = max(0.05, min(1.0, $opacity));
-            $maxZoom = (int) ($drivingCfg['max_zoom'] ?? 14);
-
-            return [
-                'radius' => max(1, $radius),
-                'blur' => max(1, $blur),
-                'maxZoom' => max(10, min(22, $maxZoom)),
-                'minOpacity' => $opacity,
-                'max' => 1.0,
-                'gradient' => self::floatKeysToJsonGradient($g),
-            ];
-        }
-
+        /** Driving: same as {@see frontend/src/app/pages/advertiser/Heatmap.tsx} (moving heat). */
         $g = self::gradientMoving();
         $m = $dims['moving'];
 
@@ -167,7 +150,7 @@ final class HeatmapLeafletStyle
     /**
      * JSON object keys must be strings; leaflet.heat accepts numeric string keys.
      *
-     * @param  array<float, string>  $g
+     * @param  array<string, string>  $g
      * @return array<string, string>
      */
     private static function floatKeysToJsonGradient(array $g): array

@@ -182,36 +182,9 @@ return [
         ],
     ],
 
-    'heatmaps' => [
-        'driving' => [
-            'export_intensity_mode' => env('CAMPAIGN_REPORT_DRIVING_EXPORT_INTENSITY', 'log'),
-            'gradient' => [
-                '0' => '#2c7bb6',
-                '0.2' => '#abd9e9',
-                '0.4' => '#ffffbf',
-                '0.6' => '#fdae61',
-                '0.8' => '#f46d43',
-                '1' => '#d73027',
-            ],
-            'radius' => (int) env('CAMPAIGN_REPORT_DRIVING_HEAT_RADIUS', 14),
-            'blur' => (int) env('CAMPAIGN_REPORT_DRIVING_HEAT_BLUR', 24),
-            'max_zoom' => (int) env('CAMPAIGN_REPORT_DRIVING_HEAT_MAX_ZOOM', 14),
-            'export_min_opacity' => (float) env('CAMPAIGN_REPORT_DRIVING_HEAT_MIN_OPACITY', 0.42),
-            'heat_max' => (float) env('CAMPAIGN_REPORT_DRIVING_HEAT_MAX', 1.0),
-        ],
-        'parking' => [
-            'gradient' => [
-                '0' => '#edf8fb',
-                '0.3' => '#b2e2e2',
-                '0.5' => '#66c2a4',
-                '0.7' => '#2ca25f',
-                '1' => '#006d2c',
-            ],
-            'radius' => (int) env('CAMPAIGN_REPORT_PARKING_HEAT_RADIUS', 26),
-            'blur' => (int) env('CAMPAIGN_REPORT_PARKING_HEAT_BLUR', 30),
-            'max_zoom' => (int) env('CAMPAIGN_REPORT_PARKING_HEAT_MAX_ZOOM', 15),
-            'export_min_opacity' => (float) env('CAMPAIGN_REPORT_PARKING_HEAT_MIN_OPACITY', 0.38),
-            'heat_max' => (float) env('CAMPAIGN_REPORT_PARKING_HEAT_MAX', 1.0),
-        ],
-    ],
+    /*
+    | Report heatmap PNGs use the same Leaflet.heat settings as the Advertiser portal:
+    | HeatmapLeafletStyle::heatLayerOptionsForExport + heatmap_export.shadow_preset.
+    */
+    'heatmaps' => [],
 ];

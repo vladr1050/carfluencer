@@ -23,27 +23,15 @@ class HeatmapLeafletStyleTest extends TestCase
         $this->assertNotEquals($d['radius'], $p['radius']);
     }
 
-    public function test_driving_export_uses_reports_heatmaps_config_not_shadow_preset(): void
+    public function test_driving_export_uses_same_moving_layer_as_advertiser_portal(): void
     {
         Config::set('reports.heatmap_export.shadow_preset', 'xsmall');
-        Config::set('reports.heatmaps.driving', [
-            'export_intensity_mode' => 'log',
-            'gradient' => [
-                '0' => '#2E7D32',
-                '0.4' => '#FDD835',
-                '0.7' => '#FB8C00',
-                '1' => '#D32F2F',
-            ],
-            'radius' => 8,
-            'blur' => 3,
-            'opacity' => 0.85,
-        ]);
 
         $d = HeatmapLeafletStyle::heatLayerOptionsForExport('driving');
         $this->assertSame(8, $d['radius']);
         $this->assertSame(3, $d['blur']);
-        $this->assertSame(1.0, $d['max']);
-        $this->assertContains('#2E7D32', array_values($d['gradient']));
+        $this->assertEqualsWithDelta(1.0 / 2.15, $d['max'], 0.0001);
+        $this->assertSame('#440154', $d['gradient']['0'] ?? '');
     }
 
     public function test_tile_layer_matches_maptiler_when_key_set(): void
