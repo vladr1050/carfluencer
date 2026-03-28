@@ -79,10 +79,17 @@
     L.tileLayer(tile.url, tileOptions).addTo(map);
 
     function applyViewport() {
+        // Pixel padding so leaflet.heat radius/blur is not clipped at PNG edges (fixed frames + regional).
+        const padFixedPx = [110, 110];
+        const padFitDataPx = [64, 64];
         if (viewport.fit_to_data) {
             if (heatData.length) {
                 const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
-                map.fitBounds(bounds.pad(0.12), { maxZoom: Math.min(17, mapFitMaxZoom + 1), animate: false });
+                map.fitBounds(bounds.pad(0.14), {
+                    padding: padFitDataPx,
+                    maxZoom: Math.min(17, mapFitMaxZoom + 1),
+                    animate: false
+                });
             } else {
                 map.setView([56.95, 24.11], 11);
             }
@@ -91,8 +98,8 @@
         const b = L.latLngBounds(
             [viewport.south, viewport.west],
             [viewport.north, viewport.east]
-        );
-        map.fitBounds(b.pad(0.06), { maxZoom: mapFitMaxZoom, animate: false });
+        ).pad(0.14);
+        map.fitBounds(b, { padding: padFixedPx, maxZoom: mapFitMaxZoom, animate: false });
     }
 
     applyViewport();

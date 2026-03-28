@@ -56,13 +56,14 @@ final class ReportHeatmapExportRollupZoom
         $lngSpan = abs($bbox['max_lng'] - $bbox['min_lng']);
         $span = max($latSpan, $lngSpan);
 
+        // One zoom step below the “tightest” fit leaves margin so heat halos stay inside the frame.
         if ($span <= 0.12) {
-            return 17;
-        }
-        if ($span <= 0.35) {
             return 16;
         }
+        if ($span <= 0.35) {
+            return 15;
+        }
 
-        return 15;
+        return 14;
     }
 }

@@ -18,13 +18,13 @@ class ReportHeatmapExportRollupZoomTest extends TestCase
         $this->assertNotNull($center);
         $bboxCenter = ReportHeatmapExportBBox::forRollup($center);
         $this->assertSame(15, ReportHeatmapExportRollupZoom::forViewport($center, $bboxCenter));
-        $this->assertSame(17, ReportHeatmapExportRollupZoom::mapFitMaxZoom($center, $bboxCenter));
+        $this->assertSame(16, ReportHeatmapExportRollupZoom::mapFitMaxZoom($center, $bboxCenter));
 
         $rj = ReportHeatmapViewports::byId('riga_jurmala');
         $this->assertNotNull($rj);
         $bboxRj = ReportHeatmapExportBBox::forRollup($rj);
         $this->assertSame(12, ReportHeatmapExportRollupZoom::forViewport($rj, $bboxRj));
-        $this->assertSame(15, ReportHeatmapExportRollupZoom::mapFitMaxZoom($rj, $bboxRj));
+        $this->assertSame(14, ReportHeatmapExportRollupZoom::mapFitMaxZoom($rj, $bboxRj));
     }
 
     public function test_fit_to_data_uses_base_config_zoom(): void
