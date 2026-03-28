@@ -35,6 +35,61 @@ final class HeatmapRollupQueryService
             $normalization = 'p95';
         }
 
+        $raw = $this->fetchAggregatedSampleSums($deviceIds, $dateFrom, $dateTo, $mode, $mapZoom, $bbox);
+        if ($raw === []) {
+            return [];
+        }
+
+        $weights = array_column($raw, 'w');
+        $gamma = TelemetryHeatmapConfig::intensityGamma();
+        $cap = $mode === HeatmapAggregationService::MODE_PARKING
+            ? HeatmapIntensityNormalizer::capFromWeights($weights, $normalization)
+            : HeatmapIntensityNormalizer::capFromWeights($weights, $normalization);
+
+        $out = [];
+        foreach ($raw as $row) {
+            $w = (int) $row['w'];
+            $lat = (float) $row['lat'];
+            $lng = (float) $row['lng'];
+            $intensity = $mode === HeatmapAggregationService::MODE_PARKING
+                ? HeatmapIntensityNormalizer::normalizeStopped($w, $cap)
+                : HeatmapIntensityNormalizer::normalize($w, $cap, $gamma);
+
+            $out[] = [
+                'lat' => $lat,
+                'lng' => $lng,
+                'w' => $w,
+                'intensity' => $intensity,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * SUM(samples_count) per bucket from heatmap_cells_daily (no intensity normalization).
+     * PDF export applies its own scaling; API path uses {@see fetchBuckets}.
+     *
+     * @param  list<string>  $deviceIds  IMEIs
+     * @param  array{min_lat: float, max_lat: float, min_lng: float, max_lng: float}  $bbox
+     * @return list<array{lat: float, lng: float, w: int}>
+     */
+    public function fetchAggregatedSampleSums(
+        array $deviceIds,
+        string $dateFrom,
+        string $dateTo,
+        string $mode,
+        int $mapZoom,
+        array $bbox
+    ): array {
+        if ($deviceIds === []) {
+            return [];
+        }
+
+        if (! in_array($mode, [HeatmapAggregationService::MODE_DRIVING, HeatmapAggregationService::MODE_PARKING], true)) {
+            throw new \InvalidArgumentException('mode must be driving or parking');
+        }
+
         $tier = HeatmapBucketStrategy::tierFromMapZoom($mapZoom);
 
         $driver = DB::getDriverName();
@@ -54,30 +109,12 @@ final class HeatmapRollupQueryService
             ->havingRaw('SUM(samples_count) > 0')
             ->get();
 
-        if ($rows->isEmpty()) {
-            return [];
-        }
-
-        $weights = $rows->map(fn ($r) => (int) $r->cnt)->all();
-        $gamma = TelemetryHeatmapConfig::intensityGamma();
-        $cap = $mode === HeatmapAggregationService::MODE_PARKING
-            ? HeatmapIntensityNormalizer::capFromWeights($weights, $normalization)
-            : HeatmapIntensityNormalizer::capFromWeights($weights, $normalization);
-
         $out = [];
         foreach ($rows as $r) {
-            $w = (int) $r->cnt;
-            $lat = (float) $r->lat_bucket;
-            $lng = (float) $r->lng_bucket;
-            $intensity = $mode === HeatmapAggregationService::MODE_PARKING
-                ? HeatmapIntensityNormalizer::normalizeStopped($w, $cap)
-                : HeatmapIntensityNormalizer::normalize($w, $cap, $gamma);
-
             $out[] = [
-                'lat' => $lat,
-                'lng' => $lng,
-                'w' => $w,
-                'intensity' => $intensity,
+                'lat' => (float) $r->lat_bucket,
+                'lng' => (float) $r->lng_bucket,
+                'w' => (int) $r->cnt,
             ];
         }
 

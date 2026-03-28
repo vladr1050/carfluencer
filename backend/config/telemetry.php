@@ -124,6 +124,10 @@ return [
                 ['max_zoom' => 14, 'decimals' => 4],
                 ['max_zoom' => 22, 'decimals' => 5],
             ],
+            /**
+             * Driving rollup: exclude GPS points with speed <= this (km/h). Report/PDF export expects meaningful movement only.
+             */
+            'driving_min_speed_kmh' => (float) env('TELEMETRY_HEATMAP_ROLLUP_DRIVING_MIN_SPEED_KMH', 5.0),
         ],
     ],
 

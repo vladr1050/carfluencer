@@ -72,7 +72,9 @@
         <div><strong>Distinct driving grid cells:</strong> {{ $aCoverage['unique_cells'] ?? '—' }}</div>
         <div><strong>Reference grid cells (operational bounds):</strong> {{ $aCoverage['reference_cells'] ?? '—' }}</div>
         <div><strong>Footprint coverage ratio:</strong> @if(isset($aCoverage['coverage_ratio'])){{ number_format((float)$aCoverage['coverage_ratio'] * 100, 2) }}%@else—@endif</div>
-        @if(!empty($aCoverage['coverage_pattern']))
+        @if(!empty($aCoverage['coverage_narrative']))
+            <div><strong>Spatial summary:</strong> {{ $aCoverage['coverage_narrative'] }}</div>
+        @elseif(!empty($aCoverage['coverage_pattern']))
             <div><strong>Spatial pattern:</strong> {{ $aCoverage['coverage_pattern'] }}</div>
         @endif
     </div>
@@ -145,7 +147,7 @@
     @else
         <p>No map image for this view.</p>
     @endif
-    <p class="note">Intensity shows sampled parking activity for the selected period and vehicles.</p>
+    <p class="note">Heat layer shows parking rollup density (sample-weighted cells). Labels highlight top zones for the viewport.</p>
 </section>
 @endforeach
 @endif

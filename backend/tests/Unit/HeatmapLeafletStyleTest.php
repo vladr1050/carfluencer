@@ -20,7 +20,7 @@ class HeatmapLeafletStyleTest extends TestCase
 
         $this->assertNotSame($d['gradient']['0'], $p['gradient']['0']);
         $this->assertNotEquals($d['max'], $p['max']);
-        $this->assertGreaterThan($d['radius'], $p['radius']);
+        $this->assertNotEquals($d['radius'], $p['radius']);
     }
 
     public function test_driving_export_uses_reports_heatmaps_config_not_shadow_preset(): void

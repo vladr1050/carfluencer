@@ -66,6 +66,8 @@ class CampaignAnalyticsServiceTest extends TestCase
         $this->assertArrayHasKey('denominator_scope', $snap['coverage']);
         $this->assertSame(0, $snap['coverage']['unique_cells']);
         $this->assertNull($snap['coverage']['coverage_pattern']);
+        $this->assertArrayHasKey('coverage_narrative', $snap['coverage']);
+        $this->assertNull($snap['coverage']['coverage_narrative']);
     }
 
     public function test_top_locations_from_heatmap_cells_daily_parking_and_kpis_from_daily_impressions(): void

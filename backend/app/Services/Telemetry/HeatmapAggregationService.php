@@ -37,6 +37,8 @@ final class HeatmapAggregationService
 
         $decimals = HeatmapBucketStrategy::decimalPlacesForTier($zoomTier);
         $threshold = (float) config('telemetry.parking_speed_kmh_max');
+        $drivingMinSpeedKmh = (float) config('telemetry.heatmap.rollup.driving_min_speed_kmh', 5.0);
+        $drivingMinSpeedKmh = max(0.0, $drivingMinSpeedKmh);
 
         $dayStr = $dayUtc->copy()->utc()->toDateString();
         $start = $dayUtc->copy()->utc()->startOfDay();
@@ -56,7 +58,7 @@ SQL;
 SQL;
         }
 
-        DB::transaction(function () use ($dayStr, $zoomTier, $mode, $start, $end, $latExpr, $lngExpr, $whereMotion, $threshold): void {
+        DB::transaction(function () use ($dayStr, $zoomTier, $mode, $start, $end, $latExpr, $lngExpr, $whereMotion, $threshold, $drivingMinSpeedKmh): void {
             DB::table('heatmap_cells_daily')
                 ->where('day', $dayStr)
                 ->where('zoom_tier', $zoomTier)
@@ -83,14 +85,15 @@ GROUP BY device_id, {$latExpr}, {$lngExpr}
 HAVING COUNT(*) > 0
 SQL;
 
-            // Bindings must follow the order of ? in the SQL: SELECT day/mode/tier, then event_at bounds, then speed threshold in $whereMotion.
+            // Bindings: day/mode/tier, event_at bounds, then speed cutoff (driving floor vs parking ceiling).
+            $speedCutoff = $mode === self::MODE_DRIVING ? $drivingMinSpeedKmh : $threshold;
             DB::statement($sql, [
                 $dayStr,
                 $mode,
                 $zoomTier,
                 $start->toDateTimeString(),
                 $end->toDateTimeString(),
-                $threshold,
+                $speedCutoff,
             ]);
         });
     }

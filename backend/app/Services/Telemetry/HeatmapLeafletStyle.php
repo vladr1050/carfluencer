@@ -135,15 +135,16 @@ final class HeatmapLeafletStyle
         $drivingCfg = config('reports.heatmaps.driving', []);
         if (is_array($drivingCfg) && $drivingCfg !== []) {
             $g = is_array($drivingCfg['gradient'] ?? null) ? $drivingCfg['gradient'] : self::gradientMoving();
-            $radius = (int) ($drivingCfg['radius'] ?? 25);
-            $blur = (int) ($drivingCfg['blur'] ?? 15);
-            $opacity = (float) ($drivingCfg['opacity'] ?? 0.85);
+            $radius = (int) ($drivingCfg['radius'] ?? 14);
+            $blur = (int) ($drivingCfg['blur'] ?? 24);
+            $opacity = (float) ($drivingCfg['export_min_opacity'] ?? $drivingCfg['opacity'] ?? 0.42);
             $opacity = max(0.05, min(1.0, $opacity));
+            $maxZoom = (int) ($drivingCfg['max_zoom'] ?? 14);
 
             return [
                 'radius' => max(1, $radius),
                 'blur' => max(1, $blur),
-                'maxZoom' => 17,
+                'maxZoom' => max(10, min(22, $maxZoom)),
                 'minOpacity' => $opacity,
                 'max' => 1.0,
                 'gradient' => self::floatKeysToJsonGradient($g),

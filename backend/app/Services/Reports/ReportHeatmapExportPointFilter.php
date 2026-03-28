@@ -39,6 +39,36 @@ final class ReportHeatmapExportPointFilter
         return $out;
     }
 
+    /**
+     * @param  list<array{lat: float, lng: float, w: int}>  $cells
+     * @return list<array{lat: float, lng: float, w: int}>
+     */
+    public static function filterWeightedCells(array $cells): array
+    {
+        $out = [];
+        foreach ($cells as $p) {
+            if (! isset($p['lat'], $p['lng'])) {
+                continue;
+            }
+            $lat = (float) $p['lat'];
+            $lng = (float) $p['lng'];
+            $w = max(0, (int) ($p['w'] ?? 0));
+
+            if (! self::isValidCoordinate($lat, $lng)) {
+                continue;
+            }
+
+            if (config('reports.heatmap_export.clip_to_bounds') === true
+                && ! self::withinBounds($lat, $lng)) {
+                continue;
+            }
+
+            $out[] = ['lat' => $lat, 'lng' => $lng, 'w' => $w];
+        }
+
+        return $out;
+    }
+
     private static function isValidCoordinate(float $lat, float $lng): bool
     {
         if (is_nan($lat) || is_nan($lng) || is_infinite($lat) || is_infinite($lng)) {

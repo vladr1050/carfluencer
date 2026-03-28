@@ -7,12 +7,13 @@ use Tests\TestCase;
 
 class HeatmapExportViewTest extends TestCase
 {
-    public function test_driving_export_template_includes_activity_legend(): void
+    public function test_driving_export_template_includes_activity_legend_and_heat(): void
     {
         $html = View::make('reports.heatmap-export', [
-            'exportMode' => 'driving_heat',
+            'exportMode' => 'heatmap',
+            'legendVariant' => 'driving_heat',
             'heatData' => [],
-            'parkingCircles' => [],
+            'hotspots' => [],
             'modeLabel' => 'Driving',
             'viewportLabel' => 'Full',
             'periodLabel' => '2026-03-01 — 2026-03-31',
@@ -25,37 +26,29 @@ class HeatmapExportViewTest extends TestCase
                 'max_zoom' => 19,
             ],
             'heatLayerOptions' => [
-                'radius' => 25,
-                'blur' => 15,
-                'maxZoom' => 17,
-                'minOpacity' => 0.85,
+                'radius' => 14,
+                'blur' => 24,
+                'maxZoom' => 14,
+                'minOpacity' => 0.42,
                 'max' => 1.0,
-                'gradient' => ['0' => '#2E7D32', '1' => '#D32F2F'],
+                'gradient' => ['0' => '#2c7bb6', '1' => '#d73027'],
             ],
         ])->render();
 
-        $this->assertStringContainsString('Low activity', $html);
-        $this->assertStringContainsString('Top activity zones', $html);
+        $this->assertStringContainsString('Low', $html);
+        $this->assertStringContainsString('High', $html);
         $this->assertStringContainsString('leaflet.heat', $html);
+        $this->assertStringContainsString('hotspots', $html);
     }
 
-    public function test_parking_circles_export_has_legend_not_leaflet_heat(): void
+    public function test_parking_export_uses_density_legend_and_heat(): void
     {
         $html = View::make('reports.heatmap-export', [
-            'exportMode' => 'parking_circles',
-            'heatData' => [],
-            'parkingCircles' => [
-                [
-                    'lat' => 56.95,
-                    'lng' => 24.1,
-                    'radius_px' => 12.0,
-                    'fillColor' => '#8E24AA',
-                    'fillOpacity' => 0.72,
-                    'weight' => 2,
-                    'color' => '#333',
-                    'label' => 1,
-                    'tooltip' => 'Parking intensity: 100',
-                ],
+            'exportMode' => 'heatmap',
+            'legendVariant' => 'parking_heat',
+            'heatData' => [[56.95, 24.1, 0.5]],
+            'hotspots' => [
+                ['lat' => 56.95, 'lng' => 24.1, 'title' => 'Zone A', 'subtitle' => 'Relative dwell: 100%'],
             ],
             'modeLabel' => 'Parking',
             'viewportLabel' => 'Full',
@@ -68,11 +61,19 @@ class HeatmapExportViewTest extends TestCase
                 'subdomains' => null,
                 'max_zoom' => 19,
             ],
-            'heatLayerOptions' => [],
+            'heatLayerOptions' => [
+                'radius' => 26,
+                'blur' => 30,
+                'maxZoom' => 15,
+                'minOpacity' => 0.38,
+                'max' => 1.0,
+                'gradient' => ['0' => '#edf8fb', '1' => '#006d2c'],
+            ],
         ])->render();
 
-        $this->assertStringContainsString('Circle size = parking intensity', $html);
-        $this->assertStringNotContainsString('leaflet.heat', $html);
-        $this->assertStringContainsString('circleMarker', $html);
+        $this->assertStringContainsString('Short stay', $html);
+        $this->assertStringContainsString('Long stay', $html);
+        $this->assertStringContainsString('leaflet.heat', $html);
+        $this->assertStringNotContainsString('circleMarker', $html);
     }
 }
