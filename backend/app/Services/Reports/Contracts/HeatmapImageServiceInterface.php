@@ -9,6 +9,8 @@ interface HeatmapImageServiceInterface
      *
      * @param  list<int>  $vehicleIds
      * @param  string  $viewportId  {@see ReportHeatmapViewports} id (e.g. full, riga_jurmala)
+     * @param  list<array<string, mixed>>|null  $parkingTopLocations  When non-null and mode is parking, render
+     *                                                                circle export from analytics top_locations instead of Leaflet.heat.
      */
     public function renderPng(
         int $campaignId,
@@ -18,5 +20,6 @@ interface HeatmapImageServiceInterface
         string $mode,
         string $absolutePath,
         string $viewportId = 'full',
+        ?array $parkingTopLocations = null,
     ): void;
 }

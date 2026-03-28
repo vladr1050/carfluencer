@@ -13,7 +13,8 @@ final class BrowsershotCampaignReportPdfService implements CampaignReportPdfServ
         $drivingViews = $this->viewportImagesToRows($heatmapPngAbsolutePaths['driving'] ?? null);
         $parkingViews = $this->viewportImagesToRows($heatmapPngAbsolutePaths['parking'] ?? null);
 
-        $kpis = $snapshot['kpis'] ?? [];
+        /** @var array<string, mixed> $analytics */
+        $analytics = $snapshot['analytics_snapshot'] ?? [];
 
         $html = View::make('reports.pdf-html', [
             'advertiserName' => $snapshot['campaign']['advertiser_name'] ?? '—',
@@ -21,9 +22,7 @@ final class BrowsershotCampaignReportPdfService implements CampaignReportPdfServ
             'dateFrom' => $snapshot['date_from'] ?? '',
             'dateTo' => $snapshot['date_to'] ?? '',
             'vehicleCount' => count($snapshot['vehicle_ids'] ?? []),
-            'dataSource' => $kpis['data_source'] ?? '—',
-            'isEstimated' => ! empty($kpis['is_estimated']),
-            'kpis' => $kpis,
+            'analytics' => $analytics,
             'includeDriving' => ! empty($snapshot['settings']['include_driving_heatmap']),
             'includeParking' => ! empty($snapshot['settings']['include_parking_heatmap']),
             'drivingViewports' => $drivingViews,

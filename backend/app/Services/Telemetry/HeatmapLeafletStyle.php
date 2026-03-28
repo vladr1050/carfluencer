@@ -131,6 +131,25 @@ final class HeatmapLeafletStyle
             ];
         }
 
+        /** Report export driving: dedicated config (premium contrast), not portal presets. */
+        $drivingCfg = config('reports.heatmaps.driving', []);
+        if (is_array($drivingCfg) && $drivingCfg !== []) {
+            $g = is_array($drivingCfg['gradient'] ?? null) ? $drivingCfg['gradient'] : self::gradientMoving();
+            $radius = (int) ($drivingCfg['radius'] ?? 25);
+            $blur = (int) ($drivingCfg['blur'] ?? 15);
+            $opacity = (float) ($drivingCfg['opacity'] ?? 0.85);
+            $opacity = max(0.05, min(1.0, $opacity));
+
+            return [
+                'radius' => max(1, $radius),
+                'blur' => max(1, $blur),
+                'maxZoom' => 17,
+                'minOpacity' => $opacity,
+                'max' => 1.0,
+                'gradient' => self::floatKeysToJsonGradient($g),
+            ];
+        }
+
         $g = self::gradientMoving();
         $m = $dims['moving'];
 

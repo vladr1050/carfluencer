@@ -35,5 +35,6 @@
         <!-- Не ходим во внешний ClickHouse при тестах, даже если в .env включено -->
         <env name="TELEMETRY_CLICKHOUSE_ENABLED" value="false"/>
         <env name="CAMPAIGN_REPORT_BROWSER_DRIVER" value="fake"/>
+        <env name="REPORT_LOCATION_LABEL_PROVIDER" value="none"/>
     </php>
 </phpunit>

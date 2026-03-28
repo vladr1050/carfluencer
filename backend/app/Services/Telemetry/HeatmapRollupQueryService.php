@@ -109,4 +109,53 @@ final class HeatmapRollupQueryService
             ->whereIn('device_id', $deviceIds)
             ->sum('samples_count');
     }
+
+    /**
+     * Top parking cells by SUM(samples_count), no bbox (MVP: no clustering).
+     * {@see HeatmapBucketStrategy::tierFromMapZoom} must match rollup write/read tier.
+     *
+     * @param  list<string>  $deviceIds  IMEIs (heatmap_cells_daily.device_id)
+     * @return list<array{lat: float, lng: float, samples: int}>
+     */
+    public function fetchTopParkingBySamples(
+        array $deviceIds,
+        string $dateFrom,
+        string $dateTo,
+        int $mapZoom,
+        int $limit = 10
+    ): array {
+        if ($deviceIds === [] || $limit <= 0) {
+            return [];
+        }
+
+        $tier = HeatmapBucketStrategy::tierFromMapZoom($mapZoom);
+
+        $driver = DB::getDriverName();
+        $sumExpr = $driver === 'pgsql'
+            ? 'lat_bucket, lng_bucket, SUM(samples_count)::bigint AS cnt'
+            : 'lat_bucket, lng_bucket, CAST(SUM(samples_count) AS INTEGER) AS cnt';
+
+        $rows = DB::table('heatmap_cells_daily')
+            ->selectRaw($sumExpr)
+            ->whereBetween('day', [$dateFrom, $dateTo])
+            ->where('mode', HeatmapAggregationService::MODE_PARKING)
+            ->where('zoom_tier', $tier)
+            ->whereIn('device_id', $deviceIds)
+            ->groupBy('lat_bucket', 'lng_bucket')
+            ->havingRaw('SUM(samples_count) > 0')
+            ->orderByDesc(DB::raw('SUM(samples_count)'))
+            ->limit($limit)
+            ->get();
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = [
+                'lat' => round((float) $r->lat_bucket, 6),
+                'lng' => round((float) $r->lng_bucket, 6),
+                'samples' => (int) $r->cnt,
+            ];
+        }
+
+        return $out;
+    }
 }

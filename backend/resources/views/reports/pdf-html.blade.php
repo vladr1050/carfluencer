@@ -21,9 +21,25 @@
         .page-break { page-break-after: always; }
         .map-img { width: 100%; max-height: 380px; object-fit: contain; border: 1px solid #ddd; }
         .note { font-size: 9px; color: #666; margin-top: 6px; }
+        table.data { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10px; }
+        table.data th, table.data td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+        table.data th { background: #f5f5f5; }
+        .insights-summary { margin: 8px 0; line-height: 1.45; font-size: 10.5px; }
+        .insights-highlights { margin: 8px 0 0 18px; padding: 0; font-size: 10px; line-height: 1.4; }
+        .insights-highlights li { margin: 4px 0; }
     </style>
 </head>
 <body>
+
+@php
+    $aMeta = $analytics['meta'] ?? [];
+    $aKpis = $analytics['kpis'] ?? [];
+    $aDataSource = $aMeta['data_source'] ?? '—';
+    $aIsEstimated = !empty($aMeta['is_estimated']);
+    $aExposure = $analytics['exposure_split'] ?? [];
+    $aTopLocs = $analytics['top_locations'] ?? [];
+    $aInsights = $analytics['insights'] ?? [];
+@endphp
 
 <section>
     <h1>Campaign report</h1>
@@ -32,16 +48,60 @@
         <div><strong>Campaign:</strong> {{ $campaignName }}</div>
         <div><strong>Period:</strong> {{ $dateFrom }} — {{ $dateTo }}</div>
         <div><strong>Vehicles:</strong> {{ $vehicleCount }}</div>
-        <div><strong>Metrics source:</strong> {{ $dataSource }} @if($isEstimated)(estimated)@endif</div>
+        <div><strong>Metrics source:</strong> {{ $aDataSource }} @if($aIsEstimated)(estimated)@endif</div>
     </div>
     <h2>Key metrics</h2>
     <div class="kpis">
-        <div class="kpi"><div class="label">Impressions</div><div class="value">{{ $kpis['impressions'] ?? '—' }}</div></div>
-        <div class="kpi"><div class="label">Carfluencers</div><div class="value">{{ $kpis['carfluencers'] ?? 0 }}</div></div>
-        <div class="kpi"><div class="label">KM driven</div><div class="value">{{ $kpis['driving_distance_km'] ?? '—' }}</div></div>
-        <div class="kpi"><div class="label">Hours driving</div><div class="value">{{ $kpis['driving_time_hours'] ?? '—' }}</div></div>
-        <div class="kpi"><div class="label">Hours parked</div><div class="value">{{ $kpis['parking_time_hours'] ?? '—' }}</div></div>
+        <div class="kpi"><div class="label">Impressions</div><div class="value">{{ $aKpis['impressions'] ?? '—' }}</div></div>
+        <div class="kpi"><div class="label">Carfluencers</div><div class="value">{{ $aKpis['carfluencers'] ?? 0 }}</div></div>
+        <div class="kpi"><div class="label">KM driven</div><div class="value">{{ $aKpis['km_driven'] ?? '—' }}</div></div>
+        <div class="kpi"><div class="label">Hours driving</div><div class="value">{{ $aKpis['driving_hours'] ?? '—' }}</div></div>
+        <div class="kpi"><div class="label">Hours parked</div><div class="value">{{ $aKpis['parking_hours'] ?? '—' }}</div></div>
     </div>
+
+    <h2>Exposure split</h2>
+    <div class="meta">
+        <div><strong>Driving:</strong> {{ number_format((float)($aExposure['driving_share'] ?? 0) * 100, 2) }}%</div>
+        <div><strong>Parking:</strong> {{ number_format((float)($aExposure['parking_share'] ?? 0) * 100, 2) }}%</div>
+    </div>
+    <p class="note">Share of driving vs parking hours (same basis as key metrics).</p>
+
+    <h2>Campaign insights</h2>
+    @if(!empty($aInsights['summary']))
+        <p class="insights-summary">{{ $aInsights['summary'] }}</p>
+    @endif
+    @if(!empty($aInsights['highlights']) && is_array($aInsights['highlights']))
+        <ul class="insights-highlights">
+            @foreach($aInsights['highlights'] as $line)
+                @if(is_string($line) && $line !== '')
+                    <li>{{ $line }}</li>
+                @endif
+            @endforeach
+        </ul>
+    @endif
+
+    <h2>Top parking locations</h2>
+    @if(!empty($aTopLocs))
+        <table class="data">
+            <thead>
+            <tr>
+                <th>Location</th>
+                <th>Dwell proxy</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach($aTopLocs as $loc)
+                <tr>
+                    <td>{{ \App\Services\Reports\ReportTopLocationPresentation::locationCell($loc) }}</td>
+                    <td>{{ $loc['dwell_proxy'] ?? '—' }}</td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table>
+        <p class="note">Dwell proxy reflects aggregated parking sample intensity, not minutes parked.</p>
+    @else
+        <p class="note">No top parking cells for this period (rollup data may be empty).</p>
+    @endif
 </section>
 
 @if(!empty($includeDriving))

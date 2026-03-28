@@ -100,4 +100,85 @@ return [
      * When set, combined with telemetry.heatmap.max_date_range_days (stricter wins).
      */
     'max_calendar_days' => env('CAMPAIGN_REPORT_MAX_CALENDAR_DAYS'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Analytics snapshot (CampaignAnalyticsService)
+    |--------------------------------------------------------------------------
+    |
+    | Leaflet map zoom used to pick heatmap_cells_daily.zoom_tier for top parking
+    | locations (same mapping as HeatmapBucketStrategy::tierFromMapZoom). Align
+    | with typical advertiser viewport zoom if you need parity with rollup tiles.
+    |
+    */
+    'analytics' => [
+        'top_locations_map_zoom' => (int) env('CAMPAIGN_REPORT_ANALYTICS_TOP_LOCATIONS_ZOOM', 14),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Deterministic campaign insights (PDF snapshot; hours-based exposure wording)
+    |--------------------------------------------------------------------------
+    */
+    'insights' => [
+        'exposure' => [
+            'parking_dominant_min' => (float) env('REPORT_INSIGHTS_PARKING_DOM_MIN', 0.75),
+            'balanced_min' => (float) env('REPORT_INSIGHTS_BALANCED_MIN', 0.40),
+        ],
+        'location' => [
+            'highly_concentrated_top1_min' => (float) env('REPORT_INSIGHTS_LOC_TOP1_MIN', 0.50),
+            'highly_concentrated_top3_min' => (float) env('REPORT_INSIGHTS_LOC_TOP3_HIGH_MIN', 0.75),
+            'moderately_concentrated_top3_min' => (float) env('REPORT_INSIGHTS_LOC_TOP3_MOD_MIN', 0.50),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Report export heatmap visuals (PNG/PDF only — not portal/API)
+    |--------------------------------------------------------------------------
+    */
+    /*
+    |--------------------------------------------------------------------------
+    | Human-readable top location labels (reverse geocoding, report export only)
+    |--------------------------------------------------------------------------
+    |
+    | Provider "none" skips external calls. Use nominatim in production (.env).
+    | Respect Nominatim usage policy (max ~1 req/s; inter_request_delay_ms).
+    |
+    */
+    'location_labels' => [
+        'provider' => env('REPORT_LOCATION_LABEL_PROVIDER', 'nominatim'),
+        'cache_ttl_days' => (int) env('REPORT_LOCATION_LABEL_CACHE_TTL_DAYS', 90),
+        'timeout_seconds' => (int) env('REPORT_LOCATION_LABEL_TIMEOUT', 5),
+        'inter_request_delay_ms' => (int) env('REPORT_LOCATION_LABEL_DELAY_MS', 1100),
+        'nominatim' => [
+            'base_url' => env('NOMINATIM_BASE_URL', 'https://nominatim.openstreetmap.org'),
+            'user_agent' => env('NOMINATIM_USER_AGENT', ''),
+        ],
+    ],
+
+    'heatmaps' => [
+        'driving' => [
+            'export_intensity_mode' => env('CAMPAIGN_REPORT_DRIVING_EXPORT_INTENSITY', 'log'),
+            'gradient' => [
+                '0' => '#2E7D32',
+                '0.4' => '#FDD835',
+                '0.7' => '#FB8C00',
+                '1' => '#D32F2F',
+            ],
+            'radius' => (int) env('CAMPAIGN_REPORT_DRIVING_HEAT_RADIUS', 25),
+            'blur' => (int) env('CAMPAIGN_REPORT_DRIVING_HEAT_BLUR', 15),
+            'opacity' => (float) env('CAMPAIGN_REPORT_DRIVING_HEAT_OPACITY', 0.85),
+        ],
+        'parking' => [
+            'radius_scale' => (float) env('CAMPAIGN_REPORT_PARKING_RADIUS_SCALE', 1.2),
+            'min_radius' => (float) env('CAMPAIGN_REPORT_PARKING_MIN_RADIUS', 8),
+            'gradient' => [
+                '0' => '#CE93D8',
+                '0.5' => '#8E24AA',
+                '0.8' => '#E53935',
+                '1' => '#B71C1C',
+            ],
+        ],
+    ],
 ];

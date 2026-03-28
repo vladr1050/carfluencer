@@ -4,9 +4,10 @@ namespace App\Jobs;
 
 use App\Enums\CampaignReportStatus;
 use App\Models\CampaignReport;
+use App\Services\Analytics\CampaignAnalyticsService;
 use App\Services\Reports\CampaignReportDateSpan;
+use App\Services\Reports\CampaignReportLegacyKpisProjection;
 use App\Services\Reports\CampaignReportVehicleResolver;
-use App\Services\Reports\Contracts\CampaignReportMetricsServiceInterface;
 use App\Services\Reports\Contracts\CampaignReportPdfServiceInterface;
 use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
 use App\Services\Reports\ReportHeatmapViewports;
@@ -29,9 +30,9 @@ class GenerateCampaignReportJob implements ShouldQueue
 
     public function handle(
         CampaignReportVehicleResolver $vehicleResolver,
-        CampaignReportMetricsServiceInterface $metrics,
         HeatmapImageServiceInterface $heatmapImages,
         CampaignReportPdfServiceInterface $pdfService,
+        CampaignAnalyticsService $campaignAnalytics,
     ): void {
         $mem = (string) config('reports.php_memory_limit', '512M');
         if ($mem !== '' && $mem !== '0') {
@@ -62,7 +63,8 @@ class GenerateCampaignReportJob implements ShouldQueue
             $campaign = $report->campaign()->with(['advertiser.advertiserProfile'])->firstOrFail();
             $vehicleIds = $vehicleResolver->resolveForCampaign($campaign->id);
 
-            $kpis = $metrics->getKpis($campaign->id, $from, $to, $vehicleIds);
+            $analyticsSnapshot = $campaignAnalytics->buildSnapshot($campaign->id, $from, $to, $vehicleIds);
+            $kpis = CampaignReportLegacyKpisProjection::fromAnalyticsSnapshot($analyticsSnapshot);
 
             $disk = Storage::disk('local');
             $baseRel = $report->storageDirectoryRelative();
@@ -85,12 +87,14 @@ class GenerateCampaignReportJob implements ShouldQueue
                     $drivingRel[$id] = $baseRel.'/'.$fname;
                 }
             }
+            $parkingTopLocations = $analyticsSnapshot['top_locations'] ?? [];
+
             if ($report->include_parking_heatmap) {
                 foreach ($viewports as $vp) {
                     $id = $vp['id'];
                     $fname = 'parking_'.$id.'.png';
                     $abs = $baseAbs.'/'.$fname;
-                    $heatmapImages->renderPng($campaign->id, $from, $to, $vehicleIds, 'parking', $abs, $id);
+                    $heatmapImages->renderPng($campaign->id, $from, $to, $vehicleIds, 'parking', $abs, $id, $parkingTopLocations);
                     $parkingPaths[$id] = $abs;
                     $parkingRel[$id] = $baseRel.'/'.$fname;
                 }
@@ -132,6 +136,7 @@ class GenerateCampaignReportJob implements ShouldQueue
                     'include_driving_heatmap' => $report->include_driving_heatmap,
                     'include_parking_heatmap' => $report->include_parking_heatmap,
                 ],
+                'analytics_snapshot' => $analyticsSnapshot,
             ];
 
             $pdfRel = $baseRel.'/report.pdf';

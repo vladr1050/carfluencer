@@ -4,6 +4,10 @@ namespace App\Providers;
 
 use App\Models\CampaignVehicle;
 use App\Observers\CampaignVehicleObserver;
+use App\Services\Analytics\Contracts\LocationLabelProviderInterface;
+use App\Services\Analytics\NominatimLocationLabelProvider;
+use App\Services\Analytics\NullLocationLabelProvider;
+use App\Services\Analytics\TopLocationLabelResolver;
 use App\Services\Reports\BrowsershotCampaignReportPdfService;
 use App\Services\Reports\BrowsershotHeatmapImageService;
 use App\Services\Reports\CampaignReportMetricsService;
@@ -29,6 +33,17 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(CampaignReportMetricsServiceInterface::class, CampaignReportMetricsService::class);
+
+        $this->app->bind(LocationLabelProviderInterface::class, function () {
+            $p = strtolower(trim((string) config('reports.location_labels.provider', 'none')));
+
+            return match ($p) {
+                'nominatim' => new NominatimLocationLabelProvider,
+                default => new NullLocationLabelProvider,
+            };
+        });
+
+        $this->app->singleton(TopLocationLabelResolver::class);
 
         $this->app->bind(HeatmapImageServiceInterface::class, function ($app) {
             if (config('reports.browser_driver') === 'fake') {

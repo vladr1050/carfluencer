@@ -85,9 +85,25 @@ class CampaignReportGenerationTest extends TestCase
         $this->assertCount(3, $report->report_data_json['assets']['heatmap_pngs']['driving']);
         $this->assertCount(3, $report->report_data_json['assets']['heatmap_pngs']['parking']);
         $this->assertSame([$vehicle->id], $report->report_data_json['vehicle_ids']);
+        $json = $report->report_data_json;
+        $analytics = $json['analytics_snapshot'];
         // Как на портале: 1 vehicle × 31 inclusive day (Mar 1–31) × default 1.0 trips/vehicle/day
-        $this->assertSame(31, $report->report_data_json['kpis']['carfluencers']);
-        $this->assertSame(100, $report->report_data_json['kpis']['impressions']);
+        $this->assertSame(31, $analytics['kpis']['carfluencers']);
+        $this->assertSame(100, $analytics['kpis']['impressions']);
+        $this->assertArrayHasKey('analytics_snapshot', $json);
+        $this->assertSame('v1', $analytics['meta']['schema_version']);
+        $this->assertSame(100, $analytics['kpis']['impressions']);
+        $this->assertSame('daily_impressions', $analytics['meta']['data_source']);
+        // BC: top-level kpis mirrors legacy getKpis() key names, values copied from analytics_snapshot only.
+        $this->assertSame($analytics['kpis']['impressions'], $json['kpis']['impressions']);
+        $this->assertSame($analytics['kpis']['carfluencers'], $json['kpis']['carfluencers']);
+        $this->assertSame($analytics['kpis']['km_driven'], $json['kpis']['driving_distance_km']);
+        $this->assertSame($analytics['kpis']['driving_hours'], $json['kpis']['driving_time_hours']);
+        $this->assertSame($analytics['kpis']['parking_hours'], $json['kpis']['parking_time_hours']);
+        $this->assertSame($analytics['meta']['data_source'], $json['kpis']['data_source']);
+        $this->assertSame($analytics['meta']['is_estimated'], $json['kpis']['is_estimated']);
+        $this->assertArrayHasKey('insights', $analytics);
+        $this->assertIsString($analytics['insights']['summary']);
 
         $this->assertFileExists(Storage::disk('local')->path($report->file_path));
     }
