@@ -78,15 +78,14 @@
     }
     L.tileLayer(tile.url, tileOptions).addTo(map);
 
-    /** Fill the PNG with the frame: tight geographic bounds + minimal pixel inset only. */
-    const insetPx = 8;
+    const edgePadding = [0, 0];
 
     function applyViewport() {
         if (viewport.fit_to_data) {
             if (heatData.length) {
                 const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
-                map.fitBounds(bounds.pad(0.04), {
-                    padding: [insetPx, insetPx],
+                map.fitBounds(bounds, {
+                    padding: edgePadding,
                     maxZoom: tileMax,
                     animate: false
                 });
@@ -99,7 +98,7 @@
             [viewport.south, viewport.west],
             [viewport.north, viewport.east]
         );
-        map.fitBounds(b, { padding: [insetPx, insetPx], maxZoom: tileMax, animate: false });
+        map.fitBounds(b, { padding: edgePadding, maxZoom: tileMax, animate: false });
     }
 
     applyViewport();
