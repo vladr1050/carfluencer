@@ -16,6 +16,9 @@ use Throwable;
 /**
  * Queued telemetry sync for platform-scoped IMEIs: all vehicles, one campaign, or explicit vehicle IDs.
  * (No “whole ClickHouse table” scope — use CLI/scheduler if you need that.)
+ *
+ * Ops: worker needs `queue:work … --timeout=7200` (see deploy/supervisor-laravel.conf.example). With the
+ * database/redis drivers, `retry_after` must be greater than this job’s runtime (see config/queue.php).
  */
 class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
 {

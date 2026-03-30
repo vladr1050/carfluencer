@@ -5,7 +5,9 @@
 [program:carfluencer-queue]
 process_name=%(program_name)s_%(process_num)02d
 ; Воркер очереди: лимит не ниже job (CAMPAIGN_REPORT_PHP_MEMORY_LIMIT), иначе ini_set в job не поможет.
-command=/usr/bin/php8.4 -d memory_limit=1024M /var/www/carfluencer/backend/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+; --timeout=7200: SyncTelemetryScopeFromClickHouseJob / SyncVehicleTelemetryFromClickHouseJob ($timeout=7200).
+; Без этого Laravel по умолчанию обрывает дочерний процесс через 60s → повторы до MaxAttemptsExceeded.
+command=/usr/bin/php8.4 -d memory_limit=1024M /var/www/carfluencer/backend/artisan queue:work database --sleep=3 --tries=3 --timeout=7200 --max-time=3600
 autostart=true
 autorestart=true
 stopasgroup=true

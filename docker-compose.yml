@@ -60,8 +60,10 @@ services:
     environment:
       CAMPAIGN_REPORT_BROWSER_DRIVER: browsershot
       CAMPAIGN_REPORT_CHROME_PATH: /usr/bin/chromium
+      # Telemetry historical sync jobs use $timeout=7200; worker default --timeout=60 kills them → MaxAttemptsExceeded.
+      DB_QUEUE_RETRY_AFTER: '7500'
     working_dir: /var/www/html
-    command: php artisan queue:work database --sleep=3 --tries=3 --no-interaction
+    command: php artisan queue:work database --sleep=3 --tries=3 --timeout=7200 --no-interaction
     volumes:
       - ./backend:/var/www/html
     depends_on:

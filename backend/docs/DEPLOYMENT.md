@@ -49,6 +49,8 @@ php artisan view:cache
 
 Async jobs (ClickHouse sync и др.): **`deploy/supervisor-laravel.conf.example`** → программа **`carfluencer-queue`** (`queue:work database`, пользователь `www-data`). Индекс артефактов: **`deploy/README.md`**.
 
+Исторический sync из ClickHouse (`SyncTelemetryScopeFromClickHouseJob`) может работать до **7200s**: воркер обязан иметь **`--timeout=7200`** (иначе дефолт **60s** обрывает job и после нескольких попыток — `MaxAttemptsExceededException`). В **`config/queue.php`** для `database`/`redis` **`retry_after`** по умолчанию **7500**; при переопределении в **`.env`** держите значение **выше** времени самого долгого job.
+
 После деплоя **`deploy/post-pull.sh`** вызывает **`queue:restart`** — воркеры завершают текущий job и Supervisor поднимает новый процесс.
 
 ## Storage

@@ -7,7 +7,7 @@
 | `postgres` | PostgreSQL 16 |
 | `app` | PHP 8.4-FPM (Laravel) |
 | `nginx` | Веб-сервер, раздаёт `backend/public` |
-| `queue` | `php artisan queue:work` |
+| `queue` | `php artisan queue:work` (для исторической телеметрии: `--timeout=7200`, `DB_QUEUE_RETRY_AFTER=7500` в сервисе) |
 | `scheduler` | `php artisan schedule:work` (в т.ч. телеметрия по расписанию) |
 
 ClickHouse **в compose не входит** — остаётся внешний URL в `backend/.env` (`TELEMETRY_CLICKHOUSE_*`).

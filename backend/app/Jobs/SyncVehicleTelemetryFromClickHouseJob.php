@@ -13,6 +13,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
+/** @see SyncTelemetryScopeFromClickHouseJob (same worker timeout / queue retry_after requirements) */
 class SyncVehicleTelemetryFromClickHouseJob implements ShouldQueue
 {
     use Queueable;
