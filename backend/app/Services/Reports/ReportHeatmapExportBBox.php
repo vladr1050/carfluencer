@@ -35,6 +35,26 @@ final class ReportHeatmapExportBBox
     }
 
     /**
+     * Full operational heatmap envelope (reports.heatmap_export.bounds) for rollup reads.
+     * PDF export uses this for {@see BrowsershotHeatmapImageService} so cells
+     * are not dropped at viewport edges; the map frame stays the viewport from {@see forRollup}.
+     *
+     * @return array{min_lat: float, max_lat: float, min_lng: float, max_lng: float}
+     */
+    public static function operationalEnvelope(): array
+    {
+        /** @var array{south: float, north: float, west: float, east: float} $b */
+        $b = config('reports.heatmap_export.bounds');
+
+        return [
+            'min_lat' => (float) $b['south'],
+            'max_lat' => (float) $b['north'],
+            'min_lng' => (float) $b['west'],
+            'max_lng' => (float) $b['east'],
+        ];
+    }
+
+    /**
      * @param  array{min_lat: float, max_lat: float, min_lng: float, max_lng: float}  $bbox
      */
     public static function areaDeg2(array $bbox): float

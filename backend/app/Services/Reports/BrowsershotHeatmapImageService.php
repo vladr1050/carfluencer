@@ -34,9 +34,13 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
 
         $viewport = ReportHeatmapViewports::byId($viewportId) ?? ReportHeatmapViewports::all()[0];
 
-        $bbox = ReportHeatmapExportBBox::forRollup($viewport);
-        $zoom = ReportHeatmapExportRollupZoom::forViewport($viewport, $bbox);
+        $frameBbox = ReportHeatmapExportBBox::forRollup($viewport);
+        $zoom = ReportHeatmapExportRollupZoom::forViewport($viewport, $frameBbox);
         $zoom = max(1, min(22, $zoom));
+
+        $queryBbox = filter_var(config('reports.heatmap_export.pdf_rollup_query_full_operational_bounds', true), FILTER_VALIDATE_BOOLEAN)
+            ? ReportHeatmapExportBBox::operationalEnvelope()
+            : $frameBbox;
 
         $norm = (string) config('reports.normalization', 'p95');
         if (! in_array($norm, ['max', 'p95', 'p99'], true)) {
@@ -49,10 +53,10 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             'date_to' => $dateTo,
             'mode' => $mode,
             'normalization' => $norm,
-            'south' => $bbox['min_lat'],
-            'west' => $bbox['min_lng'],
-            'north' => $bbox['max_lat'],
-            'east' => $bbox['max_lng'],
+            'south' => $queryBbox['min_lat'],
+            'west' => $queryBbox['min_lng'],
+            'north' => $queryBbox['max_lat'],
+            'east' => $queryBbox['max_lng'],
             'zoom' => $zoom,
         ];
 
@@ -65,7 +69,7 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             $heatData[] = [(float) $p['lat'], (float) $p['lng'], (float) $p['intensity']];
         }
 
-        $mapFit = ReportHeatmapExportDataBounds::compute($heatData, $bbox);
+        $mapFit = ReportHeatmapExportDataBounds::compute($heatData, $queryBbox);
 
         $legendVariant = $mode === 'parking' ? 'parking_heat' : 'driving_heat';
 

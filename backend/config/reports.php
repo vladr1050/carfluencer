@@ -44,6 +44,11 @@ return [
             ? $s
             : null,
         'clip_to_bounds' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_CLIP_TO_BOUNDS', true), FILTER_VALIDATE_BOOLEAN),
+        /**
+         * PDF heatmap PNG: load rollup for full operational bounds so viewport edges aren’t missing cells;
+         * Leaflet still frames the viewport; zoom tier still follows the viewport span.
+         */
+        'pdf_rollup_query_full_operational_bounds' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_PDF_QUERY_FULL_BOUNDS', true), FILTER_VALIDATE_BOOLEAN),
         'bounds' => [
             'south' => $heatmapSouth,
             'north' => $heatmapNorth,
