@@ -60,11 +60,16 @@
     <div class="row" style="margin-top:6px;">Low → high movement intensity</div>
 </div>
 @endif
+@php
+    $leafletFitMaxExport = max(8, min(19, (int) config('reports.heatmap_export.leaflet_fit_max_zoom', 14)));
+@endphp
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
     const heatData = @json($heatData);
     const viewport = @json($viewport);
+    const mapFit = @json($mapFit ?? null);
+    const leafletFitMax = @json($leafletFitMaxExport);
     const tile = @json($tileLayer);
     const heatOpts = @json($heatLayerOptions);
     const map = L.map('map', { zoomControl: false, attributionControl: true });
@@ -81,12 +86,22 @@
     const edgePadding = [0, 0];
 
     function applyViewport() {
+        if (mapFit && mapFit.use_data_fit) {
+            const mz = Math.min(tileMax, parseInt(mapFit.max_zoom, 10) || leafletFitMax);
+            const b = L.latLngBounds(
+                [mapFit.south, mapFit.west],
+                [mapFit.north, mapFit.east]
+            );
+            map.fitBounds(b, { padding: edgePadding, maxZoom: mz, animate: false });
+            return;
+        }
         if (viewport.fit_to_data) {
             if (heatData.length) {
                 const bounds = L.latLngBounds(heatData.map(p => [p[0], p[1]]));
+                const mz = Math.min(tileMax, leafletFitMax);
                 map.fitBounds(bounds, {
                     padding: edgePadding,
-                    maxZoom: tileMax,
+                    maxZoom: mz,
                     animate: false
                 });
             } else {
@@ -98,7 +113,8 @@
             [viewport.south, viewport.west],
             [viewport.north, viewport.east]
         );
-        map.fitBounds(b, { padding: edgePadding, maxZoom: tileMax, animate: false });
+        const mz = Math.min(tileMax, leafletFitMax);
+        map.fitBounds(b, { padding: edgePadding, maxZoom: mz, animate: false });
     }
 
     applyViewport();

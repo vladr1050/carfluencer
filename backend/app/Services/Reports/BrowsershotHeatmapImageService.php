@@ -65,6 +65,8 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             $heatData[] = [(float) $p['lat'], (float) $p['lng'], (float) $p['intensity']];
         }
 
+        $mapFit = ReportHeatmapExportDataBounds::compute($heatData, $bbox);
+
         $legendVariant = $mode === 'parking' ? 'parking_heat' : 'driving_heat';
 
         $html = View::make('reports.heatmap-export', [
@@ -76,6 +78,7 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             'periodLabel' => $dateFrom.' — '.$dateTo,
             'vehicleCount' => count($vehicleIds),
             'viewport' => $viewport,
+            'mapFit' => $mapFit,
             'tileLayer' => HeatmapLeafletStyle::tileLayerConfig(),
             'heatLayerOptions' => HeatmapLeafletStyle::heatLayerOptionsForExport($mode),
         ])->render();

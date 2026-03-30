@@ -74,6 +74,17 @@ return [
         'max_cells' => (int) env('CAMPAIGN_REPORT_HEATMAP_MAX_CELLS', 50000),
         'density_high_cells_per_deg2' => (float) env('CAMPAIGN_REPORT_HEATMAP_DENSITY_HIGH', 2500),
         'density_low_cells_per_deg2' => (float) env('CAMPAIGN_REPORT_HEATMAP_DENSITY_LOW', 200),
+        /** PNG Leaflet fitBounds max zoom (cap single-street over-zoom). */
+        'leaflet_fit_max_zoom' => max(8, min(18, (int) env('CAMPAIGN_REPORT_HEATMAP_LEAFLET_FIT_MAX_ZOOM', 14))),
+        /** Fit map to active export points (rollup cells) instead of full viewport rectangle. */
+        'data_fit_to_active_cells' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT', true), FILTER_VALIDATE_BOOLEAN),
+        'data_fit_padding_ratio' => max(0.0, min(0.25, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_PAD', 0.12))),
+        'data_fit_min_points' => max(1, min(100, (int) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_MIN_POINTS', 2))),
+        'data_fit_min_lat_span_deg' => max(0.001, min(1.0, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_MIN_LAT_SPAN', 0.012))),
+        'data_fit_min_lng_span_deg' => max(0.001, min(1.0, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_MIN_LNG_SPAN', 0.018))),
+        /** If data span exceeds this, keep full viewport fit (e.g. scattered national-scale). */
+        'data_fit_max_lat_span_deg' => max(0.05, min(5.0, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_MAX_LAT_SPAN', 0.45))),
+        'data_fit_max_lng_span_deg' => max(0.05, min(5.0, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_MAX_LNG_SPAN', 0.7))),
     ],
 
     'normalization' => env('CAMPAIGN_REPORT_HEATMAP_NORMALIZATION', 'max'),
