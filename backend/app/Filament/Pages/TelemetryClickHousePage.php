@@ -324,6 +324,30 @@ class TelemetryClickHousePage extends Page
         );
     }
 
+    /**
+     * Actionable checks when historical sync dies after queue retries.
+     */
+    public static function telematicsQueueFailuresDescription(): HtmlString
+    {
+        $li1 = e(__('Open **Per-vehicle status** below → failed_jobs: the stored `exception` often shows the real cause (ClickHouse HTTP error, DB timeout). `MaxAttemptsExceededException` is only the final wrapper.'));
+        $li2 = e(__('On the server: queue worker must use `--timeout=7200` (historical jobs). After changing `config/queue.php` or `.env`, run `php artisan config:clear` (or `config:cache`) and `php artisan queue:restart`.'));
+        $li3 = e(__('Each ClickHouse HTTP request uses `TELEMETRY_CH_HTTP_TIMEOUT` (default 900s in config). Raise it (up to 3600) if queries are slow; lower `TELEMETRY_CH_HISTORICAL_ROWS_PER_CHUNK` if ClickHouse or PostgreSQL struggles on large pages.'));
+        $li4 = e(__('CLI: `php artisan queue:failed` then `php artisan queue:retry <uuid>` after fixing the root cause.'));
+
+        return new HtmlString(
+            <<<HTML
+            <div class="space-y-2 text-sm leading-relaxed">
+                <ul class="list-disc space-y-1 ps-5">
+                    <li>{$li1}</li>
+                    <li>{$li2}</li>
+                    <li>{$li3}</li>
+                    <li>{$li4}</li>
+                </ul>
+            </div>
+            HTML
+        );
+    }
+
     public function content(Schema $schema): Schema
     {
         return $schema
@@ -364,6 +388,10 @@ class TelemetryClickHousePage extends Page
                     ->info()
                     ->icon(Heroicon::OutlinedInformationCircle)
                     ->description(static::telematicsSyncInfoDescription()),
+                Callout::make(__('If queue jobs still fail (e.g. MaxAttemptsExceeded)'))
+                    ->warning()
+                    ->icon(Heroicon::OutlinedExclamationTriangle)
+                    ->description(static::telematicsQueueFailuresDescription()),
                 Section::make(__('ClickHouse → PostgreSQL'))
                     ->description(__('Choose the same kind of target as on the Heatmap page: campaign, one vehicle, or a group. Then incremental (cursor) or historical window.'))
                     ->schema([

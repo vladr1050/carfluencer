@@ -180,4 +180,23 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
             throw $e;
         }
     }
+
+    public function failed(?Throwable $exception): void
+    {
+        if ($exception === null) {
+            return;
+        }
+
+        Log::error('SyncTelemetryScopeFromClickHouseJob failed permanently', [
+            'mode' => $this->mode,
+            'scope' => $this->scope,
+            'campaign_id' => $this->campaignId,
+            'vehicle_ids' => $this->vehicleIds,
+            'date_from' => $this->dateFrom,
+            'date_to' => $this->dateTo,
+            'exception' => $exception::class,
+            'message' => $exception->getMessage(),
+            'previous' => $exception->getPrevious()?->getMessage(),
+        ]);
+    }
 }

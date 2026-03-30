@@ -103,4 +103,21 @@ class SyncVehicleTelemetryFromClickHouseJob implements ShouldQueue
             throw $e;
         }
     }
+
+    public function failed(?Throwable $exception): void
+    {
+        if ($exception === null) {
+            return;
+        }
+
+        Log::error('SyncVehicleTelemetryFromClickHouseJob failed permanently', [
+            'vehicle_id' => $this->vehicleId,
+            'mode' => $this->mode,
+            'date_from' => $this->dateFrom,
+            'date_to' => $this->dateTo,
+            'exception' => $exception::class,
+            'message' => $exception->getMessage(),
+            'previous' => $exception->getPrevious()?->getMessage(),
+        ]);
+    }
 }

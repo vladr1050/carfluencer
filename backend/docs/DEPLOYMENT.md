@@ -51,6 +51,8 @@ Async jobs (ClickHouse sync и др.): **`deploy/supervisor-laravel.conf.example
 
 Исторический sync из ClickHouse (`SyncTelemetryScopeFromClickHouseJob`) может работать до **7200s**: воркер обязан иметь **`--timeout=7200`** (иначе дефолт **60s** обрывает job и после нескольких попыток — `MaxAttemptsExceededException`). В **`config/queue.php`** для `database`/`redis` **`retry_after`** по умолчанию **7500**; при переопределении в **`.env`** держите значение **выше** времени самого долгого job.
 
+Исторический импорт делает много HTTP-запросов к ClickHouse: таймаут одного запроса — **`TELEMETRY_CH_HTTP_TIMEOUT`** в **`.env`** (в конфиге по умолчанию **900** с, максимум **3600**). Слишком низкое значение даёт обрыв посреди страницы и повторы job до `MaxAttemptsExceededException`.
+
 После деплоя **`deploy/post-pull.sh`** вызывает **`queue:restart`** — воркеры завершают текущий job и Supervisor поднимает новый процесс.
 
 ## Storage

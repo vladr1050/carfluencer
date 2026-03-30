@@ -62,7 +62,8 @@ return [
         'historical_max_pages' => max(100, min(500_000, (int) env('TELEMETRY_CH_HISTORICAL_MAX_PAGES', 50_000))),
         'historical_imei_chunk_size' => max(1, min(500, (int) env('TELEMETRY_CH_HISTORICAL_IMEI_CHUNK', 40))),
         'pause_ms_between_historical_chunks' => max(0, min(120_000, (int) env('TELEMETRY_CH_PAUSE_MS_HISTORICAL_CHUNK', 500))),
-        'http_timeout_seconds' => max(30, min(600, (int) env('TELEMETRY_CH_HTTP_TIMEOUT', 120))),
+        /** Per HTTP request to ClickHouse (one historical page can be large). Must stay below queue worker/job limits. */
+        'http_timeout_seconds' => max(30, min(3600, (int) env('TELEMETRY_CH_HTTP_TIMEOUT', 900))),
     ],
 
     'cursor_incremental' => 'clickhouse:device_locations:incremental',
