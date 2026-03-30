@@ -1,5 +1,6 @@
 @php
     /** @var array{url: string, attribution: string, subdomains: string|null, max_zoom: int} $tileLayer */
+    /** @var array{type: string, features: list<array<string, mixed>>} $rigaPriekspilsetas */
     /** @var array{min_lat: mixed, max_lat: mixed, min_lng: mixed, max_lng: mixed, polygon_geojson: mixed} $initial */
     $mapId = 'geo-zone-map-picker';
 @endphp
@@ -10,9 +11,18 @@
 </style>
 <div class="fi-geo-zone-map space-y-2">
     <p class="text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Draw a polygon or a rectangle on the map. Session centers must fall inside the shape. Vertices can be dragged after drawing. The bounding box fields update from the shape. “Refresh map from fields” replaces the shape with a rectangle from the numbers and clears the polygon.') }}
+        {{ __('Draw a polygon or a rectangle, or pick one of Riga’s six administrative districts (open data, CC BY 4.0). Session centers must fall inside the shape. The bounding box fields update from the shape. “Refresh map from fields” replaces the shape with a rectangle from the numbers and clears the polygon.') }}
     </p>
-    <div>
+    <div class="flex flex-wrap items-center gap-2">
+        <label class="inline-flex min-w-[min(100%,16rem)] flex-1 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <span class="shrink-0 font-medium whitespace-nowrap">{{ __('Riga district') }}</span>
+            <select
+                id="geo-zone-riga-district"
+                class="fi-select-input block w-full rounded-lg border border-gray-300 bg-white py-1.5 ps-3 pe-8 text-sm text-gray-950 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-primary-500"
+            >
+                <option value="">{{ __('— None —') }}</option>
+            </select>
+        </label>
         <button
             type="button"
             id="geo-zone-map-refresh-from-fields"
@@ -36,6 +46,7 @@
     const mapId = @js($mapId);
     const tileLayer = @js($tileLayer);
     const initial = @js($initial);
+    const rigaPriekspilsetas = @js($rigaPriekspilsetas);
 
     function roundCoord(v) {
         const n = Number(v);
@@ -118,6 +129,23 @@
             return gj ? { geojson: gj, bounds: layer.getBounds() } : null;
         }
         return null;
+    }
+
+    function ringLngLatToRoundedGeoJson(ring) {
+        const out = [];
+        for (let i = 0; i < ring.length; i++) {
+            const lng = roundCoord(ring[i][0]);
+            const lat = roundCoord(ring[i][1]);
+            if (lng === null || lat === null) return null;
+            out.push([lng, lat]);
+        }
+        if (out.length < 3) return null;
+        const a = out[0];
+        const b = out[out.length - 1];
+        if (a[0] !== b[0] || a[1] !== b[1]) {
+            out.push([a[0], a[1]]);
+        }
+        return { type: 'Polygon', coordinates: [out] };
     }
 
     function pushShapeToForm(cmp, geojson, bounds) {
@@ -210,6 +238,33 @@
             map.fitBounds(bounds.pad(0.08));
         }
 
+        function resetDistrictSelect() {
+            const ds = document.getElementById('geo-zone-riga-district');
+            if (ds) ds.value = '';
+        }
+
+        function applyRigaDistrictById(gidStr) {
+            const cmp = livewireFromMapEl(el);
+            if (!cmp || typeof cmp.set !== 'function') return;
+            const features = (rigaPriekspilsetas && rigaPriekspilsetas.features) ? rigaPriekspilsetas.features : [];
+            const f = features.find(function (x) {
+                return String(x.id) === String(gidStr);
+            });
+            if (!f || !f.geometry || f.geometry.type !== 'Polygon') return;
+            const ring = f.geometry.coordinates[0];
+            if (!ring || ring.length < 3) return;
+            const gj = ringLngLatToRoundedGeoJson(ring);
+            if (!gj) return;
+            const latlngs = gj.coordinates[0].map(function (pt) {
+                return L.latLng(pt[1], pt[0]);
+            });
+            drawnItems.clearLayers();
+            const poly = L.polygon(latlngs, { color: '#2563eb', weight: 2 });
+            drawnItems.addLayer(poly);
+            pushShapeToForm(cmp, gj, poly.getBounds());
+            map.fitBounds(poly.getBounds().pad(0.08));
+        }
+
         function loadInitialShape() {
             const latlngs = initialPolygonLatLngs();
             if (latlngs && latlngs.length >= 3) {
@@ -231,6 +286,7 @@
             if (e.layerType !== 'rectangle' && e.layerType !== 'polygon') return;
             drawnItems.clearLayers();
             drawnItems.addLayer(e.layer);
+            resetDistrictSelect();
             syncFromLayer(e.layer);
             map.fitBounds(e.layer.getBounds().pad(0.08));
         });
@@ -251,6 +307,7 @@
         const btn = document.getElementById('geo-zone-map-refresh-from-fields');
         if (btn) {
             btn.addEventListener('click', function () {
+                resetDistrictSelect();
                 const cmp = livewireFromMapEl(el);
                 if (cmp && typeof cmp.set === 'function') {
                     cmp.set('data.polygon_geojson', null, true);
@@ -258,6 +315,22 @@
                 const b = readBoundsFromInputs();
                 if (!b) return;
                 replaceRectangle(b);
+            });
+        }
+
+        const districtSel = document.getElementById('geo-zone-riga-district');
+        if (districtSel && rigaPriekspilsetas && Array.isArray(rigaPriekspilsetas.features)) {
+            rigaPriekspilsetas.features.forEach(function (f) {
+                const opt = document.createElement('option');
+                opt.value = String(f.id);
+                const name = (f.properties && f.properties.name_lv) ? f.properties.name_lv : String(f.id);
+                opt.textContent = name;
+                districtSel.appendChild(opt);
+            });
+            districtSel.addEventListener('change', function () {
+                const v = this.value;
+                if (!v) return;
+                applyRigaDistrictById(v);
             });
         }
 

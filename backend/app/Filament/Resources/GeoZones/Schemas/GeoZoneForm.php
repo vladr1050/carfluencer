@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\GeoZones\Schemas;
 
 use App\Services\Telemetry\HeatmapLeafletStyle;
+use App\Support\Geo\RigaPriekspilsetas;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -75,6 +76,7 @@ class GeoZoneForm
                             ->viewData(function (Get $get): array {
                                 return [
                                     'tileLayer' => HeatmapLeafletStyle::tileLayerConfig(),
+                                    'rigaPriekspilsetas' => RigaPriekspilsetas::featureCollection(),
                                     'initial' => [
                                         'min_lat' => $get('min_lat'),
                                         'max_lat' => $get('max_lat'),
