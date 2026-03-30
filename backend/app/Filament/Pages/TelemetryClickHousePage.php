@@ -168,20 +168,20 @@ class TelemetryClickHousePage extends Page
                     ->maxValue(1440)
                     ->required()
                     ->helperText(__(
-                        'Minimum minutes between incremental pulls (checked each scheduler pass). Default production cron runs `schedule:run` once per hour, so the tick is hourly — pulls cannot run more often than that even if you enter a smaller number. With `* * * * *` cron and `everyMinute()` in `bootstrap/app.php`, this interval is enforced every minute.'
+                        'Minimum minutes between incremental ClickHouse → PostgreSQL pulls (UTC). The scheduler checks often; use cron `* * * * *` for `schedule:run` so this interval is honored (see deploy/cron-carfluencer.example). If cron runs only hourly, pulls cannot run more often than once per hour regardless of this number. Per tick at most TELEMETRY_CH_MAX_IMEIS_PER_TICK vehicles (default 35), round-robin by last pull time.'
                     )),
                 TextInput::make('build_sessions_at')
                     ->label(__('Daily: rebuild stop/driving sessions (UTC, HH:MM)'))
                     ->placeholder('01:10')
                     ->required()
                     ->maxLength(5)
-                    ->helperText(__('After this UTC time, yesterday’s job becomes eligible. With an hourly tick it runs on the first pass after this moment (not necessarily at this exact minute).')),
+                    ->helperText(__('After this UTC time, yesterday’s job becomes eligible. Runs on the first scheduler pass after this moment (not necessarily at this exact minute).')),
                 TextInput::make('aggregate_daily_at')
                     ->label(__('Daily: aggregate impressions (UTC, HH:MM)'))
                     ->placeholder('01:40')
                     ->required()
                     ->maxLength(5)
-                    ->helperText(__('Same as above: UTC threshold for yesterday’s aggregates and heatmap rollup; first hourly pass after this time runs the job (once per day, cache-guarded).')),
+                    ->helperText(__('Same as above: UTC threshold for yesterday’s aggregates and heatmap rollup; first scheduler pass after this time runs the job (once per day, cache-guarded).')),
             ]);
     }
 
