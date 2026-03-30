@@ -95,7 +95,7 @@ return [
          */
         'rollup_read_zoom' => (int) env('CAMPAIGN_REPORT_HEATMAP_ROLLUP_ZOOM', 12),
         /** Cap distinct cells sent to the browser for PNG (keeps heaviest tail). */
-        'max_cells' => (int) env('CAMPAIGN_REPORT_HEATMAP_MAX_CELLS', 50000),
+        'max_cells' => (int) env('CAMPAIGN_REPORT_HEATMAP_MAX_CELLS', 25_000),
         'density_high_cells_per_deg2' => (float) env('CAMPAIGN_REPORT_HEATMAP_DENSITY_HIGH', 2500),
         'density_low_cells_per_deg2' => (float) env('CAMPAIGN_REPORT_HEATMAP_DENSITY_LOW', 200),
         /** PNG Leaflet fitBounds max zoom (cap single-street over-zoom). Higher = tighter composition on dense data. */

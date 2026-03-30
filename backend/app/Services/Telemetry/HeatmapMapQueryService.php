@@ -103,7 +103,9 @@ class HeatmapMapQueryService
         );
         $gamma = TelemetryHeatmapConfig::intensityGamma();
         $weights = array_column($rows, 'w');
-        $rankBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($weights);
+        // PDF/PNG export passes maxRollupCells; Browsershot only needs map.points — skip buckets + rank to save RAM.
+        $leanExport = $query->maxRollupCells !== null && $query->maxRollupCells > 0;
+        $rankBatch = $leanExport ? [] : HeatmapIntensityNormalizer::rankPercentBelowBatch($weights);
         $capMoving = $mode === 'driving'
             ? HeatmapIntensityNormalizer::capFromWeights($weights, $normalization)
             : 1;
@@ -121,17 +123,19 @@ class HeatmapMapQueryService
             $wm = $mode === 'driving' ? $w : 0;
             $ws = $mode === 'parking' ? $w : 0;
 
-            $bucketsOut[] = [
-                'lat' => $lat,
-                'lng' => $lng,
-                'w_moving' => $wm,
-                'w_stopped' => $ws,
-                'w_total' => $w,
-                'intensity_moving' => $mode === 'driving' ? $intensity : 0.0,
-                'intensity_stopped' => $mode === 'parking' ? $intensity : 0.0,
-                'rank_moving_pct' => $mode === 'driving' ? ($rankBatch[$idx] ?? 0.0) : null,
-                'rank_stopped_pct' => $mode === 'parking' ? ($rankBatch[$idx] ?? 0.0) : null,
-            ];
+            if (! $leanExport) {
+                $bucketsOut[] = [
+                    'lat' => $lat,
+                    'lng' => $lng,
+                    'w_moving' => $wm,
+                    'w_stopped' => $ws,
+                    'w_total' => $w,
+                    'intensity_moving' => $mode === 'driving' ? $intensity : 0.0,
+                    'intensity_stopped' => $mode === 'parking' ? $intensity : 0.0,
+                    'rank_moving_pct' => $mode === 'driving' ? ($rankBatch[$idx] ?? 0.0) : null,
+                    'rank_stopped_pct' => $mode === 'parking' ? ($rankBatch[$idx] ?? 0.0) : null,
+                ];
+            }
 
             $points[] = [
                 'lat' => $lat,
@@ -142,6 +146,8 @@ class HeatmapMapQueryService
                 'w_stopped' => $ws,
             ];
         }
+
+        unset($rows);
 
         $samplesTotal = $this->rollupQuery->sumSamplesInRange($imeis, $from, $to, $mode, $zoom);
 
