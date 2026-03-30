@@ -1,6 +1,6 @@
 @php
     /** @var array{url: string, attribution: string, subdomains: string|null, max_zoom: int} $tileLayer */
-    /** @var array{min_lat: mixed, max_lat: mixed, min_lng: mixed, max_lng: mixed} $initial */
+    /** @var array{min_lat: mixed, max_lat: mixed, min_lng: mixed, max_lng: mixed, polygon_geojson: mixed} $initial */
     $mapId = 'geo-zone-map-picker';
 @endphp
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -10,7 +10,7 @@
 </style>
 <div class="fi-geo-zone-map space-y-2">
     <p class="text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Use the rectangle tool on the map to draw the zone. Drag corners to adjust. Values above update automatically. After editing numbers, click the button to move the rectangle on the map.') }}
+        {{ __('Draw a polygon or a rectangle on the map. Session centers must fall inside the shape. Vertices can be dragged after drawing. The bounding box fields update from the shape. “Refresh map from fields” replaces the shape with a rectangle from the numbers and clears the polygon.') }}
     </p>
     <div>
         <button
@@ -57,6 +57,19 @@
         return L.latLngBounds([minLat, minLng], [maxLat, maxLng]);
     }
 
+    function initialPolygonLatLngs() {
+        const p = initial.polygon_geojson;
+        if (!p || p.type !== 'Polygon' || !Array.isArray(p.coordinates) || !Array.isArray(p.coordinates[0])) {
+            return null;
+        }
+        const ring = p.coordinates[0];
+        if (ring.length < 3) return null;
+        return ring.map(function (pt) {
+            if (!Array.isArray(pt) || pt.length < 2) return null;
+            return L.latLng(Number(pt[1]), Number(pt[0]));
+        }).filter(Boolean);
+    }
+
     function livewireFromMapEl(el) {
         if (!window.Livewire || !el) return null;
         const root = el.closest('[wire\\:id]');
@@ -66,10 +79,52 @@
         return window.Livewire.find(id);
     }
 
-    function pushBoundsToForm(cmp, bounds) {
+    function ringLatLngsToGeoJson(latlngs) {
+        const ring = [];
+        for (let i = 0; i < latlngs.length; i++) {
+            const ll = L.latLng(latlngs[i]);
+            const lng = roundCoord(ll.lng);
+            const lat = roundCoord(ll.lat);
+            if (lng === null || lat === null) return null;
+            ring.push([lng, lat]);
+        }
+        if (ring.length < 3) return null;
+        const a = ring[0];
+        const b = ring[ring.length - 1];
+        if (a[0] !== b[0] || a[1] !== b[1]) {
+            ring.push([a[0], a[1]]);
+        }
+        return { type: 'Polygon', coordinates: [ring] };
+    }
+
+    function rectangleToGeoJson(layer) {
+        const b = layer.getBounds();
+        const nw = b.getNorthWest();
+        const ne = b.getNorthEast();
+        const se = b.getSouthEast();
+        const sw = b.getSouthWest();
+        return ringLatLngsToGeoJson([nw, ne, se, sw]);
+    }
+
+    function layerToGeoJsonAndBounds(layer) {
+        if (layer instanceof L.Rectangle) {
+            const gj = rectangleToGeoJson(layer);
+            return gj ? { geojson: gj, bounds: layer.getBounds() } : null;
+        }
+        if (layer instanceof L.Polygon) {
+            const raw = layer.getLatLngs();
+            const ring = Array.isArray(raw[0]) ? raw[0] : raw;
+            const gj = ringLatLngsToGeoJson(ring);
+            return gj ? { geojson: gj, bounds: layer.getBounds() } : null;
+        }
+        return null;
+    }
+
+    function pushShapeToForm(cmp, geojson, bounds) {
+        const live = true;
+        cmp.set('data.polygon_geojson', geojson, live);
         const sw = bounds.getSouthWest();
         const ne = bounds.getNorthEast();
-        const live = true;
         cmp.set('data.min_lat', roundCoord(sw.lat), live);
         cmp.set('data.min_lng', roundCoord(sw.lng), live);
         cmp.set('data.max_lat', roundCoord(ne.lat), live);
@@ -111,17 +166,24 @@
         const drawControl = new L.Control.Draw({
             position: 'topright',
             draw: {
-                polygon: false,
-                polyline: false,
-                circle: false,
-                marker: false,
-                circlemarker: false,
+                polygon: {
+                    allowIntersection: false,
+                    showArea: false,
+                    shapeOptions: {
+                        color: '#2563eb',
+                        weight: 2,
+                    },
+                },
                 rectangle: {
                     shapeOptions: {
                         color: '#2563eb',
                         weight: 2,
                     },
                 },
+                polyline: false,
+                circle: false,
+                marker: false,
+                circlemarker: false,
             },
             edit: {
                 featureGroup: drawnItems,
@@ -133,8 +195,9 @@
         function syncFromLayer(layer) {
             const cmp = livewireFromMapEl(el);
             if (!cmp || typeof cmp.set !== 'function') return;
-            const b = layer.getBounds();
-            pushBoundsToForm(cmp, b);
+            const parsed = layerToGeoJsonAndBounds(layer);
+            if (!parsed) return;
+            pushShapeToForm(cmp, parsed.geojson, parsed.bounds);
         }
 
         function replaceRectangle(bounds) {
@@ -147,8 +210,25 @@
             map.fitBounds(bounds.pad(0.08));
         }
 
+        function loadInitialShape() {
+            const latlngs = initialPolygonLatLngs();
+            if (latlngs && latlngs.length >= 3) {
+                drawnItems.clearLayers();
+                const poly = L.polygon(latlngs, { color: '#2563eb', weight: 2 });
+                drawnItems.addLayer(poly);
+                map.fitBounds(poly.getBounds().pad(0.08));
+                return;
+            }
+            const initialBounds = parseInitialBounds();
+            if (initialBounds) {
+                replaceRectangle(initialBounds);
+                return;
+            }
+            map.setView([56.95, 24.1], 11);
+        }
+
         map.on('draw:created', function (e) {
-            if (e.layerType !== 'rectangle') return;
+            if (e.layerType !== 'rectangle' && e.layerType !== 'polygon') return;
             drawnItems.clearLayers();
             drawnItems.addLayer(e.layer);
             syncFromLayer(e.layer);
@@ -162,24 +242,26 @@
         });
 
         map.on('draw:deleted', function () {
-            /* Keep form values; user can refresh from fields or draw again. */
+            const cmp = livewireFromMapEl(el);
+            if (cmp && typeof cmp.set === 'function') {
+                cmp.set('data.polygon_geojson', null, true);
+            }
         });
 
         const btn = document.getElementById('geo-zone-map-refresh-from-fields');
         if (btn) {
             btn.addEventListener('click', function () {
+                const cmp = livewireFromMapEl(el);
+                if (cmp && typeof cmp.set === 'function') {
+                    cmp.set('data.polygon_geojson', null, true);
+                }
                 const b = readBoundsFromInputs();
                 if (!b) return;
                 replaceRectangle(b);
             });
         }
 
-        const initialBounds = parseInitialBounds();
-        if (initialBounds) {
-            replaceRectangle(initialBounds);
-        } else {
-            map.setView([56.95, 24.1], 11);
-        }
+        loadInitialShape();
 
         el._geoZoneLeafletMap = map;
     }

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\GeoZones\Schemas;
 
 use App\Services\Telemetry\HeatmapLeafletStyle;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
@@ -35,9 +36,10 @@ class GeoZoneForm
                             ->helperText('Inactive zones are ignored for parking-by-zone reports and zone attribution.'),
                     ])
                     ->columns(2),
-                Section::make('Bounding box (WGS84)')
-                    ->description('Parking sessions are matched when their center point falls inside this rectangle (south ≤ lat ≤ north, west ≤ lng ≤ east). Draw a rectangle on the map or type coordinates; the map and fields stay in sync when you draw or press “Refresh map from fields”.')
+                Section::make('Zone geometry (WGS84)')
+                    ->description('Parking sessions match when their center lies inside the polygon drawn on the map, or inside the bounding box if no polygon is set. Numeric fields are the axis-aligned envelope (south ≤ lat ≤ north, west ≤ lng ≤ east); they update when you draw. Use “Refresh map from fields” to replace the shape with a rectangle from the numbers (clears the polygon).')
                     ->schema([
+                        Hidden::make('polygon_geojson'),
                         TextInput::make('min_lat')
                             ->label('South (min latitude)')
                             ->required()
@@ -78,6 +80,7 @@ class GeoZoneForm
                                         'max_lat' => $get('max_lat'),
                                         'min_lng' => $get('min_lng'),
                                         'max_lng' => $get('max_lng'),
+                                        'polygon_geojson' => $get('polygon_geojson'),
                                     ],
                                 ];
                             }),

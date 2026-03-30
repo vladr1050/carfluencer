@@ -16,7 +16,8 @@ class CreateGeoZone extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        GeoZone::validateBoundingBox($data);
+        $data = GeoZone::normalizeGeometryFields($data);
+        GeoZone::validateZoneGeometry($data);
 
         return $data;
     }

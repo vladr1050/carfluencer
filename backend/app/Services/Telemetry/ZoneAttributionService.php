@@ -23,16 +23,10 @@ class ZoneAttributionService
         foreach ($sessions as $session) {
             $session->zones()->detach();
             foreach ($zones as $zone) {
-                if ($this->pointInBBox((float) $session->center_latitude, (float) $session->center_longitude, $zone)) {
+                if ($zone->containsPoint((float) $session->center_latitude, (float) $session->center_longitude)) {
                     $session->zones()->syncWithoutDetaching([$zone->id]);
                 }
             }
         }
-    }
-
-    private function pointInBBox(float $lat, float $lng, GeoZone $zone): bool
-    {
-        return $lat >= $zone->min_lat && $lat <= $zone->max_lat
-            && $lng >= $zone->min_lng && $lng <= $zone->max_lng;
     }
 }

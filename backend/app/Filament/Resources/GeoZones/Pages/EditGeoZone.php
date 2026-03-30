@@ -24,7 +24,8 @@ class EditGeoZone extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        GeoZone::validateBoundingBox($data);
+        $data = GeoZone::normalizeGeometryFields($data);
+        GeoZone::validateZoneGeometry($data);
 
         return $data;
     }

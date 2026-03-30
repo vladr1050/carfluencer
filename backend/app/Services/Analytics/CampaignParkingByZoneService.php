@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
 /**
  * Parking time (minutes) by {@see GeoZone} for campaign vehicles, from {@see StopSession} kind=parking.
  *
- * Attribution: session center (center_latitude/center_longitude) inside zone bbox; uses pivot zones when
+ * Attribution: session center (center_latitude/center_longitude) inside zone polygon if set, else bbox; uses pivot zones when
  * present (active zones only), otherwise evaluates all active GeoZones. Full clipped minutes are credited
  * to each matching zone — sums across zones can exceed unique session time when zones overlap.
  */
@@ -186,7 +186,7 @@ final class CampaignParkingByZoneService
         }
 
         return [
-            'definition' => 'Parking minutes = overlap of each stop_session (kind=parking) with [date_from 00:00 UTC, date_to 23:59:59 UTC], rounded to whole minutes. A session is attributed to every active GeoZone whose bbox contains its center; pivot stop_session_zone is used when present (active zones only).',
+            'definition' => 'Parking minutes = overlap of each stop_session (kind=parking) with [date_from 00:00 UTC, date_to 23:59:59 UTC], rounded to whole minutes. A session is attributed to every active GeoZone whose polygon (or bbox if no polygon) contains its center; pivot stop_session_zone is used when present (active zones only).',
             'overlap_note' => 'Sum of by_zone.parking_minutes may exceed totals.parking_minutes_in_window when zones overlap or one session matches multiple zones.',
             'totals' => [
                 'parking_minutes_in_window' => $totalUniqueMin,
@@ -238,18 +238,12 @@ final class CampaignParkingByZoneService
         $lng = (float) $session->center_longitude;
         $ids = [];
         foreach ($activeZones as $z) {
-            if ($this->pointInZoneBBox($lat, $lng, $z)) {
+            if ($z->containsPoint($lat, $lng)) {
                 $ids[] = (int) $z->id;
             }
         }
 
         return $ids;
-    }
-
-    private function pointInZoneBBox(float $lat, float $lng, GeoZone $zone): bool
-    {
-        return $lat >= $zone->min_lat && $lat <= $zone->max_lat
-            && $lng >= $zone->min_lng && $lng <= $zone->max_lng;
     }
 
     /**
