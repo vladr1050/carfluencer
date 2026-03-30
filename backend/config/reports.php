@@ -82,10 +82,11 @@ return [
                 'id' => 'riga',
                 'label' => 'Riga',
                 'fit_to_data' => false,
-                'south' => 56.93,
-                'west' => 24.055,
-                'north' => 57.01,
-                'east' => 24.205,
+                // Tighter frame ~1.2× zoom vs previous; centered on city core (~56.949, 24.105).
+                'south' => 56.916,
+                'west' => 24.043,
+                'north' => 56.982,
+                'east' => 24.168,
             ],
         ],
         /**
