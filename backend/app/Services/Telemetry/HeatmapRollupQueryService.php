@@ -12,6 +12,7 @@ final class HeatmapRollupQueryService
     /**
      * @param  list<string>  $deviceIds  IMEIs
      * @param  array{min_lat: float, max_lat: float, min_lng: float, max_lng: float}  $bbox
+     * @param  ?int  $maxCells  Keep top buckets by sample sum (PDF/PNG export); null = all.
      * @return list<array{lat: float, lng: float, w: int, intensity: float}>
      */
     public function fetchBuckets(
@@ -21,7 +22,8 @@ final class HeatmapRollupQueryService
         string $mode,
         int $mapZoom,
         array $bbox,
-        string $normalization = 'p95'
+        string $normalization = 'p95',
+        ?int $maxCells = null,
     ): array {
         if ($deviceIds === []) {
             return [];
@@ -35,7 +37,7 @@ final class HeatmapRollupQueryService
             $normalization = 'p95';
         }
 
-        $raw = $this->fetchAggregatedSampleSums($deviceIds, $dateFrom, $dateTo, $mode, $mapZoom, $bbox);
+        $raw = $this->fetchAggregatedSampleSums($deviceIds, $dateFrom, $dateTo, $mode, $mapZoom, $bbox, $maxCells);
         if ($raw === []) {
             return [];
         }
@@ -72,6 +74,7 @@ final class HeatmapRollupQueryService
      *
      * @param  list<string>  $deviceIds  IMEIs
      * @param  array{min_lat: float, max_lat: float, min_lng: float, max_lng: float}  $bbox
+     * @param  ?int  $maxCells  Limit to top-N buckets by total samples (bounded memory for huge rollups).
      * @return list<array{lat: float, lng: float, w: int}>
      */
     public function fetchAggregatedSampleSums(
@@ -80,7 +83,8 @@ final class HeatmapRollupQueryService
         string $dateTo,
         string $mode,
         int $mapZoom,
-        array $bbox
+        array $bbox,
+        ?int $maxCells = null,
     ): array {
         if ($deviceIds === []) {
             return [];
@@ -97,7 +101,7 @@ final class HeatmapRollupQueryService
             ? 'lat_bucket, lng_bucket, SUM(samples_count)::bigint AS cnt'
             : 'lat_bucket, lng_bucket, CAST(SUM(samples_count) AS INTEGER) AS cnt';
 
-        $rows = DB::table('heatmap_cells_daily')
+        $inner = DB::table('heatmap_cells_daily')
             ->selectRaw($sumExpr)
             ->whereBetween('day', [$dateFrom, $dateTo])
             ->where('mode', $mode)
@@ -106,8 +110,11 @@ final class HeatmapRollupQueryService
             ->whereBetween('lat_bucket', [(float) $bbox['min_lat'], (float) $bbox['max_lat']])
             ->whereBetween('lng_bucket', [(float) $bbox['min_lng'], (float) $bbox['max_lng']])
             ->groupBy('lat_bucket', 'lng_bucket')
-            ->havingRaw('SUM(samples_count) > 0')
-            ->get();
+            ->havingRaw('SUM(samples_count) > 0');
+
+        $rows = ($maxCells !== null && $maxCells > 0)
+            ? DB::query()->fromSub($inner, 'rollup_cap')->orderByDesc('cnt')->limit($maxCells)->get()
+            : $inner->get();
 
         $out = [];
         foreach ($rows as $r) {

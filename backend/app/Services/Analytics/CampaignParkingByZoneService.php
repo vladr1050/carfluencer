@@ -43,6 +43,7 @@ final class CampaignParkingByZoneService
             north: null,
             east: null,
             zoom: null,
+            maxRollupCells: null,
         );
 
         /** @var list<int> $vehicleIds */

@@ -34,6 +34,7 @@ final class CampaignReportMetricsService implements CampaignReportMetricsService
             north: null,
             east: null,
             zoom: null,
+            maxRollupCells: null,
         );
 
         $summary = $this->heatmapSummary->fetchForAdvertiser($query);

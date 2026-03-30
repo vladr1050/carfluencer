@@ -68,6 +68,7 @@ final class CampaignAnalyticsService
             north: null,
             east: null,
             zoom: null,
+            maxRollupCells: null,
         );
 
         /** @var list<int> $resolvedVehicleIds */

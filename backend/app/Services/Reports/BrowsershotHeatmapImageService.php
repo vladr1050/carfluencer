@@ -47,6 +47,8 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             $norm = 'p95';
         }
 
+        $maxCells = max(1000, (int) config('reports.heatmap_export.max_cells', 50_000));
+
         $filters = [
             'vehicle_ids' => $vehicleIds,
             'date_from' => $dateFrom,
@@ -58,6 +60,7 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
             'north' => $queryBbox['max_lat'],
             'east' => $queryBbox['max_lng'],
             'zoom' => $zoom,
+            'max_rollup_cells' => $maxCells,
         ];
 
         $bundle = $this->heatmapData->fetchHeatmapData($campaignId, $filters);

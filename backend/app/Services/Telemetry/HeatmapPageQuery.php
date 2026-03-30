@@ -13,6 +13,7 @@ final readonly class HeatmapPageQuery
 {
     /**
      * @param  list<int>  $vehicleIdsFilter  Empty = all vehicles on the campaign.
+     * @param  ?int  $maxRollupCells  Cap rollup rows (top by sample sum); null = all cells (advertiser UI).
      */
     public function __construct(
         public int $campaignId,
@@ -26,6 +27,7 @@ final readonly class HeatmapPageQuery
         public ?float $north,
         public ?float $east,
         public ?int $zoom,
+        public ?int $maxRollupCells = null,
     ) {}
 
     /**
@@ -48,6 +50,12 @@ final readonly class HeatmapPageQuery
 
         $vehicleIds = array_values(array_filter(array_map('intval', $filters['vehicle_ids'] ?? [])));
 
+        $maxRollupCells = null;
+        if (isset($filters['max_rollup_cells'])) {
+            $cap = max(0, (int) $filters['max_rollup_cells']);
+            $maxRollupCells = $cap > 0 ? $cap : null;
+        }
+
         return new self(
             campaignId: $campaignId,
             dateFrom: isset($filters['date_from']) ? (string) $filters['date_from'] : null,
@@ -60,6 +68,7 @@ final readonly class HeatmapPageQuery
             north: self::optionalFloat($filters['north'] ?? null),
             east: self::optionalFloat($filters['east'] ?? null),
             zoom: self::optionalInt($filters['zoom'] ?? null),
+            maxRollupCells: $maxRollupCells,
         );
     }
 

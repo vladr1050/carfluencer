@@ -91,7 +91,16 @@ class HeatmapMapQueryService
         ];
         $zoom = $viewport['zoom'];
 
-        $rows = $this->rollupQuery->fetchBuckets($imeis, $from, $to, $mode, $zoom, $bbox, $normalization);
+        $rows = $this->rollupQuery->fetchBuckets(
+            $imeis,
+            $from,
+            $to,
+            $mode,
+            $zoom,
+            $bbox,
+            $normalization,
+            $query->maxRollupCells,
+        );
         $gamma = TelemetryHeatmapConfig::intensityGamma();
         $weights = array_column($rows, 'w');
         $rankBatch = HeatmapIntensityNormalizer::rankPercentBelowBatch($weights);
