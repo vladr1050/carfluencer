@@ -37,13 +37,15 @@ php artisan view:cache
 
 ## Scheduler
 
-На VPS после **`deploy/setup-ubuntu-server.sh`** cron уже в **`/etc/cron.d/carfluencer-laravel`** (`www-data`, `php8.4 artisan schedule:run`). Вручную:
+На VPS после **`deploy/setup-ubuntu-server.sh`** cron в **`/etc/cron.d/carfluencer-laravel`** должен вызывать **`schedule:run` достаточно часто** для интервала из админки (Telemetry → automation). В **`bootstrap/app.php`** задача **`telemetry:scheduler-tick`** стоит на **`everyMinute()`** — при **`0 * * * *`** cron инкрементальный pull фактически выполняется **раз в час**, независимо от «10 минут» в UI.
+
+Рекомендуемый cron (раз в минуту):
 
 ```cron
-0 * * * * www-data cd /var/www/carfluencer/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
+* * * * * www-data cd /var/www/carfluencer/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
 ```
 
-Инкрементальный опрос ClickHouse в тике не чаще одного раза в час при таком cron; для интервала из админки меньше 60 минут используйте `* * * * *` и `everyMinute()` в `bootstrap/app.php`.
+Шаблон: **`deploy/cron-carfluencer.example`**. Старые серверы с **`0 * * * *`** замените на **`* * * * *`**, иначе фоновая инкрементальная подгрузка ClickHouse почти не крутится.
 
 ## Queues
 

@@ -1,11 +1,10 @@
-# Laravel scheduler: schedule:run раз в час; telemetry:scheduler-tick в bootstrap/app.php — hourly().
+# Laravel scheduler: `telemetry:scheduler-tick` в bootstrap/app.php — everyMinute(); реальный интервал задаётся в админке (Telemetry).
+# Нужен `schedule:run` не реже этого интервала: по умолчанию * * * * * (раз в минуту). Раз в час — только если интервал ≥ 60 мин и устраивает грубость.
 # Установка: sudo cp deploy/cron-carfluencer.example /etc/cron.d/carfluencer-laravel
 # Замени пути, если корень репозитория не /var/www/carfluencer.
 # Права: chmod 644 /etc/cron.d/carfluencer-laravel
 #
-# Чаще инкрементальный ClickHouse (интервал из админки меньше 60 мин): верни * * * * * и everyMinute() в bootstrap/app.php.
-#
 SHELL=/bin/sh
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
-0 * * * * www-data cd /var/www/carfluencer/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
+* * * * * www-data cd /var/www/carfluencer/backend && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1

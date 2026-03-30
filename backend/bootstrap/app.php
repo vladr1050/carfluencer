@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('telemetry:scheduler-tick')->hourly()->withoutOverlapping();
+        // Runs every scheduler invocation; internal interval + empty-IMEI handling gate real work.
+        // Cron must call `schedule:run` at least as often as the admin incremental interval (use * * * * * for < 60 min).
+        $schedule->command('telemetry:scheduler-tick')->everyMinute()->withoutOverlapping(5);
     })
     ->create();

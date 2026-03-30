@@ -69,17 +69,7 @@ class TelemetrySchedulerTickCommand extends Command
                 $lastAt = null;
             }
             if ($lastAt !== null && now('UTC')->diffInMinutes($lastAt) < $interval) {
-                TelemetrySyncEventRecorder::record(
-                    TelemetrySyncEvent::SOURCE_SCHEDULER,
-                    TelemetrySyncEvent::ACTION_INCREMENTAL_SKIPPED,
-                    TelemetrySyncEvent::STATUS_SKIPPED,
-                    'Scheduler tick: incremental pull skipped (interval not elapsed).',
-                    [
-                        'interval_minutes' => $interval,
-                        'last_incremental_at_utc' => $last,
-                    ],
-                );
-
+                // Silent: with everyMinute() schedule, logging each skip would flood telemetry_sync_events.
                 return;
             }
         }
@@ -92,6 +82,22 @@ class TelemetrySchedulerTickCommand extends Command
         $maxPerTick = (int) config('telemetry.clickhouse.max_imeis_per_scheduler_tick', 35);
         if ($maxPerTick > 0) {
             $imeis = array_slice($imeis, 0, $maxPerTick);
+        }
+
+        if ($imeis === []) {
+            Cache::remember('telemetry:incremental-no-pull-targets-notice', 3600, function (): true {
+                TelemetrySyncEventRecorder::record(
+                    TelemetrySyncEvent::SOURCE_SCHEDULER,
+                    TelemetrySyncEvent::ACTION_INCREMENTAL_SKIPPED,
+                    TelemetrySyncEvent::STATUS_SKIPPED,
+                    'Scheduler: incremental pull skipped — no vehicles with **Scheduled ClickHouse pull** enabled (Fleet → vehicle).',
+                    [],
+                );
+
+                return true;
+            });
+
+            return;
         }
 
         $pauseUs = ((int) config('telemetry.clickhouse.pause_ms_between_imei', 300)) * 1000;
