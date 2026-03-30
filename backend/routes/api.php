@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Advertiser\AdvertiserCampaignController;
+use App\Http\Controllers\Api\Advertiser\AdvertiserCampaignParkingByZoneController;
 use App\Http\Controllers\Api\Advertiser\AdvertiserCampaignProofController;
 use App\Http\Controllers\Api\Advertiser\AdvertiserCampaignVehicleController;
 use App\Http\Controllers\Api\Advertiser\AdvertiserDashboardController;
@@ -60,6 +61,7 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
         Route::get('vehicles', [AdvertiserVehicleController::class, 'index']);
         Route::get('vehicles/{vehicle}', [AdvertiserVehicleController::class, 'show']);
         Route::get('heatmap', [AdvertiserHeatmapController::class, 'show']);
+        Route::get('campaigns/{campaign}/parking-by-zone', [AdvertiserCampaignParkingByZoneController::class, 'show']);
         Route::get('map-basemap', AdvertiserMapBasemapController::class);
         Route::get('pricing', [AdvertiserPricingController::class, 'index']);
         Route::get('profile-discounts', [AdvertiserProfileController::class, 'discounts']);

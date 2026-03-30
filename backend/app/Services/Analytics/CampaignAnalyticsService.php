@@ -24,6 +24,7 @@ final class CampaignAnalyticsService
         private readonly TopLocationLabelResolver $topLocationLabelResolver,
         private readonly CampaignInsightsService $campaignInsightsService,
         private readonly CampaignCoverageService $campaignCoverageService,
+        private readonly CampaignParkingByZoneService $campaignParkingByZoneService,
     ) {}
 
     /**
@@ -43,7 +44,8 @@ final class CampaignAnalyticsService
      *     time_distribution: array{day_vs_night: array{day: float, night: float, is_stub: bool}},
      *     meta: array{campaign_id: int, date_from: string, date_to: string, vehicle_ids: list<int>, schema_version: string, data_source: string, is_estimated: bool},
      *     coverage: array{unique_cells: int, reference_cells: int, coverage_ratio: float, coverage_pattern: string|null, coverage_narrative: string|null, method: string, denominator_scope: string, rollup_tier_index: int, map_zoom_used: int},
-     *     insights: array{summary: string|null, highlights: list<string>, exposure_pattern: string|null, location_pattern: string|null}
+     *     insights: array{summary: string|null, highlights: list<string>, exposure_pattern: string|null, location_pattern: string|null},
+     *     parking_by_zone: array<string, mixed>
      * }
      */
     public function buildSnapshot(
@@ -133,6 +135,13 @@ final class CampaignAnalyticsService
             $topLocations
         );
 
+        $parkingByZone = $this->campaignParkingByZoneService->build(
+            $campaignId,
+            $dateFrom,
+            $dateTo,
+            $vehicleIds
+        );
+
         $snapshot = [
             'kpis' => [
                 'impressions' => $impressions,
@@ -163,6 +172,7 @@ final class CampaignAnalyticsService
                 'is_estimated' => (bool) ($kpisRaw['is_estimated'] ?? false),
             ],
             'coverage' => $coverage,
+            'parking_by_zone' => $parkingByZone,
         ];
 
         $snapshot['insights'] = $this->campaignInsightsService->buildInsights($snapshot);

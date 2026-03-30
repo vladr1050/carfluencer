@@ -47,6 +47,8 @@ class CampaignAnalyticsServiceTest extends TestCase
         $this->assertSame(0.0, $snap['kpis']['driving_hours']);
         $this->assertSame(0.0, $snap['kpis']['parking_hours']);
         $this->assertSame([], $snap['top_locations']);
+        $this->assertArrayHasKey('parking_by_zone', $snap);
+        $this->assertSame(0, $snap['parking_by_zone']['totals']['parking_minutes_in_window']);
         $this->assertTrue($snap['time_distribution']['day_vs_night']['is_stub']);
         $this->assertSame(0.75, $snap['time_distribution']['day_vs_night']['day']);
         $this->assertSame(0.25, $snap['time_distribution']['day_vs_night']['night']);

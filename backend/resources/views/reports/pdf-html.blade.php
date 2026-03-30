@@ -40,6 +40,7 @@
     $aTopLocs = $analytics['top_locations'] ?? [];
     $aInsights = $analytics['insights'] ?? [];
     $aCoverage = is_array($analytics['coverage'] ?? null) ? $analytics['coverage'] : [];
+    $aParkingByZone = is_array($analytics['parking_by_zone'] ?? null) ? $analytics['parking_by_zone'] : null;
 @endphp
 
 <section>
@@ -115,6 +116,52 @@
         <p class="note">Dwell proxy reflects aggregated parking sample intensity, not minutes parked.</p>
     @else
         <p class="note">No top parking cells for this period (rollup data may be empty).</p>
+    @endif
+
+    <h2>Parking time by zone</h2>
+    @if($aParkingByZone)
+        <div class="meta">
+            <div><strong>Parking minutes (window overlap):</strong> {{ (int)($aParkingByZone['totals']['parking_minutes_in_window'] ?? 0) }}</div>
+            <div><strong>Parking sessions:</strong> {{ (int)($aParkingByZone['totals']['parking_sessions_in_window'] ?? 0) }}</div>
+        </div>
+        @if(!empty($aParkingByZone['by_zone']) && is_array($aParkingByZone['by_zone']))
+            <table class="data">
+                <thead>
+                <tr>
+                    <th>Zone</th>
+                    <th>Code</th>
+                    <th>Minutes</th>
+                    <th>Sessions</th>
+                    <th>Vehicles</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach($aParkingByZone['by_zone'] as $z)
+                    @if(is_array($z))
+                        <tr>
+                            <td>{{ $z['name'] ?? '—' }}</td>
+                            <td>{{ $z['code'] ?? '—' }}</td>
+                            <td>{{ (int)($z['parking_minutes'] ?? 0) }}</td>
+                            <td>{{ (int)($z['sessions_count'] ?? 0) }}</td>
+                            <td>{{ (int)($z['vehicles_distinct'] ?? 0) }}</td>
+                        </tr>
+                    @endif
+                @endforeach
+                </tbody>
+            </table>
+        @else
+            <p class="note">No active GeoZones matched session centers (configure zones or check attribution).</p>
+        @endif
+        @php
+            $uMin = (int)($aParkingByZone['unattributed']['parking_minutes'] ?? 0);
+            $uSess = (int)($aParkingByZone['unattributed']['sessions_count'] ?? 0);
+        @endphp
+        @if($uMin > 0 || $uSess > 0)
+            <p class="note">Outside zones: {{ $uMin }} minutes ({{ $uSess }} sessions).</p>
+        @endif
+        <p class="note">{{ $aParkingByZone['overlap_note'] ?? '' }}</p>
+    @else
+        <p class="note">No parking-by-zone breakdown in this snapshot.</p>
     @endif
 </section>
 
