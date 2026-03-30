@@ -41,9 +41,15 @@ class GeoZone extends Model
 
     public function containsPoint(float $lat, float $lng): bool
     {
-        $ring = $this->polygonOuterRingLngLat();
-        if ($ring !== null && count($ring) >= 4) {
-            return self::pointInPolygonRing($lat, $lng, $ring);
+        $rings = $this->polygonOuterRingsLngLat();
+        if ($rings !== []) {
+            foreach ($rings as $ring) {
+                if (count($ring) >= 4 && self::pointInPolygonRing($lat, $lng, $ring)) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         return $lat >= $this->min_lat && $lat <= $this->max_lat
@@ -51,21 +57,56 @@ class GeoZone extends Model
     }
 
     /**
-     * @return list<array{0: float, 1: float}>|null Outer ring as [lng, lat], closed (first equals last).
+     * Outer rings of stored geometry (one ring per Polygon part). Empty if no polygon geometry.
+     *
+     * @return list<list<array{0: float, 1: float}>>
      */
-    public function polygonOuterRingLngLat(): ?array
+    private function polygonOuterRingsLngLat(): array
     {
         $poly = $this->polygon_geojson;
-        if (! is_array($poly) || ($poly['type'] ?? '') !== 'Polygon') {
-            return null;
+        if (! is_array($poly)) {
+            return [];
         }
-        $coords = $poly['coordinates'] ?? null;
-        if (! is_array($coords) || ! isset($coords[0]) || ! is_array($coords[0])) {
+
+        $type = $poly['type'] ?? '';
+
+        if ($type === 'Polygon') {
+            $ring = self::ringLngLatFromPolygonCoordinates($poly['coordinates'] ?? null);
+
+            return $ring !== null ? [$ring] : [];
+        }
+
+        if ($type === 'MultiPolygon') {
+            $coords = $poly['coordinates'] ?? null;
+            if (! is_array($coords)) {
+                return [];
+            }
+            $out = [];
+            foreach ($coords as $polygonCoords) {
+                $ring = self::ringLngLatFromPolygonCoordinates($polygonCoords);
+                if ($ring !== null) {
+                    $out[] = $ring;
+                }
+            }
+
+            return $out;
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  mixed  $polygonCoords  GeoJSON Polygon coordinates: [outerRing, ...holes]
+     * @return list<array{0: float, 1: float}>|null
+     */
+    private static function ringLngLatFromPolygonCoordinates(mixed $polygonCoords): ?array
+    {
+        if (! is_array($polygonCoords) || ! isset($polygonCoords[0]) || ! is_array($polygonCoords[0])) {
             return null;
         }
 
         /** @var list<mixed> $ring */
-        $ring = $coords[0];
+        $ring = $polygonCoords[0];
         $out = [];
         foreach ($ring as $pt) {
             if (! is_array($pt) || count($pt) < 2) {
@@ -128,23 +169,91 @@ class GeoZone extends Model
             ]);
         }
 
-        if (($raw['type'] ?? '') !== 'Polygon') {
-            throw ValidationException::withMessages([
-                'polygon_geojson' => 'Only Polygon geometry is supported.',
-            ]);
+        $type = $raw['type'] ?? '';
+
+        if ($type === 'Polygon') {
+            $coords = $raw['coordinates'] ?? null;
+            if (! is_array($coords) || ! isset($coords[0]) || ! is_array($coords[0])) {
+                throw ValidationException::withMessages([
+                    'polygon_geojson' => 'Polygon must include a coordinates array with an outer ring.',
+                ]);
+            }
+
+            /** @var list<mixed> $outer */
+            $outer = $coords[0];
+            $ring = self::normalizePolygonOuterRingVertices($outer);
+            $env = self::envelopeFromRing($ring);
+
+            $data['polygon_geojson'] = [
+                'type' => 'Polygon',
+                'coordinates' => [$ring],
+            ];
+            $data['min_lat'] = $env['min_lat'];
+            $data['max_lat'] = $env['max_lat'];
+            $data['min_lng'] = $env['min_lng'];
+            $data['max_lng'] = $env['max_lng'];
+
+            return $data;
         }
 
-        $coords = $raw['coordinates'] ?? null;
-        if (! is_array($coords) || ! isset($coords[0]) || ! is_array($coords[0])) {
-            throw ValidationException::withMessages([
-                'polygon_geojson' => 'Polygon must include a coordinates array with an outer ring.',
-            ]);
+        if ($type === 'MultiPolygon') {
+            $coords = $raw['coordinates'] ?? null;
+            if (! is_array($coords) || $coords === []) {
+                throw ValidationException::withMessages([
+                    'polygon_geojson' => 'MultiPolygon must include a non-empty coordinates array.',
+                ]);
+            }
+
+            $parts = [];
+            $minLat = PHP_FLOAT_MAX;
+            $maxLat = -PHP_FLOAT_MAX;
+            $minLng = PHP_FLOAT_MAX;
+            $maxLng = -PHP_FLOAT_MAX;
+
+            foreach ($coords as $polygonCoords) {
+                if (! is_array($polygonCoords) || ! isset($polygonCoords[0]) || ! is_array($polygonCoords[0])) {
+                    throw ValidationException::withMessages([
+                        'polygon_geojson' => 'Each MultiPolygon part must have an outer ring.',
+                    ]);
+                }
+
+                /** @var list<mixed> $outer */
+                $outer = $polygonCoords[0];
+                $ring = self::normalizePolygonOuterRingVertices($outer);
+                $parts[] = [$ring];
+                foreach ($ring as $pt) {
+                    $lng = $pt[0];
+                    $lat = $pt[1];
+                    $minLat = min($minLat, $lat);
+                    $maxLat = max($maxLat, $lat);
+                    $minLng = min($minLng, $lng);
+                    $maxLng = max($maxLng, $lng);
+                }
+            }
+
+            $data['polygon_geojson'] = [
+                'type' => 'MultiPolygon',
+                'coordinates' => $parts,
+            ];
+            $data['min_lat'] = $minLat;
+            $data['max_lat'] = $maxLat;
+            $data['min_lng'] = $minLng;
+            $data['max_lng'] = $maxLng;
+
+            return $data;
         }
 
-        /** @var list<mixed> $outer */
-        $outer = $coords[0];
-        $ring = self::normalizePolygonOuterRingVertices($outer);
+        throw ValidationException::withMessages([
+            'polygon_geojson' => 'Only Polygon or MultiPolygon geometry is supported.',
+        ]);
+    }
 
+    /**
+     * @param  list<array{0: float, 1: float}>  $ring
+     * @return array{min_lat: float, max_lat: float, min_lng: float, max_lng: float}
+     */
+    private static function envelopeFromRing(array $ring): array
+    {
         $minLat = PHP_FLOAT_MAX;
         $maxLat = -PHP_FLOAT_MAX;
         $minLng = PHP_FLOAT_MAX;
@@ -158,16 +267,12 @@ class GeoZone extends Model
             $maxLng = max($maxLng, $lng);
         }
 
-        $data['polygon_geojson'] = [
-            'type' => 'Polygon',
-            'coordinates' => [$ring],
+        return [
+            'min_lat' => $minLat,
+            'max_lat' => $maxLat,
+            'min_lng' => $minLng,
+            'max_lng' => $maxLng,
         ];
-        $data['min_lat'] = $minLat;
-        $data['max_lat'] = $maxLat;
-        $data['min_lng'] = $minLng;
-        $data['max_lng'] = $maxLng;
-
-        return $data;
     }
 
     /**

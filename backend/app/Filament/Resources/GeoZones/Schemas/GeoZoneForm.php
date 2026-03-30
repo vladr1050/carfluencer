@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\GeoZones\Schemas;
 
 use App\Services\Telemetry\HeatmapLeafletStyle;
+use App\Support\Geo\RigaApkaimes;
 use App\Support\Geo\RigaPriekspilsetas;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
@@ -38,7 +39,7 @@ class GeoZoneForm
                     ])
                     ->columns(2),
                 Section::make('Zone geometry (WGS84)')
-                    ->description('Parking sessions match when their center lies inside the polygon drawn on the map, or inside the bounding box if no polygon is set. Numeric fields are the axis-aligned envelope (south ≤ lat ≤ north, west ≤ lng ≤ east); they update when you draw. Use “Refresh map from fields” to replace the shape with a rectangle from the numbers (clears the polygon).')
+                    ->description('Parking sessions match when their center lies inside the polygon drawn on the map, inside a MultiPolygon (e.g. all apkaimes), or inside the bounding box if no polygon is set. Numeric fields are the axis-aligned envelope (south ≤ lat ≤ north, west ≤ lng ≤ east); they update when you draw. Use “Refresh map from fields” to replace the shape with a rectangle from the numbers (clears the polygon).')
                     ->schema([
                         Hidden::make('polygon_geojson'),
                         TextInput::make('min_lat')
@@ -77,6 +78,7 @@ class GeoZoneForm
                                 return [
                                     'tileLayer' => HeatmapLeafletStyle::tileLayerConfig(),
                                     'rigaPriekspilsetas' => RigaPriekspilsetas::featureCollection(),
+                                    'rigaApkaimes' => RigaApkaimes::featureCollection(),
                                     'initial' => [
                                         'min_lat' => $get('min_lat'),
                                         'max_lat' => $get('max_lat'),

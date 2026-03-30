@@ -1,6 +1,7 @@
 @php
     /** @var array{url: string, attribution: string, subdomains: string|null, max_zoom: int} $tileLayer */
     /** @var array{type: string, features: list<array<string, mixed>>} $rigaPriekspilsetas */
+    /** @var array{type: string, features: list<array<string, mixed>>} $rigaApkaimes */
     /** @var array{min_lat: mixed, max_lat: mixed, min_lng: mixed, max_lng: mixed, polygon_geojson: mixed} $initial */
     $mapId = 'geo-zone-map-picker';
 @endphp
@@ -11,7 +12,7 @@
 </style>
 <div class="fi-geo-zone-map space-y-2">
     <p class="text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Draw a polygon or a rectangle, or pick one of Riga’s six administrative districts (open data, CC BY 4.0). Session centers must fall inside the shape. The bounding box fields update from the shape. “Refresh map from fields” replaces the shape with a rectangle from the numbers and clears the polygon.') }}
+        {{ __('Draw a polygon or a rectangle, pick one of Riga’s six administrative districts, or one of 58 neighbourhoods (apkaimes); “All 58 neighbourhoods” loads a MultiPolygon for attribution and the map (open data, CC BY 4.0). Session centers must fall inside the geometry. The bounding box fields follow the envelope. “Refresh map from fields” replaces the shape with a rectangle from the numbers and clears the polygon.') }}
     </p>
     <div class="flex flex-wrap items-center gap-2">
         <label class="inline-flex min-w-[min(100%,16rem)] flex-1 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -21,6 +22,16 @@
                 class="fi-select-input block w-full rounded-lg border border-gray-300 bg-white py-1.5 ps-3 pe-8 text-sm text-gray-950 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-primary-500"
             >
                 <option value="">{{ __('— None —') }}</option>
+            </select>
+        </label>
+        <label class="inline-flex min-w-[min(100%,18rem)] flex-1 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <span class="shrink-0 font-medium whitespace-nowrap">{{ __('Riga neighbourhood') }}</span>
+            <select
+                id="geo-zone-riga-apkaime"
+                class="fi-select-input block w-full rounded-lg border border-gray-300 bg-white py-1.5 ps-3 pe-8 text-sm text-gray-950 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-primary-500"
+            >
+                <option value="">{{ __('— None —') }}</option>
+                <option value="__all__">{{ __('All 58 neighbourhoods') }}</option>
             </select>
         </label>
         <button
@@ -47,6 +58,9 @@
     const tileLayer = @js($tileLayer);
     const initial = @js($initial);
     const rigaPriekspilsetas = @js($rigaPriekspilsetas);
+    const rigaApkaimes = @js($rigaApkaimes);
+
+    let uiListenersAbort = null;
 
     function roundCoord(v) {
         const n = Number(v);
@@ -180,6 +194,12 @@
         const el = document.getElementById(mapId);
         if (!el || el._geoZoneLeafletMap) return;
 
+        if (uiListenersAbort) {
+            uiListenersAbort.abort();
+        }
+        uiListenersAbort = new AbortController();
+        const signal = uiListenersAbort.signal;
+
         const map = L.map(el, { zoomControl: true });
         const subdomains = tileLayer.subdomains ? String(tileLayer.subdomains).split('') : false;
         L.tileLayer(tileLayer.url, {
@@ -243,6 +263,11 @@
             if (ds) ds.value = '';
         }
 
+        function resetApkaimeSelect() {
+            const s = document.getElementById('geo-zone-riga-apkaime');
+            if (s) s.value = '';
+        }
+
         function applyRigaDistrictById(gidStr) {
             const cmp = livewireFromMapEl(el);
             if (!cmp || typeof cmp.set !== 'function') return;
@@ -262,10 +287,90 @@
             const poly = L.polygon(latlngs, { color: '#2563eb', weight: 2 });
             drawnItems.addLayer(poly);
             pushShapeToForm(cmp, gj, poly.getBounds());
+            resetApkaimeSelect();
             map.fitBounds(poly.getBounds().pad(0.08));
         }
 
+        function applyApkaimeById(gidStr) {
+            const cmp = livewireFromMapEl(el);
+            if (!cmp || typeof cmp.set !== 'function') return;
+            const features = (rigaApkaimes && rigaApkaimes.features) ? rigaApkaimes.features : [];
+            const f = features.find(function (x) {
+                return String(x.id) === String(gidStr);
+            });
+            if (!f || !f.geometry || f.geometry.type !== 'Polygon') return;
+            const ring = f.geometry.coordinates[0];
+            if (!ring || ring.length < 3) return;
+            const gj = ringLngLatToRoundedGeoJson(ring);
+            if (!gj) return;
+            const latlngs = gj.coordinates[0].map(function (pt) {
+                return L.latLng(pt[1], pt[0]);
+            });
+            drawnItems.clearLayers();
+            const poly = L.polygon(latlngs, { color: '#2563eb', weight: 2 });
+            drawnItems.addLayer(poly);
+            pushShapeToForm(cmp, gj, poly.getBounds());
+            resetDistrictSelect();
+            map.fitBounds(poly.getBounds().pad(0.08));
+        }
+
+        function applyAllApkaimes() {
+            const cmp = livewireFromMapEl(el);
+            if (!cmp || typeof cmp.set !== 'function') return;
+            const features = (rigaApkaimes && rigaApkaimes.features) ? rigaApkaimes.features : [];
+            const multiCoords = [];
+            let bounds = null;
+            drawnItems.clearLayers();
+            for (let i = 0; i < features.length; i++) {
+                const f = features[i];
+                if (!f.geometry || f.geometry.type !== 'Polygon') continue;
+                const ring = f.geometry.coordinates[0];
+                if (!ring || ring.length < 3) continue;
+                const gj = ringLngLatToRoundedGeoJson(ring);
+                if (!gj) continue;
+                multiCoords.push(gj.coordinates);
+                const latlngs = gj.coordinates[0].map(function (pt) {
+                    return L.latLng(pt[1], pt[0]);
+                });
+                const poly = L.polygon(latlngs, { color: '#2563eb', weight: 2, fillOpacity: 0.12 });
+                drawnItems.addLayer(poly);
+                const b = poly.getBounds();
+                bounds = bounds ? bounds.extend(b) : b;
+            }
+            if (multiCoords.length === 0 || !bounds) return;
+            const multi = { type: 'MultiPolygon', coordinates: multiCoords };
+            pushShapeToForm(cmp, multi, bounds);
+            resetDistrictSelect();
+            resetApkaimeSelect();
+            map.fitBounds(bounds.pad(0.08));
+        }
+
         function loadInitialShape() {
+            const p = initial.polygon_geojson;
+            if (p && p.type === 'MultiPolygon' && Array.isArray(p.coordinates)) {
+                drawnItems.clearLayers();
+                let bounds = null;
+                for (let i = 0; i < p.coordinates.length; i++) {
+                    const polyCoords = p.coordinates[i];
+                    if (!polyCoords || !Array.isArray(polyCoords[0])) continue;
+                    const ring = polyCoords[0];
+                    if (ring.length < 3) continue;
+                    const latlngs = ring.map(function (pt) {
+                        if (!Array.isArray(pt) || pt.length < 2) return null;
+                        return L.latLng(Number(pt[1]), Number(pt[0]));
+                    }).filter(Boolean);
+                    if (latlngs.length < 3) continue;
+                    const poly = L.polygon(latlngs, { color: '#2563eb', weight: 2, fillOpacity: 0.12 });
+                    drawnItems.addLayer(poly);
+                    const b = poly.getBounds();
+                    bounds = bounds ? bounds.extend(b) : b;
+                }
+                if (bounds) {
+                    map.fitBounds(bounds.pad(0.08));
+                }
+                return;
+            }
+
             const latlngs = initialPolygonLatLngs();
             if (latlngs && latlngs.length >= 3) {
                 drawnItems.clearLayers();
@@ -287,6 +392,7 @@
             drawnItems.clearLayers();
             drawnItems.addLayer(e.layer);
             resetDistrictSelect();
+            resetApkaimeSelect();
             syncFromLayer(e.layer);
             map.fitBounds(e.layer.getBounds().pad(0.08));
         });
@@ -308,6 +414,7 @@
         if (btn) {
             btn.addEventListener('click', function () {
                 resetDistrictSelect();
+                resetApkaimeSelect();
                 const cmp = livewireFromMapEl(el);
                 if (cmp && typeof cmp.set === 'function') {
                     cmp.set('data.polygon_geojson', null, true);
@@ -315,11 +422,14 @@
                 const b = readBoundsFromInputs();
                 if (!b) return;
                 replaceRectangle(b);
-            });
+            }, { signal });
         }
 
         const districtSel = document.getElementById('geo-zone-riga-district');
         if (districtSel && rigaPriekspilsetas && Array.isArray(rigaPriekspilsetas.features)) {
+            while (districtSel.options.length > 1) {
+                districtSel.remove(1);
+            }
             rigaPriekspilsetas.features.forEach(function (f) {
                 const opt = document.createElement('option');
                 opt.value = String(f.id);
@@ -331,7 +441,35 @@
                 const v = this.value;
                 if (!v) return;
                 applyRigaDistrictById(v);
+            }, { signal });
+        }
+
+        const apkaimeSel = document.getElementById('geo-zone-riga-apkaime');
+        if (apkaimeSel && rigaApkaimes && Array.isArray(rigaApkaimes.features)) {
+            while (apkaimeSel.options.length > 2) {
+                apkaimeSel.remove(2);
+            }
+            const sorted = rigaApkaimes.features.slice().sort(function (a, b) {
+                const na = (a.properties && a.properties.name_lv) ? a.properties.name_lv : '';
+                const nb = (b.properties && b.properties.name_lv) ? b.properties.name_lv : '';
+                return na.localeCompare(nb, 'lv');
             });
+            sorted.forEach(function (f) {
+                const opt = document.createElement('option');
+                opt.value = String(f.id);
+                const name = (f.properties && f.properties.name_lv) ? f.properties.name_lv : String(f.id);
+                opt.textContent = name;
+                apkaimeSel.appendChild(opt);
+            });
+            apkaimeSel.addEventListener('change', function () {
+                const v = this.value;
+                if (v === '__all__') {
+                    applyAllApkaimes();
+                    return;
+                }
+                if (!v) return;
+                applyApkaimeById(v);
+            }, { signal });
         }
 
         loadInitialShape();
@@ -340,6 +478,10 @@
     }
 
     function teardownThenInit() {
+        if (uiListenersAbort) {
+            uiListenersAbort.abort();
+            uiListenersAbort = null;
+        }
         const el = document.getElementById(mapId);
         if (el && el._geoZoneLeafletMap) {
             el._geoZoneLeafletMap.remove();
