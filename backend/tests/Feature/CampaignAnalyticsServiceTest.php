@@ -8,9 +8,7 @@ use App\Models\DailyImpression;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Analytics\CampaignAnalyticsService;
-use App\Services\Telemetry\HeatmapBucketStrategy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CampaignAnalyticsServiceTest extends TestCase
@@ -72,7 +70,7 @@ class CampaignAnalyticsServiceTest extends TestCase
         $this->assertNull($snap['coverage']['coverage_narrative']);
     }
 
-    public function test_top_locations_from_heatmap_cells_daily_parking_and_kpis_from_daily_impressions(): void
+    public function test_kpis_from_daily_impressions_without_heatmap_top_location_rollup(): void
     {
         $advertiser = User::factory()->advertiser()->create();
         $mo = User::factory()->mediaOwner()->create();
@@ -113,34 +111,6 @@ class CampaignAnalyticsServiceTest extends TestCase
             'parking_minutes' => 120,
         ]);
 
-        $mapZoom = (int) config('reports.analytics.top_locations_map_zoom', 14);
-        $tier = HeatmapBucketStrategy::tierFromMapZoom($mapZoom);
-
-        DB::table('heatmap_cells_daily')->insert([
-            'day' => '2026-03-10',
-            'mode' => 'parking',
-            'zoom_tier' => $tier,
-            'lat_bucket' => 56.95,
-            'lng_bucket' => 24.10,
-            'device_id' => $vehicle->imei,
-            'samples_count' => 500,
-            'weight_value' => 500,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        DB::table('heatmap_cells_daily')->insert([
-            'day' => '2026-03-10',
-            'mode' => 'parking',
-            'zoom_tier' => $tier,
-            'lat_bucket' => 57.0,
-            'lng_bucket' => 24.2,
-            'device_id' => $vehicle->imei,
-            'samples_count' => 100,
-            'weight_value' => 100,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
         $svc = app(CampaignAnalyticsService::class);
         $snap = $svc->buildSnapshot($campaign->id, '2026-03-01', '2026-03-31', []);
 
@@ -149,12 +119,7 @@ class CampaignAnalyticsServiceTest extends TestCase
         $this->assertSame(2.0, $snap['kpis']['parking_hours']);
         $this->assertGreaterThan(0, $snap['kpis']['carfluencers']);
 
-        $this->assertCount(2, $snap['top_locations']);
-        $this->assertSame(500, $snap['top_locations'][0]['samples']);
-        $this->assertSame(500, $snap['top_locations'][0]['dwell_proxy']);
-        $this->assertSame(56.95, $snap['top_locations'][0]['lat']);
-        $this->assertSame(24.1, $snap['top_locations'][0]['lng']);
-        $this->assertNull($snap['top_locations'][0]['label']);
+        $this->assertSame([], $snap['top_locations']);
 
         $totalHours = $snap['kpis']['driving_hours'] + $snap['kpis']['parking_hours'];
         if ($totalHours > 0) {

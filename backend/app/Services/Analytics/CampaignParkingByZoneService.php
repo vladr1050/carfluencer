@@ -187,7 +187,7 @@ final class CampaignParkingByZoneService
 
         return [
             'definition' => 'Parking minutes = overlap of each stop_session (kind=parking) with [date_from 00:00 UTC, date_to 23:59:59 UTC], rounded to whole minutes. A session is attributed to every active GeoZone whose polygon (or bbox if no polygon) contains its center; pivot stop_session_zone is used when present (active zones only).',
-            'overlap_note' => 'Sum of by_zone.parking_minutes may exceed totals.parking_minutes_in_window when zones overlap or one session matches multiple zones.',
+            'overlap_note' => 'Per-zone parking time may sum to more than the total unique window time when zones overlap or one session is credited to multiple zones.',
             'totals' => [
                 'parking_minutes_in_window' => $totalUniqueMin,
                 'parking_sessions_in_window' => $sessionCount,
@@ -253,7 +253,7 @@ final class CampaignParkingByZoneService
     {
         return [
             'definition' => 'Parking minutes = overlap of each stop_session (kind=parking) with the selected UTC date window.',
-            'overlap_note' => 'Sum of by_zone.parking_minutes may exceed totals when zones overlap.',
+            'overlap_note' => 'Per-zone parking time may sum to more than the total unique window time when zones overlap.',
             'totals' => [
                 'parking_minutes_in_window' => 0,
                 'parking_sessions_in_window' => 0,

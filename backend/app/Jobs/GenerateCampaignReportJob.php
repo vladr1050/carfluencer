@@ -87,14 +87,12 @@ class GenerateCampaignReportJob implements ShouldQueue
                     $drivingRel[$id] = $baseRel.'/'.$fname;
                 }
             }
-            $parkingTopLocations = $analyticsSnapshot['top_locations'] ?? [];
-
             if ($report->include_parking_heatmap) {
                 foreach ($viewports as $vp) {
                     $id = $vp['id'];
                     $fname = 'parking_'.$id.'.png';
                     $abs = $baseAbs.'/'.$fname;
-                    $heatmapImages->renderPng($campaign->id, $from, $to, $vehicleIds, 'parking', $abs, $id, $parkingTopLocations);
+                    $heatmapImages->renderPng($campaign->id, $from, $to, $vehicleIds, 'parking', $abs, $id, null);
                     $parkingPaths[$id] = $abs;
                     $parkingRel[$id] = $baseRel.'/'.$fname;
                 }

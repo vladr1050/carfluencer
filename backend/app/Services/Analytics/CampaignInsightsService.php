@@ -5,6 +5,7 @@ namespace App\Services\Analytics;
 /**
  * Deterministic, rule-based interpretation of {@see CampaignAnalyticsService} snapshots for PDF/API.
  * Wording reflects that exposure_split is derived from driving vs parking hours, not impression shares.
+ * Parking geography uses {@see CampaignParkingByZoneService} (GeoZones), not heatmap top cells.
  */
 final class CampaignInsightsService
 {
@@ -35,15 +36,17 @@ final class CampaignInsightsService
         $parkingShare = (float) ($split['parking_share'] ?? 0.0);
         $drivingShare = (float) ($split['driving_share'] ?? 0.0);
 
-        /** @var list<array<string, mixed>> $topLocations */
-        $topLocations = $analyticsSnapshot['top_locations'] ?? [];
-        if (! is_array($topLocations)) {
-            $topLocations = [];
+        /** @var array<string, mixed> $parkingByZone */
+        $parkingByZone = $analyticsSnapshot['parking_by_zone'] ?? [];
+        if (! is_array($parkingByZone)) {
+            $parkingByZone = [];
         }
 
+        $zoneWeights = $this->zoneParkingMinuteWeights($parkingByZone);
+
         $exposurePattern = $this->classifyExposurePattern($parkingShare, $drivingShare);
-        $locationPattern = $this->classifyLocationPattern($topLocations);
-        $zonePhrase = $this->buildZonePhrase($topLocations);
+        $locationPattern = $this->classifyLocationPattern($zoneWeights);
+        $zonePhrase = $this->buildZonePhraseFromParkingByZone($parkingByZone);
 
         /** @var array<string, mixed> $coverage */
         $coverage = $analyticsSnapshot['coverage'] ?? [];
@@ -52,7 +55,13 @@ final class CampaignInsightsService
         }
 
         $summary = $this->buildSummary($exposurePattern, $locationPattern, $zonePhrase, $parkingShare, $drivingShare);
-        $highlights = $this->buildHighlights($exposurePattern, $locationPattern, $zonePhrase, $topLocations, $coverage);
+        $highlights = $this->buildHighlights(
+            $exposurePattern,
+            $locationPattern,
+            $zonePhrase,
+            $parkingByZone,
+            $coverage
+        );
 
         return [
             'summary' => $summary,
@@ -73,28 +82,39 @@ final class CampaignInsightsService
         $dh = (float) ($kpis['driving_hours'] ?? 0.0);
         $ph = (float) ($kpis['parking_hours'] ?? 0.0);
 
-        /** @var list<array<string, mixed>> $top */
-        $top = $snap['top_locations'] ?? [];
-        if (! is_array($top)) {
-            $top = [];
+        /** @var array<string, mixed> $pbz */
+        $pbz = $snap['parking_by_zone'] ?? [];
+        if (! is_array($pbz)) {
+            $pbz = [];
         }
+        $windowMin = (int) ($pbz['totals']['parking_minutes_in_window'] ?? 0);
 
         $hasHours = $dh > 0.0 || $ph > 0.0;
 
-        return $imp <= 0 && ! $hasHours && $top === [];
+        return $imp <= 0 && ! $hasHours && $windowMin <= 0;
     }
 
     /**
-     * @param  list<array<string, mixed>>  $topLocations
+     * @param  array<string, mixed>  $parkingByZone
+     * @return list<float>
      */
-    private function totalDwellProxy(array $topLocations): float
+    private function zoneParkingMinuteWeights(array $parkingByZone): array
     {
-        $sum = 0.0;
-        foreach ($topLocations as $loc) {
-            $sum += max(0.0, (float) ($loc['dwell_proxy'] ?? $loc['samples'] ?? 0));
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $parkingByZone['by_zone'] ?? [];
+        if (! is_array($rows)) {
+            return [];
         }
 
-        return $sum;
+        $weights = [];
+        foreach ($rows as $z) {
+            if (! is_array($z)) {
+                continue;
+            }
+            $weights[] = max(0.0, (float) ($z['parking_minutes'] ?? 0));
+        }
+
+        return $weights;
     }
 
     private function classifyExposurePattern(float $parkingShare, float $drivingShare): ?string
@@ -117,18 +137,10 @@ final class CampaignInsightsService
     }
 
     /**
-     * @param  list<array<string, mixed>>  $topLocations
+     * @param  list<float>  $weights  Parking minutes per GeoZone (descending sort expected from upstream).
      */
-    private function classifyLocationPattern(array $topLocations): ?string
+    private function classifyLocationPattern(array $weights): ?string
     {
-        $weights = [];
-        foreach ($topLocations as $loc) {
-            if (! is_array($loc)) {
-                continue;
-            }
-            $weights[] = max(0.0, (float) ($loc['dwell_proxy'] ?? $loc['samples'] ?? 0));
-        }
-
         $total = array_sum($weights);
         if ($total <= 0.0 || $weights === []) {
             return null;
@@ -152,18 +164,24 @@ final class CampaignInsightsService
     }
 
     /**
-     * @param  list<array<string, mixed>>  $topLocations
+     * @param  array<string, mixed>  $parkingByZone
      */
-    private function buildZonePhrase(array $topLocations): string
+    private function buildZonePhraseFromParkingByZone(array $parkingByZone): string
     {
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $parkingByZone['by_zone'] ?? [];
+        if (! is_array($rows)) {
+            return '';
+        }
+
         $labels = [];
-        foreach (array_slice($topLocations, 0, 3) as $loc) {
-            if (! is_array($loc)) {
+        foreach (array_slice($rows, 0, 3) as $z) {
+            if (! is_array($z)) {
                 continue;
             }
-            $l = $loc['label'] ?? null;
-            if (is_string($l) && trim($l) !== '') {
-                $labels[] = trim($l);
+            $n = $z['name'] ?? null;
+            if (is_string($n) && trim($n) !== '') {
+                $labels[] = trim($n);
             }
         }
 
@@ -196,18 +214,18 @@ final class CampaignInsightsService
 
         if ($locationPattern === 'highly_concentrated') {
             if ($zonePhrase !== '') {
-                $segments[] = 'Strongest parking intensity clustered around '.$zonePhrase.', suggesting a tight urban concentration.';
+                $segments[] = 'Credited parking time in configured GeoZones clustered strongly around '.$zonePhrase.'.';
             } else {
-                $segments[] = 'Top parking intensity clustered sharply in a small number of high-signal zones.';
+                $segments[] = 'Credited parking time in GeoZones was concentrated in a small set of zones (see Parking time by zone).';
             }
         } elseif ($locationPattern === 'moderately_concentrated') {
             if ($zonePhrase !== '') {
-                $segments[] = 'Key parking intensity appeared across several zones including '.$zonePhrase.'.';
+                $segments[] = 'Credited parking time appeared across several GeoZones, notably '.$zonePhrase.'.';
             } else {
-                $segments[] = 'Parking intensity focused on several distinct zones while retaining broader city presence.';
+                $segments[] = 'Credited parking time spread across several GeoZones while some zones lead the table.';
             }
         } elseif ($locationPattern === 'distributed') {
-            $segments[] = 'Parking intensity signals were spread across multiple areas rather than a single hotspot.';
+            $segments[] = 'Credited parking time was spread across many GeoZones rather than a single zone.';
         }
 
         if ($segments === []) {
@@ -215,17 +233,17 @@ final class CampaignInsightsService
                 return 'The campaign mix of parked vs movement-related visibility time is reflected in the exposure split above.';
             }
             if ($zonePhrase !== '') {
-                return 'Notable parking intensity surfaced around '.$zonePhrase.' for the selected period.';
+                return 'Notable credited parking time in GeoZones surfaced around '.$zonePhrase.' for the selected period.';
             }
 
-            return 'See key metrics and top parking zones above for this campaign period.';
+            return 'See key metrics and Parking time by zone for this campaign period.';
         }
 
         return implode(' ', $segments);
     }
 
     /**
-     * @param  list<array<string, mixed>>  $topLocations
+     * @param  array<string, mixed>  $parkingByZone
      * @param  array<string, mixed>  $coverage  {@see CampaignCoverageService::buildCoverage}
      * @return list<string>
      */
@@ -233,7 +251,7 @@ final class CampaignInsightsService
         ?string $exposurePattern,
         ?string $locationPattern,
         string $zonePhrase,
-        array $topLocations,
+        array $parkingByZone,
         array $coverage = []
     ): array {
         $out = [];
@@ -247,27 +265,27 @@ final class CampaignInsightsService
         }
 
         if ($zonePhrase !== '') {
-            $out[] = 'Stand-out parking intensity zones included '.$zonePhrase.'.';
-        } elseif ($this->totalDwellProxy($topLocations) > 0.0) {
-            $out[] = 'Top campaign parking zones are listed in the table above.';
+            $out[] = 'Largest shares of credited parking time in GeoZones included '.$zonePhrase.'.';
+        } elseif ($this->totalAttributedZoneMinutes($parkingByZone) > 0) {
+            $out[] = 'Breakdown by GeoZone is in the Parking time by zone table.';
         }
 
         if ($locationPattern === 'highly_concentrated') {
-            $out[] = 'Intensity concentrated heavily in a limited set of locations.';
+            $out[] = 'Parking time credited to zones concentrated heavily in a limited set of GeoZones.';
         } elseif ($locationPattern === 'moderately_concentrated') {
-            $out[] = 'Intensity spread across several key zones with remaining breadth elsewhere.';
+            $out[] = 'Parking time credited to zones spread across several leading GeoZones.';
         } elseif ($locationPattern === 'distributed') {
-            $out[] = 'Signals indicate a distributed footprint across multiple city areas.';
+            $out[] = 'Parking time credited to zones indicates a distributed footprint across GeoZones.';
         }
 
         $covPattern = $coverage['coverage_pattern'] ?? null;
         if (is_string($covPattern) && $covPattern !== '') {
             if ($covPattern === 'focused') {
-                $out[] = 'Spatial coverage of driving activity was narrow relative to the configured operational map grid (see footprint metrics).';
+                $out[] = 'Spatial coverage of driving activity was narrow relative to the configured operational map grid (see Footprint).';
             } elseif ($covPattern === 'balanced') {
-                $out[] = 'Spatial coverage of driving activity was moderate relative to the configured operational map grid (see footprint metrics).';
+                $out[] = 'Spatial coverage of driving activity was moderate relative to the configured operational map grid (see Footprint).';
             } elseif ($covPattern === 'wide') {
-                $out[] = 'Spatial coverage of driving activity was broad relative to the configured operational map grid (see footprint metrics).';
+                $out[] = 'Spatial coverage of driving activity was broad relative to the configured operational map grid (see Footprint).';
             }
         }
 
@@ -279,13 +297,34 @@ final class CampaignInsightsService
         }
 
         if (count($out) === 1) {
-            $out[] = 'Refer to the exposure split and top parking locations for supporting detail.';
+            $out[] = 'Refer to the exposure split and Parking time by zone for supporting detail.';
         }
 
         if ($out === []) {
-            $out[] = 'Review key metrics, exposure split, and top parking zones for this campaign period.';
+            $out[] = 'Review key metrics, exposure split, and Parking time by zone for this campaign period.';
         }
 
         return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $parkingByZone
+     */
+    private function totalAttributedZoneMinutes(array $parkingByZone): int
+    {
+        $sum = 0;
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $parkingByZone['by_zone'] ?? [];
+        if (! is_array($rows)) {
+            return 0;
+        }
+        foreach ($rows as $z) {
+            if (! is_array($z)) {
+                continue;
+            }
+            $sum += (int) ($z['parking_minutes'] ?? 0);
+        }
+
+        return $sum;
     }
 }

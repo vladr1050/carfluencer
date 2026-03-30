@@ -21,6 +21,22 @@ class CampaignInsightsServiceTest extends TestCase
         Config::set('reports.insights.location.moderately_concentrated_top3_min', 0.50);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function baseParkingByZone(int $windowMin, array $byZone): array
+    {
+        return [
+            'totals' => [
+                'parking_minutes_in_window' => $windowMin,
+                'parking_sessions_in_window' => 0,
+                'vehicles' => 0,
+            ],
+            'by_zone' => $byZone,
+            'unattributed' => ['parking_minutes' => 0, 'sessions_count' => 0],
+        ];
+    }
+
     public function test_insufficient_data_shape(): void
     {
         $out = $this->svc->buildInsights([
@@ -30,7 +46,7 @@ class CampaignInsightsServiceTest extends TestCase
                 'parking_hours' => 0.0,
             ],
             'exposure_split' => ['driving_share' => 0.0, 'parking_share' => 0.0],
-            'top_locations' => [],
+            'parking_by_zone' => $this->baseParkingByZone(0, []),
         ]);
 
         $this->assertStringContainsString('Insufficient data', (string) $out['summary']);
@@ -39,7 +55,7 @@ class CampaignInsightsServiceTest extends TestCase
         $this->assertNull($out['location_pattern']);
     }
 
-    public function test_parking_dominant_and_highly_concentrated(): void
+    public function test_parking_dominant_and_highly_concentrated_from_geo_zones(): void
     {
         $out = $this->svc->buildInsights([
             'kpis' => [
@@ -48,23 +64,29 @@ class CampaignInsightsServiceTest extends TestCase
                 'parking_hours' => 9.0,
             ],
             'exposure_split' => ['driving_share' => 0.1, 'parking_share' => 0.9],
-            'top_locations' => [
-                ['dwell_proxy' => 800, 'label' => 'Riga Center'],
-                ['dwell_proxy' => 100, 'label' => null],
-                ['dwell_proxy' => 100, 'label' => null],
-            ],
+            'parking_by_zone' => $this->baseParkingByZone(1000, [
+                ['name' => 'Riga Center', 'code' => 'RC', 'parking_minutes' => 800],
+                ['name' => 'Other A', 'code' => 'A', 'parking_minutes' => 100],
+                ['name' => 'Other B', 'code' => 'B', 'parking_minutes' => 100],
+            ]),
         ]);
 
         $this->assertSame('parking_dominant', $out['exposure_pattern']);
         $this->assertSame('highly_concentrated', $out['location_pattern']);
         $this->assertNotNull($out['summary']);
         $this->assertStringContainsString('parked', strtolower($out['summary']));
+        $this->assertStringContainsString('GeoZone', $out['summary']);
         $this->assertGreaterThanOrEqual(2, count($out['highlights']));
         $this->assertLessThanOrEqual(4, count($out['highlights']));
     }
 
     public function test_movement_dominant_and_distributed(): void
     {
+        $zones = [];
+        foreach (range(1, 10) as $i) {
+            $zones[] = ['name' => 'Zone '.$i, 'code' => 'Z'.$i, 'parking_minutes' => 100];
+        }
+
         $out = $this->svc->buildInsights([
             'kpis' => [
                 'impressions' => 50,
@@ -72,10 +94,7 @@ class CampaignInsightsServiceTest extends TestCase
                 'parking_hours' => 1.0,
             ],
             'exposure_split' => ['driving_share' => 0.89, 'parking_share' => 0.11],
-            'top_locations' => array_map(
-                static fn () => ['dwell_proxy' => 100, 'label' => null],
-                range(1, 10)
-            ),
+            'parking_by_zone' => $this->baseParkingByZone(1000, $zones),
         ]);
 
         $this->assertSame('movement_dominant', $out['exposure_pattern']);
@@ -92,20 +111,20 @@ class CampaignInsightsServiceTest extends TestCase
                 'parking_hours' => 3.0,
             ],
             'exposure_split' => ['driving_share' => 0.5, 'parking_share' => 0.5],
-            'top_locations' => [
-                ['dwell_proxy' => 250, 'label' => 'Zone A'],
-                ['dwell_proxy' => 240, 'label' => 'Zone B'],
-                ['dwell_proxy' => 230, 'label' => 'Zone C'],
-                ['dwell_proxy' => 220, 'label' => null],
-                ['dwell_proxy' => 210, 'label' => null],
-            ],
+            'parking_by_zone' => $this->baseParkingByZone(1150, [
+                ['name' => 'Zone A', 'code' => 'A', 'parking_minutes' => 250],
+                ['name' => 'Zone B', 'code' => 'B', 'parking_minutes' => 240],
+                ['name' => 'Zone C', 'code' => 'C', 'parking_minutes' => 230],
+                ['name' => 'Zone D', 'code' => 'D', 'parking_minutes' => 220],
+                ['name' => 'Zone E', 'code' => 'E', 'parking_minutes' => 210],
+            ]),
         ]);
 
         $this->assertSame('balanced', $out['exposure_pattern']);
         $this->assertSame('moderately_concentrated', $out['location_pattern']);
     }
 
-    public function test_empty_top_locations_still_classifies_exposure(): void
+    public function test_no_geo_zone_breakdown_still_classifies_exposure(): void
     {
         $out = $this->svc->buildInsights([
             'kpis' => [
@@ -114,14 +133,14 @@ class CampaignInsightsServiceTest extends TestCase
                 'parking_hours' => 8.0,
             ],
             'exposure_split' => ['driving_share' => 0.2, 'parking_share' => 0.8],
-            'top_locations' => [],
+            'parking_by_zone' => $this->baseParkingByZone(0, []),
         ]);
 
         $this->assertSame('parking_dominant', $out['exposure_pattern']);
         $this->assertNull($out['location_pattern']);
     }
 
-    public function test_zero_dwell_locations_yield_null_location_pattern_without_error(): void
+    public function test_zero_minute_zones_yield_null_location_pattern(): void
     {
         $out = $this->svc->buildInsights([
             'kpis' => [
@@ -130,10 +149,10 @@ class CampaignInsightsServiceTest extends TestCase
                 'parking_hours' => 1.0,
             ],
             'exposure_split' => ['driving_share' => 0.5, 'parking_share' => 0.5],
-            'top_locations' => [
-                ['dwell_proxy' => 0],
-                ['dwell_proxy' => 0],
-            ],
+            'parking_by_zone' => $this->baseParkingByZone(0, [
+                ['name' => 'Z1', 'code' => '1', 'parking_minutes' => 0],
+                ['name' => 'Z2', 'code' => '2', 'parking_minutes' => 0],
+            ]),
         ]);
 
         $this->assertNull($out['location_pattern']);

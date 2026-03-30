@@ -37,7 +37,6 @@
     $aDataSource = $aMeta['data_source'] ?? '—';
     $aIsEstimated = !empty($aMeta['is_estimated']);
     $aExposure = $analytics['exposure_split'] ?? [];
-    $aTopLocs = $analytics['top_locations'] ?? [];
     $aInsights = $analytics['insights'] ?? [];
     $aCoverage = is_array($analytics['coverage'] ?? null) ? $analytics['coverage'] : [];
     $aParkingByZone = is_array($analytics['parking_by_zone'] ?? null) ? $analytics['parking_by_zone'] : null;
@@ -68,60 +67,11 @@
     </div>
     <p class="note">Share of driving vs parking hours (same basis as key metrics).</p>
 
-    <h2>Footprint (driving)</h2>
-    <div class="meta">
-        <div><strong>Distinct driving grid cells:</strong> {{ $aCoverage['unique_cells'] ?? '—' }}</div>
-        <div><strong>Reference grid cells (operational bounds):</strong> {{ $aCoverage['reference_cells'] ?? '—' }}</div>
-        <div><strong>Footprint coverage ratio:</strong> @if(isset($aCoverage['coverage_ratio'])){{ number_format((float)$aCoverage['coverage_ratio'] * 100, 2) }}%@else—@endif</div>
-        @if(!empty($aCoverage['coverage_narrative']))
-            <div><strong>Spatial summary:</strong> {{ $aCoverage['coverage_narrative'] }}</div>
-        @elseif(!empty($aCoverage['coverage_pattern']))
-            <div><strong>Spatial pattern:</strong> {{ $aCoverage['coverage_pattern'] }}</div>
-        @endif
-    </div>
-    <p class="note">Ratio = distinct driving rollup cells ÷ cells in the configured export bounds at the report coverage zoom tier (not “share of a city”). Denominator: operational_bounds_grid.</p>
-
-    <h2>Campaign insights</h2>
-    @if(!empty($aInsights['summary']))
-        <p class="insights-summary">{{ $aInsights['summary'] }}</p>
-    @endif
-    @if(!empty($aInsights['highlights']) && is_array($aInsights['highlights']))
-        <ul class="insights-highlights">
-            @foreach($aInsights['highlights'] as $line)
-                @if(is_string($line) && $line !== '')
-                    <li>{{ $line }}</li>
-                @endif
-            @endforeach
-        </ul>
-    @endif
-
-    <h2>Top parking locations</h2>
-    @if(!empty($aTopLocs))
-        <table class="data">
-            <thead>
-            <tr>
-                <th>Location</th>
-                <th>Dwell proxy</th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach($aTopLocs as $loc)
-                <tr>
-                    <td>{{ \App\Services\Reports\ReportTopLocationPresentation::locationCell($loc) }}</td>
-                    <td>{{ $loc['dwell_proxy'] ?? '—' }}</td>
-                </tr>
-            @endforeach
-            </tbody>
-        </table>
-        <p class="note">Dwell proxy reflects aggregated parking sample intensity, not minutes parked.</p>
-    @else
-        <p class="note">No top parking cells for this period (rollup data may be empty).</p>
-    @endif
-
     <h2>Parking time by zone</h2>
     @if($aParkingByZone)
+        <p class="note">Parking duration is aggregated in whole minutes; values below are shown as decimal hours (minutes ÷ 60).</p>
         <div class="meta">
-            <div><strong>Parking minutes (window overlap):</strong> {{ (int)($aParkingByZone['totals']['parking_minutes_in_window'] ?? 0) }}</div>
+            <div><strong>Parking hours (window overlap):</strong> {{ \App\Services\Reports\ReportParkingMinutesAsHours::format((int)($aParkingByZone['totals']['parking_minutes_in_window'] ?? 0)) }}</div>
             <div><strong>Parking sessions:</strong> {{ (int)($aParkingByZone['totals']['parking_sessions_in_window'] ?? 0) }}</div>
         </div>
         @if(!empty($aParkingByZone['by_zone']) && is_array($aParkingByZone['by_zone']))
@@ -130,7 +80,7 @@
                 <tr>
                     <th>Zone</th>
                     <th>Code</th>
-                    <th>Minutes</th>
+                    <th>Hours parked</th>
                     <th>Sessions</th>
                     <th>Vehicles</th>
                 </tr>
@@ -141,7 +91,7 @@
                         <tr>
                             <td>{{ $z['name'] ?? '—' }}</td>
                             <td>{{ $z['code'] ?? '—' }}</td>
-                            <td>{{ (int)($z['parking_minutes'] ?? 0) }}</td>
+                            <td>{{ \App\Services\Reports\ReportParkingMinutesAsHours::format((int)($z['parking_minutes'] ?? 0)) }}</td>
                             <td>{{ (int)($z['sessions_count'] ?? 0) }}</td>
                             <td>{{ (int)($z['vehicles_distinct'] ?? 0) }}</td>
                         </tr>
@@ -157,12 +107,40 @@
             $uSess = (int)($aParkingByZone['unattributed']['sessions_count'] ?? 0);
         @endphp
         @if($uMin > 0 || $uSess > 0)
-            <p class="note">Outside zones: {{ $uMin }} minutes ({{ $uSess }} sessions).</p>
+            <p class="note">Outside zones: {{ \App\Services\Reports\ReportParkingMinutesAsHours::format($uMin) }} ({{ $uSess }} sessions).</p>
         @endif
         <p class="note">{{ $aParkingByZone['overlap_note'] ?? '' }}</p>
     @else
         <p class="note">No parking-by-zone breakdown in this snapshot.</p>
     @endif
+
+    <h2>Footprint (driving)</h2>
+    <div class="meta">
+        <div><strong>Distinct driving grid cells:</strong> {{ $aCoverage['unique_cells'] ?? '—' }}</div>
+        <div><strong>Reference grid cells (operational bounds):</strong> {{ $aCoverage['reference_cells'] ?? '—' }}</div>
+        <div><strong>Footprint coverage ratio:</strong> @if(isset($aCoverage['coverage_ratio'])){{ number_format((float)$aCoverage['coverage_ratio'] * 100, 2) }}%@else—@endif</div>
+        @if(!empty($aCoverage['coverage_narrative']))
+            <div><strong>Spatial summary:</strong> {{ $aCoverage['coverage_narrative'] }}</div>
+        @elseif(!empty($aCoverage['coverage_pattern']))
+            <div><strong>Spatial pattern:</strong> {{ $aCoverage['coverage_pattern'] }}</div>
+        @endif
+    </div>
+    <p class="note">Ratio = distinct driving rollup cells ÷ cells in the configured export bounds at the report coverage zoom tier (not “share of a city”). Denominator: operational_bounds_grid. The spatial summary links driving grid coverage to credited parking time in GeoZones (table above).</p>
+
+    <h2>Campaign insights</h2>
+    @if(!empty($aInsights['summary']))
+        <p class="insights-summary">{{ $aInsights['summary'] }}</p>
+    @endif
+    @if(!empty($aInsights['highlights']) && is_array($aInsights['highlights']))
+        <ul class="insights-highlights">
+            @foreach($aInsights['highlights'] as $line)
+                @if(is_string($line) && $line !== '')
+                    <li>{{ $line }}</li>
+                @endif
+            @endforeach
+        </ul>
+    @endif
+    <p class="note">Parking geography in this section follows the Parking time by zone table (GeoZone attribution), not heatmap sample cells.</p>
 </section>
 
 @if(!empty($includeDriving))
@@ -194,7 +172,7 @@
     @else
         <p>No map image for this view.</p>
     @endif
-    <p class="note">Heat layer shows parking rollup density (sample-weighted cells). Labels highlight top zones for the viewport.</p>
+    <p class="note">Heat layer shows parking rollup density (sample-weighted cells).</p>
 </section>
 @endforeach
 @endif
