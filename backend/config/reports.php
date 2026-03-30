@@ -82,11 +82,11 @@ return [
                 'id' => 'riga',
                 'label' => 'Riga',
                 'fit_to_data' => false,
-                // Tighter frame ~1.2× zoom vs previous; centered on city core (~56.949, 24.105).
-                'south' => 56.916,
-                'west' => 24.043,
-                'north' => 56.982,
-                'east' => 24.168,
+                // City core (~56.949, 24.105); span triggers rollup map zoom 15 for finer cells.
+                'south' => 56.924,
+                'west' => 24.055,
+                'north' => 56.974,
+                'east' => 24.155,
             ],
         ],
         /**

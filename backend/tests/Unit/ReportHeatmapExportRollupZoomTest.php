@@ -17,7 +17,7 @@ class ReportHeatmapExportRollupZoomTest extends TestCase
         $riga = ReportHeatmapViewports::byId('riga');
         $this->assertNotNull($riga);
         $bboxRiga = ReportHeatmapExportBBox::forRollup($riga);
-        $this->assertSame(14, ReportHeatmapExportRollupZoom::forViewport($riga, $bboxRiga));
+        $this->assertSame(15, ReportHeatmapExportRollupZoom::forViewport($riga, $bboxRiga));
 
         $lv = ReportHeatmapViewports::byId('latvia');
         $this->assertNotNull($lv);
