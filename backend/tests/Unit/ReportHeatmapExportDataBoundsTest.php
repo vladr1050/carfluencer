@@ -59,4 +59,28 @@ class ReportHeatmapExportDataBoundsTest extends TestCase
         $r = ReportHeatmapExportDataBounds::compute($heat, $this->envelope());
         $this->assertFalse($r['use_data_fit']);
     }
+
+    public function test_composition_trims_low_weight_spatial_outlier(): void
+    {
+        Config::set('reports.heatmap_export.data_fit_to_active_cells', true);
+        Config::set('reports.heatmap_export.data_fit_composition_enabled', true);
+        Config::set('reports.heatmap_export.data_fit_composition_min_points', 8);
+        Config::set('reports.heatmap_export.data_fit_composition_mass_low_frac', 0.1);
+        Config::set('reports.heatmap_export.data_fit_composition_mass_high_frac', 0.9);
+        Config::set('reports.heatmap_export.data_fit_composition_pad_ratio', 0.0);
+        $cluster = [];
+        for ($i = 0; $i < 9; $i++) {
+            $cluster[] = [56.950 + $i * 0.0001, 24.100 + $i * 0.0001, 1.0];
+        }
+        $heat = array_merge($cluster, [[57.30, 24.80, 0.01]]);
+        $rWide = ReportHeatmapExportDataBounds::compute($heat, $this->envelope());
+        $this->assertTrue($rWide['use_data_fit']);
+        $this->assertLessThan(57.25, $rWide['north'], 'composition mass should drop far outlier lat');
+
+        Config::set('reports.heatmap_export.data_fit_composition_enabled', false);
+        $rLegacy = ReportHeatmapExportDataBounds::compute($heat, $this->envelope());
+        $this->assertTrue($rLegacy['use_data_fit']);
+        $this->assertSame(57.15, $rLegacy['north'], 'envelope clamps raw max lat');
+        $this->assertLessThan($rLegacy['north'], $rWide['north'], 'composition bbox is tighter on north than legacy');
+    }
 }

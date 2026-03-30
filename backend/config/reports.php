@@ -74,11 +74,25 @@ return [
         'max_cells' => (int) env('CAMPAIGN_REPORT_HEATMAP_MAX_CELLS', 50000),
         'density_high_cells_per_deg2' => (float) env('CAMPAIGN_REPORT_HEATMAP_DENSITY_HIGH', 2500),
         'density_low_cells_per_deg2' => (float) env('CAMPAIGN_REPORT_HEATMAP_DENSITY_LOW', 200),
-        /** PNG Leaflet fitBounds max zoom (cap single-street over-zoom). */
-        'leaflet_fit_max_zoom' => max(8, min(18, (int) env('CAMPAIGN_REPORT_HEATMAP_LEAFLET_FIT_MAX_ZOOM', 14))),
+        /** PNG Leaflet fitBounds max zoom (cap single-street over-zoom). Higher = tighter composition on dense data. */
+        'leaflet_fit_max_zoom' => max(8, min(18, (int) env('CAMPAIGN_REPORT_HEATMAP_LEAFLET_FIT_MAX_ZOOM', 15))),
         /** Fit map to active export points (rollup cells) instead of full viewport rectangle. */
         'data_fit_to_active_cells' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT', true), FILTER_VALIDATE_BOOLEAN),
-        /** Geographic pad on data min/max before fitBounds; pixel glow margin is separate (see data_fit_heat_*). */
+        /**
+         * Composition-first framing: bbox from intensity-weighted cumulative mass percentiles (per axis),
+         * not raw min/max of cells — trims sparse tails so heat fills the frame; glow still handled in blade pixel padding.
+         */
+        'data_fit_composition_enabled' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION', true), FILTER_VALIDATE_BOOLEAN),
+        'data_fit_composition_min_points' => max(3, min(500, (int) env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION_MIN_POINTS', 10))),
+        /** Cumulative mass fraction [low, high] for lat/lng extent (e.g. 0.07–0.93 ≈ central 86% of weight). */
+        'data_fit_composition_mass_low_frac' => max(0.0, min(0.49, (float) env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION_MASS_LOW', 0.07))),
+        'data_fit_composition_mass_high_frac' => max(0.51, min(1.0, (float) env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION_MASS_HIGH', 0.93))),
+        /** Geographic pad on composition bbox (tighter than legacy; pixel heat margin is separate). */
+        'data_fit_composition_pad_ratio' => max(0.0, min(0.2, (float) env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION_PAD', 0.07))),
+        /** Small floor when composition span collapses (avoids degenerate fit); much smaller than legacy min span. */
+        'data_fit_composition_floor_lat_span_deg' => max(0.0005, min(0.05, (float) env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION_FLOOR_LAT', 0.002))),
+        'data_fit_composition_floor_lng_span_deg' => max(0.0005, min(0.05, (float) env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION_FLOOR_LNG', 0.003))),
+        /** Geographic pad on data min/max before fitBounds (fallback path when composition off or too few points). */
         'data_fit_padding_ratio' => max(0.0, min(0.25, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_PAD', 0.14))),
         /**
          * fitBounds pixel padding so leaflet.heat (radius+blur canvas) stays inside the PNG frame.
