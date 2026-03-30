@@ -96,15 +96,19 @@ final class ReportHeatmapViewports
         $w = isset($b['west']) ? (float) $b['west'] : 20.70;
         $n = isset($b['north']) ? (float) $b['north'] : 59.75;
         $e = isset($b['east']) ? (float) $b['east'] : 28.52;
+        $midLat = ($s + $n) / 2.0;
+        $midLng = ($w + $e) / 2.0;
+        $qLat = ($n - $s) / 4.0;
+        $qLng = ($e - $w) / 4.0;
 
         return [
             'id' => 'baltics',
             'label' => 'Baltics (Estonia, Latvia, Lithuania)',
             'fit_to_data' => false,
-            'south' => $s,
-            'west' => $w,
-            'north' => $n,
-            'east' => $e,
+            'south' => $midLat - $qLat,
+            'west' => $midLng - $qLng,
+            'north' => $midLat + $qLat,
+            'east' => $midLng + $qLng,
         ];
     }
 }

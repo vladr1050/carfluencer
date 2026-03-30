@@ -1,5 +1,19 @@
 <?php
 
+/** Operational heatmap envelope (unchanged); PDF “Baltics” viewport is half this span centered (~2× zoom vs full). */
+$heatmapSouth = (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_SOUTH', 53.70);
+$heatmapNorth = (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_NORTH', 59.75);
+$heatmapWest = (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_WEST', 20.70);
+$heatmapEast = (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_EAST', 28.52);
+$heatmapMidLat = ($heatmapSouth + $heatmapNorth) / 2.0;
+$heatmapMidLng = ($heatmapWest + $heatmapEast) / 2.0;
+$heatmapLatQuarter = ($heatmapNorth - $heatmapSouth) / 4.0;
+$heatmapLngQuarter = ($heatmapEast - $heatmapWest) / 4.0;
+$pdfBalticsSouth = $heatmapMidLat - $heatmapLatQuarter;
+$pdfBalticsNorth = $heatmapMidLat + $heatmapLatQuarter;
+$pdfBalticsWest = $heatmapMidLng - $heatmapLngQuarter;
+$pdfBalticsEast = $heatmapMidLng + $heatmapLngQuarter;
+
 return [
 
     /*
@@ -31,43 +45,42 @@ return [
             : null,
         'clip_to_bounds' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_CLIP_TO_BOUNDS', true), FILTER_VALIDATE_BOOLEAN),
         'bounds' => [
-            'south' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_SOUTH', 53.70),
-            'north' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_NORTH', 59.75),
-            'west' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_WEST', 20.70),
-            'east' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_EAST', 28.52),
+            'south' => $heatmapSouth,
+            'north' => $heatmapNorth,
+            'west' => $heatmapWest,
+            'east' => $heatmapEast,
         ],
         /*
-        | PDF: три фиксированных кадра для Driving и Parking (одинаковые bbox).
-        | 1) Операционный охват теплокарт = bounds (EE/LV/LT, не шире).
-        | 2) Латвия. 3) Рига (городской кадр).
+        | PDF: три фиксированных кадра для Driving и Parking. Каждый bbox — половина прежнего охвата
+        | относительно центра (~2× приближение при том же размере PNG).
         */
         'viewports' => [
             [
                 'id' => 'baltics',
                 'label' => 'Baltics (Estonia, Latvia, Lithuania)',
                 'fit_to_data' => false,
-                'south' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_SOUTH', 53.70),
-                'west' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_WEST', 20.70),
-                'north' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_NORTH', 59.75),
-                'east' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_EAST', 28.52),
+                'south' => $pdfBalticsSouth,
+                'west' => $pdfBalticsWest,
+                'north' => $pdfBalticsNorth,
+                'east' => $pdfBalticsEast,
             ],
             [
                 'id' => 'latvia',
                 'label' => 'Latvia',
                 'fit_to_data' => false,
-                'south' => 55.67,
-                'west' => 20.97,
-                'north' => 58.09,
-                'east' => 28.28,
+                'south' => 56.28,
+                'west' => 22.80,
+                'north' => 57.49,
+                'east' => 26.45,
             ],
             [
                 'id' => 'riga',
                 'label' => 'Riga',
                 'fit_to_data' => false,
-                'south' => 56.89,
-                'west' => 23.98,
-                'north' => 57.05,
-                'east' => 24.28,
+                'south' => 56.93,
+                'west' => 24.055,
+                'north' => 57.01,
+                'east' => 24.205,
             ],
         ],
         /**
