@@ -163,11 +163,23 @@ class DatabaseSeeder extends Seeder
         GeoZone::query()->updateOrCreate(
             ['code' => 'DEMO-CITY'],
             [
-                'name' => 'Demo city core (replace with real geofences)',
+                'name' => 'Demo city core (Vilnius area — replace in admin)',
                 'min_lat' => 54.60,
                 'max_lat' => 54.80,
                 'min_lng' => 25.00,
                 'max_lng' => 25.40,
+                'active' => false,
+            ]
+        );
+
+        GeoZone::query()->updateOrCreate(
+            ['code' => 'RIGA-METRO'],
+            [
+                'name' => 'Riga metropolitan (default for parking-by-zone)',
+                'min_lat' => 56.82,
+                'max_lat' => 57.12,
+                'min_lng' => 23.60,
+                'max_lng' => 24.45,
                 'active' => true,
             ]
         );
