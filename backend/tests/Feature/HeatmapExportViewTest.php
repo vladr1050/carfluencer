@@ -37,6 +37,7 @@ class HeatmapExportViewTest extends TestCase
         $this->assertStringContainsString('same as advertiser portal', $html);
         $this->assertStringContainsString('leaflet.heat', $html);
         $this->assertStringContainsString('#440154', $html);
+        $this->assertStringContainsString('heatmapFitBoundsPadding', $html);
     }
 
     public function test_parking_export_template_matches_portal_legend(): void
@@ -69,5 +70,6 @@ class HeatmapExportViewTest extends TestCase
         $this->assertStringContainsString('same as advertiser portal', $html);
         $this->assertStringContainsString('leaflet.heat', $html);
         $this->assertStringNotContainsString('circleMarker', $html);
+        $this->assertStringContainsString('heatmapFitBoundsPadding', $html);
     }
 }

@@ -62,6 +62,9 @@
 @endif
 @php
     $leafletFitMaxExport = max(8, min(19, (int) config('reports.heatmap_export.leaflet_fit_max_zoom', 14)));
+    $heatGlowSafety = max(1.0, min(2.0, (float) config('reports.heatmap_export.data_fit_heat_glow_safety_factor', 1.22)));
+    $heatGlowMinPx = max(0, min(80, (int) config('reports.heatmap_export.data_fit_heat_min_pixel_padding', 10)));
+    $heatGlowMaxPx = max(16, min(200, (int) config('reports.heatmap_export.data_fit_heat_max_pixel_padding', 140)));
 @endphp
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
@@ -72,6 +75,9 @@
     const leafletFitMax = @json($leafletFitMaxExport);
     const tile = @json($tileLayer);
     const heatOpts = @json($heatLayerOptions);
+    const heatGlowSafety = @json($heatGlowSafety);
+    const heatGlowMinPx = @json($heatGlowMinPx);
+    const heatGlowMaxPx = @json($heatGlowMaxPx);
     const map = L.map('map', { zoomControl: false, attributionControl: true });
     const tileMax = Math.min(19, parseInt(tile.max_zoom, 10) || 20);
     const tileOptions = {
@@ -83,7 +89,15 @@
     }
     L.tileLayer(tile.url, tileOptions).addTo(map);
 
-    const edgePadding = [0, 0];
+    /** Pixel inset for fitBounds so leaflet.heat radius+blur is not clipped at PNG edges (driving + parking). */
+    function heatmapFitBoundsPadding() {
+        const r = Number(heatOpts.radius) || 0;
+        const b = Number(heatOpts.blur) || 0;
+        let p = Math.ceil((r + b) * heatGlowSafety);
+        p = Math.max(heatGlowMinPx, Math.min(heatGlowMaxPx, p));
+        return [p, p];
+    }
+    const edgePadding = heatmapFitBoundsPadding();
 
     function applyViewport() {
         if (mapFit && mapFit.use_data_fit) {

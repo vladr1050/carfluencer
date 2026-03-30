@@ -5,6 +5,10 @@ namespace App\Services\Reports;
 /**
  * Tight Leaflet fitBounds for PDF heatmap PNG: bbox from active heat points (rollup cells),
  * padded and clamped to the viewport envelope; falls back to legacy fitting when spread is huge or too few points.
+ *
+ * Visual leaflet.heat glow (radius + blur in screen pixels) is kept inside the PNG via
+ * {@see resources/views/reports/heatmap-export.blade.php} fitBounds pixel padding, derived from the same
+ * {@see \App\Services\Telemetry\HeatmapLeafletStyle::heatLayerOptionsForExport} as the layer.
  */
 final class ReportHeatmapExportDataBounds
 {

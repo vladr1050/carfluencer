@@ -78,7 +78,15 @@ return [
         'leaflet_fit_max_zoom' => max(8, min(18, (int) env('CAMPAIGN_REPORT_HEATMAP_LEAFLET_FIT_MAX_ZOOM', 14))),
         /** Fit map to active export points (rollup cells) instead of full viewport rectangle. */
         'data_fit_to_active_cells' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT', true), FILTER_VALIDATE_BOOLEAN),
-        'data_fit_padding_ratio' => max(0.0, min(0.25, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_PAD', 0.12))),
+        /** Geographic pad on data min/max before fitBounds; pixel glow margin is separate (see data_fit_heat_*). */
+        'data_fit_padding_ratio' => max(0.0, min(0.25, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_PAD', 0.14))),
+        /**
+         * fitBounds pixel padding so leaflet.heat (radius+blur canvas) stays inside the PNG frame.
+         * Effective pad = clamp(ceil((radius+blur)*safety), min..max). Applied to driving + parking export.
+         */
+        'data_fit_heat_glow_safety_factor' => max(1.0, min(2.0, (float) env('CAMPAIGN_REPORT_HEATMAP_HEAT_GLOW_SAFETY', 1.22))),
+        'data_fit_heat_min_pixel_padding' => max(0, min(80, (int) env('CAMPAIGN_REPORT_HEATMAP_HEAT_GLOW_MIN_PX', 10))),
+        'data_fit_heat_max_pixel_padding' => max(16, min(200, (int) env('CAMPAIGN_REPORT_HEATMAP_HEAT_GLOW_MAX_PX', 140))),
         'data_fit_min_points' => max(1, min(100, (int) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_MIN_POINTS', 2))),
         'data_fit_min_lat_span_deg' => max(0.001, min(1.0, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_MIN_LAT_SPAN', 0.012))),
         'data_fit_min_lng_span_deg' => max(0.001, min(1.0, (float) env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT_MIN_LNG_SPAN', 0.018))),
