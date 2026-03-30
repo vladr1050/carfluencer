@@ -11,6 +11,8 @@
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
+        "michaellindahl/php-h3": "^2.1",
+        "openspout/openspout": "^4.0",
         "spatie/browsershot": "^5.2"
     },
     "require-dev": {

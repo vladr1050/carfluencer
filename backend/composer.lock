@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "38cb58f6b64278755d0e5eb8d06b409d",
+    "content-hash": "8fd0630bf8a7199769a539de0cbdcf44",
     "packages": [
         {
             "name": "blade-ui-kit/blade-heroicons",
@@ -3297,6 +3297,50 @@
                 }
             ],
             "time": "2026-02-28T00:01:19+00:00"
+        },
+        {
+            "name": "michaellindahl/php-h3",
+            "version": "2.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/michaellindahl/php-h3.git",
+                "reference": "bf0333cfa2c87e4bdca09f02c68002399a0a14ef"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/michaellindahl/php-h3/zipball/bf0333cfa2c87e4bdca09f02c68002399a0a14ef",
+                "reference": "bf0333cfa2c87e4bdca09f02c68002399a0a14ef",
+                "shasum": ""
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": "^7.4 | ^8.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9.2"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "MichaelLindahl\\H3\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Michael Lindahl",
+                    "email": "me@michaellindahl.com"
+                }
+            ],
+            "description": "A PHP library for Uber's H3 C Library using FFI.",
+            "support": {
+                "issues": "https://github.com/michaellindahl/php-h3/issues",
+                "source": "https://github.com/michaellindahl/php-h3/tree/2.1.0"
+            },
+            "time": "2022-08-08T00:59:59+00:00"
         },
         {
             "name": "monolog/monolog",

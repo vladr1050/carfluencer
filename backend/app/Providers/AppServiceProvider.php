@@ -8,6 +8,9 @@ use App\Services\Analytics\Contracts\LocationLabelProviderInterface;
 use App\Services\Analytics\NominatimLocationLabelProvider;
 use App\Services\Analytics\NullLocationLabelProvider;
 use App\Services\Analytics\TopLocationLabelResolver;
+use App\Services\ImpressionEngine\Contracts\H3IndexerInterface;
+use App\Services\ImpressionEngine\FakeH3Indexer;
+use App\Services\ImpressionEngine\LibH3Indexer;
 use App\Services\Reports\BrowsershotCampaignReportPdfService;
 use App\Services\Reports\BrowsershotHeatmapImageService;
 use App\Services\Reports\CampaignReportMetricsService;
@@ -32,6 +35,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(H3IndexerInterface::class, function () {
+            return config('impression_engine.h3.driver') === 'fake'
+                ? new FakeH3Indexer
+                : new LibH3Indexer;
+        });
+
         $this->app->singleton(CampaignReportMetricsServiceInterface::class, CampaignReportMetricsService::class);
 
         $this->app->bind(LocationLabelProviderInterface::class, function () {

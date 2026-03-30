@@ -38,6 +38,8 @@ The MVP focuses on:
 /architecture
 04_system_architecture.md
 05_telemetry_pipeline.md
+06_heatmap_rollup.md
+07_impression_engine_big_data_import.md — MVP: mobility reference Excel → H3 res 9, AVG per cell, streaming import
 
 /domain
 06_domain_entities.md
