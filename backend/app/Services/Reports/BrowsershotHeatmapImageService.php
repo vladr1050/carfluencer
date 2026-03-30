@@ -25,7 +25,7 @@ final class BrowsershotHeatmapImageService implements HeatmapImageServiceInterfa
         array $vehicleIds,
         string $mode,
         string $absolutePath,
-        string $viewportId = 'full',
+        string $viewportId = 'baltics',
         ?array $parkingTopLocations = null,
     ): void {
         if (! in_array($mode, ['driving', 'parking'], true)) {

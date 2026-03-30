@@ -37,32 +37,37 @@ return [
             'east' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_EAST', 28.52),
         ],
         /*
-        | Три (или больше) кадра в PDF: fit_to_data = по точкам; иначе фикс. bbox.
+        | PDF: три фиксированных кадра для Driving и Parking (одинаковые bbox).
+        | 1) Операционный охват теплокарт = bounds (EE/LV/LT, не шире).
+        | 2) Латвия. 3) Рига (городской кадр).
         */
         'viewports' => [
             [
-                'id' => 'full',
-                'label' => 'Full coverage',
-                'fit_to_data' => true,
+                'id' => 'baltics',
+                'label' => 'Baltics (Estonia, Latvia, Lithuania)',
+                'fit_to_data' => false,
+                'south' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_SOUTH', 53.70),
+                'west' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_WEST', 20.70),
+                'north' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_NORTH', 59.75),
+                'east' => (float) env('CAMPAIGN_REPORT_HEATMAP_BOUNDS_EAST', 28.52),
             ],
             [
-                'id' => 'riga_jurmala',
-                'label' => 'Rīga + Jūrmala',
+                'id' => 'latvia',
+                'label' => 'Latvia',
                 'fit_to_data' => false,
-                'south' => 56.81,
-                'west' => 23.42,
-                'north' => 57.10,
-                'east' => 24.42,
+                'south' => 55.67,
+                'west' => 20.97,
+                'north' => 58.09,
+                'east' => 28.28,
             ],
             [
-                'id' => 'riga_center',
-                'label' => 'Rīga centrs',
+                'id' => 'riga',
+                'label' => 'Riga',
                 'fit_to_data' => false,
-                // Уже кадр (~центр ~56.95, 24.11): Vecrīga + ядро центра
-                'south' => 56.936,
-                'west' => 24.045,
-                'north' => 56.966,
-                'east' => 24.128,
+                'south' => 56.89,
+                'west' => 23.98,
+                'north' => 57.05,
+                'east' => 24.28,
             ],
         ],
         /**
@@ -76,13 +81,10 @@ return [
         'density_low_cells_per_deg2' => (float) env('CAMPAIGN_REPORT_HEATMAP_DENSITY_LOW', 200),
         /** PNG Leaflet fitBounds max zoom (cap single-street over-zoom). Higher = tighter composition on dense data. */
         'leaflet_fit_max_zoom' => max(8, min(18, (int) env('CAMPAIGN_REPORT_HEATMAP_LEAFLET_FIT_MAX_ZOOM', 15))),
-        /** Fit map to active export points (rollup cells) instead of full viewport rectangle. */
-        'data_fit_to_active_cells' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT', true), FILTER_VALIDATE_BOOLEAN),
-        /**
-         * Composition-first framing: bbox from intensity-weighted cumulative mass percentiles (per axis),
-         * not raw min/max of cells — trims sparse tails so heat fills the frame; glow still handled in blade pixel padding.
-         */
-        'data_fit_composition_enabled' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION', true), FILTER_VALIDATE_BOOLEAN),
+        /** PDF maps use fixed viewports below; set true to fit bounds to active cells (advanced). */
+        'data_fit_to_active_cells' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_DATA_FIT', false), FILTER_VALIDATE_BOOLEAN),
+        /** Used only when data_fit_to_active_cells is true. */
+        'data_fit_composition_enabled' => filter_var(env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION', false), FILTER_VALIDATE_BOOLEAN),
         'data_fit_composition_min_points' => max(3, min(500, (int) env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION_MIN_POINTS', 10))),
         /** Cumulative mass fraction [low, high] for lat/lng extent (e.g. 0.07–0.93 ≈ central 86% of weight). */
         'data_fit_composition_mass_low_frac' => max(0.0, min(0.49, (float) env('CAMPAIGN_REPORT_HEATMAP_COMPOSITION_MASS_LOW', 0.07))),

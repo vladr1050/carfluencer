@@ -11,16 +11,17 @@ class ReportHeatmapViewportsTest extends TestCase
     {
         $all = ReportHeatmapViewports::all();
         $this->assertCount(3, $all);
-        $this->assertSame('full', $all[0]['id']);
-        $this->assertTrue($all[0]['fit_to_data']);
+        $this->assertSame('baltics', $all[0]['id']);
+        $this->assertFalse($all[0]['fit_to_data']);
         $this->assertFalse($all[1]['fit_to_data']);
         $this->assertArrayHasKey('south', $all[1]);
+        $this->assertSame('riga', $all[2]['id']);
     }
 
-    public function test_by_id_returns_riga_center(): void
+    public function test_by_id_returns_riga(): void
     {
-        $v = ReportHeatmapViewports::byId('riga_center');
+        $v = ReportHeatmapViewports::byId('riga');
         $this->assertNotNull($v);
-        $this->assertSame('Rīga centrs', $v['label']);
+        $this->assertSame('Riga', $v['label']);
     }
 }

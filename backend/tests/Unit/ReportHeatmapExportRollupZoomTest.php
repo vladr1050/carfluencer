@@ -10,19 +10,19 @@ use Tests\TestCase;
 
 class ReportHeatmapExportRollupZoomTest extends TestCase
 {
-    public function test_riga_center_uses_higher_rollup_zoom_than_regional_frame(): void
+    public function test_riga_uses_higher_rollup_zoom_than_latvia(): void
     {
         Config::set('reports.heatmap_export.rollup_read_zoom', 12);
 
-        $center = ReportHeatmapViewports::byId('riga_center');
-        $this->assertNotNull($center);
-        $bboxCenter = ReportHeatmapExportBBox::forRollup($center);
-        $this->assertSame(15, ReportHeatmapExportRollupZoom::forViewport($center, $bboxCenter));
+        $riga = ReportHeatmapViewports::byId('riga');
+        $this->assertNotNull($riga);
+        $bboxRiga = ReportHeatmapExportBBox::forRollup($riga);
+        $this->assertSame(14, ReportHeatmapExportRollupZoom::forViewport($riga, $bboxRiga));
 
-        $rj = ReportHeatmapViewports::byId('riga_jurmala');
-        $this->assertNotNull($rj);
-        $bboxRj = ReportHeatmapExportBBox::forRollup($rj);
-        $this->assertSame(12, ReportHeatmapExportRollupZoom::forViewport($rj, $bboxRj));
+        $lv = ReportHeatmapViewports::byId('latvia');
+        $this->assertNotNull($lv);
+        $bboxLv = ReportHeatmapExportBBox::forRollup($lv);
+        $this->assertSame(12, ReportHeatmapExportRollupZoom::forViewport($lv, $bboxLv));
     }
 
     public function test_fit_to_data_uses_base_config_zoom(): void

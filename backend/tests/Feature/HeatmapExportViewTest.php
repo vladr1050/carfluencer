@@ -17,7 +17,15 @@ class HeatmapExportViewTest extends TestCase
             'viewportLabel' => 'Full',
             'periodLabel' => '2026-03-01 — 2026-03-31',
             'vehicleCount' => 1,
-            'viewport' => ['id' => 'full', 'label' => 'Full', 'fit_to_data' => true],
+            'viewport' => [
+                'id' => 'baltics',
+                'label' => 'Baltics',
+                'fit_to_data' => false,
+                'south' => 53.7,
+                'west' => 20.7,
+                'north' => 59.75,
+                'east' => 28.52,
+            ],
             'tileLayer' => [
                 'url' => 'https://example.test/tiles/{z}/{x}/{y}.png',
                 'attribution' => '',
@@ -50,7 +58,15 @@ class HeatmapExportViewTest extends TestCase
             'viewportLabel' => 'Full',
             'periodLabel' => '2026-03-01 — 2026-03-31',
             'vehicleCount' => 1,
-            'viewport' => ['id' => 'full', 'label' => 'Full', 'fit_to_data' => true],
+            'viewport' => [
+                'id' => 'baltics',
+                'label' => 'Baltics',
+                'fit_to_data' => false,
+                'south' => 53.7,
+                'west' => 20.7,
+                'north' => 59.75,
+                'east' => 28.52,
+            ],
             'tileLayer' => [
                 'url' => 'https://example.test/tiles/{z}/{x}/{y}.png',
                 'attribution' => '',

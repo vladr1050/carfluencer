@@ -61,7 +61,7 @@
 </div>
 @endif
 @php
-    $leafletFitMaxExport = max(8, min(19, (int) config('reports.heatmap_export.leaflet_fit_max_zoom', 14)));
+    $leafletFitMaxExport = max(8, min(19, (int) config('reports.heatmap_export.leaflet_fit_max_zoom', 15)));
     $heatGlowSafety = max(1.0, min(2.0, (float) config('reports.heatmap_export.data_fit_heat_glow_safety_factor', 1.22)));
     $heatGlowMinPx = max(0, min(80, (int) config('reports.heatmap_export.data_fit_heat_min_pixel_padding', 10)));
     $heatGlowMaxPx = max(16, min(200, (int) config('reports.heatmap_export.data_fit_heat_max_pixel_padding', 140)));

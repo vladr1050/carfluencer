@@ -91,10 +91,20 @@ final class ReportHeatmapViewports
      */
     private static function fallbackFull(): array
     {
+        $b = config('reports.heatmap_export.bounds', []);
+        $s = isset($b['south']) ? (float) $b['south'] : 53.70;
+        $w = isset($b['west']) ? (float) $b['west'] : 20.70;
+        $n = isset($b['north']) ? (float) $b['north'] : 59.75;
+        $e = isset($b['east']) ? (float) $b['east'] : 28.52;
+
         return [
-            'id' => 'full',
-            'label' => 'Full coverage',
-            'fit_to_data' => true,
+            'id' => 'baltics',
+            'label' => 'Baltics (Estonia, Latvia, Lithuania)',
+            'fit_to_data' => false,
+            'south' => $s,
+            'west' => $w,
+            'north' => $n,
+            'east' => $e,
         ];
     }
 }
