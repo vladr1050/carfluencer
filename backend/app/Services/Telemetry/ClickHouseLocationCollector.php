@@ -47,10 +47,15 @@ class ClickHouseLocationCollector
 
         $where = $this->buildTimeWhereAfter($cursor->last_event_at);
         $sql = $this->buildSelectSql($where, $limit);
-        $rows = $this->client->queryJsonEachRow($sql);
-        $imported = $this->importer->import($rows);
-
-        $max = $this->maxEventAtFromRows($rows);
+        $batchSize = (int) config('telemetry.clickhouse.json_each_row_stream_batch', 2500);
+        $imported = 0;
+        $max = null;
+        $this->client->consumeJsonEachRowBatches($sql, $batchSize, function (array $batch) use (&$imported, &$max): void {
+            $imported += $this->importer->import($batch);
+            foreach ($batch as $row) {
+                $max = $this->mergeMaxEventAtFromRow($max, $row);
+            }
+        });
         if ($max !== null) {
             if ($cursor->last_event_at === null || $max->gt($cursor->last_event_at)) {
                 $cursor->last_event_at = $max;
@@ -85,10 +90,15 @@ class ClickHouseLocationCollector
         $where = $this->buildTimeWhereAfter($cursor->last_event_at);
         $where .= ' AND '.$this->deviceColumnSql()." = '{$imei}'";
         $sql = $this->buildSelectSql($where, $limit);
-        $rows = $this->client->queryJsonEachRow($sql);
-        $imported = $this->importer->import($rows);
-
-        $max = $this->maxEventAtFromRows($rows);
+        $batchSize = (int) config('telemetry.clickhouse.json_each_row_stream_batch', 2500);
+        $imported = 0;
+        $max = null;
+        $this->client->consumeJsonEachRowBatches($sql, $batchSize, function (array $batch) use (&$imported, &$max): void {
+            $imported += $this->importer->import($batch);
+            foreach ($batch as $row) {
+                $max = $this->mergeMaxEventAtFromRow($max, $row);
+            }
+        });
         if ($max !== null) {
             if ($cursor->last_event_at === null || $max->gt($cursor->last_event_at)) {
                 $cursor->last_event_at = $max;
@@ -243,15 +253,21 @@ class ClickHouseLocationCollector
         $total = 0;
         $where = $baseWhere;
 
+        $batchSize = (int) config('telemetry.clickhouse.json_each_row_stream_batch', 2500);
+
         for ($page = 0; $page < $maxPages; $page++) {
             $sql = $this->buildSelectSql($where, $pageLimit, true);
-            $rows = $this->client->queryJsonEachRow($sql);
-            if ($rows === []) {
+            $n = 0;
+            $last = null;
+            $this->client->consumeJsonEachRowBatches($sql, $batchSize, function (array $batch) use (&$total, &$n, &$last): void {
+                $total += $this->importer->import($batch);
+                $n += count($batch);
+                $last = $batch[array_key_last($batch)];
+            });
+            if ($n === 0) {
                 break;
             }
 
-            $total += $this->importer->import($rows);
-            $n = count($rows);
             if ($n < $pageLimit) {
                 break;
             }
@@ -264,7 +280,12 @@ class ClickHouseLocationCollector
                 break;
             }
 
-            $last = $rows[array_key_last($rows)];
+            if (! is_array($last)) {
+                Log::warning('ClickHouse historical: cannot build keyset from last row, stopping pagination');
+
+                break;
+            }
+
             $keyset = $this->extractHistoricalKeysetFromLastRow($last);
             if ($keyset === null) {
                 Log::warning('ClickHouse historical: cannot build keyset from last row, stopping pagination');
@@ -546,26 +567,24 @@ class ClickHouseLocationCollector
     /**
      * @param  list<array<string, mixed>>  $rows
      */
-    private function maxEventAtFromRows(array $rows): ?Carbon
+    private function mergeMaxEventAtFromRow(?Carbon $max, array $row): ?Carbon
     {
-        $max = null;
-        foreach ($rows as $row) {
-            $t = $row['event_at'] ?? $row['timestamp'] ?? null;
-            if ($t === null) {
-                continue;
+        $t = $row['event_at'] ?? $row['timestamp'] ?? null;
+        if ($t === null) {
+            return $max;
+        }
+        try {
+            if (is_numeric($t)) {
+                $c = Carbon::createFromTimestampUTC((int) $t);
+            } else {
+                $c = Carbon::parse((string) $t, 'UTC');
             }
-            try {
-                if (is_numeric($t)) {
-                    $c = Carbon::createFromTimestampUTC((int) $t);
-                } else {
-                    $c = Carbon::parse((string) $t, 'UTC');
-                }
-            } catch (\Throwable) {
-                continue;
-            }
-            if ($max === null || $c->gt($max)) {
-                $max = $c;
-            }
+        } catch (\Throwable) {
+            return $max;
+        }
+
+        if ($max === null || $c->gt($max)) {
+            return $c;
         }
 
         return $max;

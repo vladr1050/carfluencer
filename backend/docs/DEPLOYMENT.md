@@ -53,6 +53,12 @@ Async jobs (ClickHouse sync и др.): **`deploy/supervisor-laravel.conf.example
 
 Исторический импорт делает много HTTP-запросов к ClickHouse: таймаут одного запроса — **`TELEMETRY_CH_HTTP_TIMEOUT`** в **`.env`** (в конфиге по умолчанию **900** с, максимум **3600**). Слишком низкое значение даёт обрыв посреди страницы и повторы job до `MaxAttemptsExceededException`.
 
+Ответы **JSONEachRow** читаются **потоково** (без удержания всего тела в памяти). При очень тяжёлых окнах задайте **`TELEMETRY_CH_QUEUE_MEMORY_LIMIT=1024M`** (или выше) и в Supervisor оставьте **`php -d memory_limit=1024M`** для воркера. Если в логах всё ещё **`memory exhausted`** в `ClickHouseHttpClient`, уменьшите **`TELEMETRY_CH_HISTORICAL_ROWS_PER_CHUNK`** или **`TELEMETRY_CH_STREAM_BATCH`**.
+
+**Heatmap в браузере:** ошибки вида **`Allowed memory size of 134217728 bytes`** — это лимит **PHP-FPM** (**128M**). Поднимите **`memory_limit`** в пуле FPM (например **256M** или **512M**) для `php8.4-fpm`.
+
+**PDF / Browsershot:** не используйте **`/snap/bin/chromium`** под **`www-data`** (snap требует свой home и cgroup). Поставьте Chromium из пакета (`.deb`) и в **`.env`**: **`CAMPAIGN_REPORT_CHROME_PATH=/usr/bin/chromium`** (или путь из `which chromium`).
+
 После деплоя **`deploy/post-pull.sh`** вызывает **`queue:restart`** — воркеры завершают текущий job и Supervisor поднимает новый процесс.
 
 ## Storage

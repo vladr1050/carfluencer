@@ -46,6 +46,11 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
         TelemetrySyncImeiResolver $resolver,
         TelemetryVehicleSyncState $syncState,
     ): void {
+        $mem = config('telemetry.clickhouse.queue_memory_limit');
+        if (is_string($mem) && $mem !== '' && $mem !== '0') {
+            @ini_set('memory_limit', $mem);
+        }
+
         if (! $collector->isEnabled()) {
             Log::warning('SyncTelemetryScopeFromClickHouseJob skipped: ClickHouse disabled', [
                 'mode' => $this->mode,

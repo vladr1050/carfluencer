@@ -64,6 +64,10 @@ return [
         'pause_ms_between_historical_chunks' => max(0, min(120_000, (int) env('TELEMETRY_CH_PAUSE_MS_HISTORICAL_CHUNK', 500))),
         /** Per HTTP request to ClickHouse (one historical page can be large). Must stay below queue worker/job limits. */
         'http_timeout_seconds' => max(30, min(3600, (int) env('TELEMETRY_CH_HTTP_TIMEOUT', 900))),
+        /** Rows decoded per in-memory batch (streaming HTTP body); lowers peak RAM vs loading full JSONEachRow. */
+        'json_each_row_stream_batch' => max(500, min(20_000, (int) env('TELEMETRY_CH_STREAM_BATCH', 2500))),
+        /** PHP memory_limit while running ClickHouse sync queue jobs (empty = do not change). */
+        'queue_memory_limit' => env('TELEMETRY_CH_QUEUE_MEMORY_LIMIT', '1024M'),
     ],
 
     'cursor_incremental' => 'clickhouse:device_locations:incremental',

@@ -33,10 +33,10 @@ class TelemetryHistoricalPaginationTest extends TestCase
 
         $calls = 0;
         $client = Mockery::mock(ClickHouseHttpClient::class);
-        $client->shouldReceive('queryJsonEachRow')->andReturnUsing(function () use (&$calls, $rowsPage1, $rowsPage2) {
+        $client->shouldReceive('consumeJsonEachRowBatches')->andReturnUsing(function (string $sql, int $batchSize, callable $onBatch) use (&$calls, $rowsPage1, $rowsPage2): void {
             $calls++;
-
-            return $calls === 1 ? $rowsPage1 : $rowsPage2;
+            $rows = $calls === 1 ? $rowsPage1 : $rowsPage2;
+            $onBatch($rows);
         });
 
         $importer = $this->app->make(DeviceLocationBulkImporter::class);

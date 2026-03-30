@@ -32,6 +32,11 @@ class SyncVehicleTelemetryFromClickHouseJob implements ShouldQueue
         ClickHouseLocationCollector $collector,
         TelemetryVehicleSyncState $syncState,
     ): void {
+        $mem = config('telemetry.clickhouse.queue_memory_limit');
+        if (is_string($mem) && $mem !== '' && $mem !== '0') {
+            @ini_set('memory_limit', $mem);
+        }
+
         $vehicle = Vehicle::query()->find($this->vehicleId);
         if ($vehicle === null) {
             return;
