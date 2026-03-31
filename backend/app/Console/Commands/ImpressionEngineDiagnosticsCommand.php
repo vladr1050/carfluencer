@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\ImpressionEngine\Contracts\H3IndexerInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -70,6 +71,21 @@ class ImpressionEngineDiagnosticsCommand extends Command
                 ->whereBetween('date', [$from, $to])
                 ->count();
             $this->line('  rows in range: '.$n);
+
+            if ($n > 0 && config('impression_engine.h3.driver') !== 'fake') {
+                $sample = DB::table('campaign_vehicle_exposure_hourly')
+                    ->where('campaign_id', (int) $campaignId)
+                    ->whereBetween('date', [$from, $to])
+                    ->value('cell_id');
+                if ($sample !== null) {
+                    try {
+                        $geo = app(H3IndexerInterface::class)->cellIdToLatLng((string) $sample);
+                        $this->line('  H3 decode sample (first cell_id): lat='.round($geo['lat'], 6).' lng='.round($geo['lng'], 6));
+                    } catch (\Throwable $e) {
+                        $this->warn('  H3 decode sample failed: '.$e->getMessage());
+                    }
+                }
+            }
         } elseif ($campaignId !== null) {
             $this->newLine();
             $this->warn('Pass --from=Y-m-d and --to=Y-m-d with --campaign to count hourly rows for the snapshot period.');
