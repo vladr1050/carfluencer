@@ -6,12 +6,12 @@ use App\Enums\CampaignReportStatus;
 use App\Models\CampaignImpressionStat;
 use App\Models\CampaignReport;
 use App\Services\Analytics\CampaignAnalyticsService;
+use App\Services\ImpressionEngine\CampaignImpressionGeoZoneBreakdownService;
 use App\Services\Reports\CampaignReportDateSpan;
 use App\Services\Reports\CampaignReportLegacyKpisProjection;
 use App\Services\Reports\CampaignReportVehicleResolver;
 use App\Services\Reports\Contracts\CampaignReportPdfServiceInterface;
 use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
-use App\Services\ImpressionEngine\CampaignImpressionGeoZoneBreakdownService;
 use App\Services\Reports\ReportHeatmapViewports;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -95,6 +95,9 @@ class GenerateCampaignReportJob implements ShouldQueue
                 $snapshotImpressions = (int) $impressionSnapshot->total_gross_impressions;
                 $analyticsSnapshot['kpis']['impressions'] = $snapshotImpressions;
                 $kpis['impressions'] = $snapshotImpressions;
+
+                $impressionSnapshot->refresh();
+                $impressionZoneBreakdownPayload = $impressionZoneBreakdown->breakdownForSnapshot($impressionSnapshot, 10);
             }
 
             $disk = Storage::disk('local');

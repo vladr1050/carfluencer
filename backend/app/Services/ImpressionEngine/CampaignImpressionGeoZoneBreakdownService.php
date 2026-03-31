@@ -2,6 +2,7 @@
 
 namespace App\Services\ImpressionEngine;
 
+use App\Jobs\BuildCampaignImpressionZoneBreakdownJob;
 use App\Models\CampaignImpressionStat;
 use App\Models\CampaignVehicleExposureHourly;
 use App\Models\GeoZone;
@@ -22,6 +23,60 @@ final class CampaignImpressionGeoZoneBreakdownService
     public function __construct(
         private readonly H3IndexerInterface $h3,
     ) {}
+
+    /**
+     * For Filament/PDF: use persisted breakdown when present; avoid synchronous full scans on huge snapshots.
+     *
+     * @return array{
+     *     available: bool,
+     *     reason: string|null,
+     *     note: string|null,
+     *     total_impressions: int,
+     *     top_zones: list<ZoneRow>,
+     *     unattributed_impressions: int,
+     *     unattributed_share_pct: float
+     * }
+     */
+    public function breakdownForSnapshot(CampaignImpressionStat $stat, int $limit = 10): array
+    {
+        $cached = $stat->zone_breakdown_json;
+        if (is_array($cached) && $cached !== []) {
+            return $cached;
+        }
+
+        $from = $stat->date_from->toDateString();
+        $to = $stat->date_to->toDateString();
+        $rowCount = CampaignVehicleExposureHourly::query()
+            ->where('campaign_id', $stat->campaign_id)
+            ->whereBetween('date', [$from, $to])
+            ->count();
+
+        $maxLive = (int) config('impression_engine.calculation.zone_breakdown_max_hourly_rows_live', 25_000);
+
+        if ($rowCount > $maxLive) {
+            if ($stat->status === CampaignImpressionStat::STATUS_DONE) {
+                BuildCampaignImpressionZoneBreakdownJob::dispatch($stat->id);
+            }
+
+            return [
+                'available' => false,
+                'reason' => 'This snapshot has many hourly exposure rows; the top‑10 zone breakdown is computed in the background (several minutes). Refresh this page after a short wait.',
+                'note' => null,
+                'total_impressions' => 0,
+                'top_zones' => [],
+                'unattributed_impressions' => 0,
+                'unattributed_share_pct' => 0.0,
+            ];
+        }
+
+        $live = $this->topZonesForSnapshot($stat, $limit);
+
+        if ($stat->status === CampaignImpressionStat::STATUS_DONE && ($live['available'] ?? false)) {
+            $stat->update(['zone_breakdown_json' => $live]);
+        }
+
+        return $live;
+    }
 
     /**
      * @return array{
@@ -255,6 +310,10 @@ final class CampaignImpressionGeoZoneBreakdownService
     private function firstZoneContaining($zones, float $lat, float $lng): ?int
     {
         foreach ($zones as $zone) {
+            if ($lat < (float) $zone->min_lat || $lat > (float) $zone->max_lat
+                || $lng < (float) $zone->min_lng || $lng > (float) $zone->max_lng) {
+                continue;
+            }
             if ($zone->containsPoint($lat, $lng)) {
                 return (int) $zone->id;
             }

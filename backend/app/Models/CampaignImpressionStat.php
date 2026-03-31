@@ -35,6 +35,7 @@ class CampaignImpressionStat extends Model
         'unmatched_count',
         'status',
         'error_message',
+        'zone_breakdown_json',
     ];
 
     protected function casts(): array
@@ -52,6 +53,7 @@ class CampaignImpressionStat extends Model
             'matched_direct_count' => 'integer',
             'matched_fallback_count' => 'integer',
             'unmatched_count' => 'integer',
+            'zone_breakdown_json' => 'array',
         ];
     }
 

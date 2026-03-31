@@ -62,7 +62,7 @@ class CampaignImpressionStatInfolist
                         }
 
                         return [
-                            'breakdown' => app(CampaignImpressionGeoZoneBreakdownService::class)->topZonesForSnapshot($record),
+                            'breakdown' => app(CampaignImpressionGeoZoneBreakdownService::class)->breakdownForSnapshot($record),
                         ];
                     })
                     ->columnSpanFull(),

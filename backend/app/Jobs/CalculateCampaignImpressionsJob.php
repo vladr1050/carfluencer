@@ -61,6 +61,14 @@ class CalculateCampaignImpressionsJob implements ShouldQueue
                 $this->coefficientsVersion,
                 $snapshot,
             );
+
+            if ($snapshot !== null) {
+                $snapshot->refresh();
+                if ($snapshot->status === CampaignImpressionStat::STATUS_DONE) {
+                    $snapshot->update(['zone_breakdown_json' => null]);
+                    BuildCampaignImpressionZoneBreakdownJob::dispatch($snapshot->id);
+                }
+            }
         } catch (Throwable $e) {
             if ($snapshot !== null) {
                 $snapshot->update([

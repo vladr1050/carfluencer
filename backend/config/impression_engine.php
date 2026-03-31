@@ -43,6 +43,11 @@ return [
         'dwell_medium_max_seconds' => 60 * 60,
         /** Nearest mobility cell fallback (meters) using lat/lng centers. */
         'mobility_fallback_max_meters' => (float) env('IMPRESSION_ENGINE_MOBILITY_FALLBACK_M', 300),
+        /**
+         * Above this many hourly exposure rows, Filament/PDF must not recompute zone breakdown synchronously;
+         * use {@see BuildCampaignImpressionZoneBreakdownJob} and cached {@see CampaignImpressionStat::zone_breakdown_json}.
+         */
+        'zone_breakdown_max_hourly_rows_live' => (int) env('IMPRESSION_ENGINE_ZONE_BREAKDOWN_MAX_HOURLY_ROWS_LIVE', 25_000),
     ],
 
 ];
