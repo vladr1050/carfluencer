@@ -15,10 +15,11 @@ class CampaignImpressionStatInfolist
         return $schema
             ->components([
                 TextEntry::make('campaign.name')
-                    ->label('Campaign'),
+                    ->label('Campaign')
+                    ->placeholder('—'),
                 TextEntry::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn (?string $state): string => match ($state ?? '') {
                         CampaignImpressionStat::STATUS_QUEUED => 'gray',
                         CampaignImpressionStat::STATUS_PROCESSING => 'warning',
                         CampaignImpressionStat::STATUS_DONE => 'success',
@@ -44,7 +45,22 @@ class CampaignImpressionStatInfolist
                     ->columnSpanFull()
                     ->visible(fn (CampaignImpressionStat $record): bool => $record->status === CampaignImpressionStat::STATUS_FAILED),
                 SchemaView::make('filament.impression-engine.snapshot-zone-breakdown')
-                    ->viewData(function (CampaignImpressionStat $record): array {
+                    ->key('snapshot_zone_breakdown')
+                    ->viewData(function (?CampaignImpressionStat $record): array {
+                        if ($record === null) {
+                            return [
+                                'breakdown' => [
+                                    'available' => false,
+                                    'reason' => 'Snapshot record is not available.',
+                                    'note' => null,
+                                    'total_impressions' => 0,
+                                    'top_zones' => [],
+                                    'unattributed_impressions' => 0,
+                                    'unattributed_share_pct' => 0.0,
+                                ],
+                            ];
+                        }
+
                         return [
                             'breakdown' => app(CampaignImpressionGeoZoneBreakdownService::class)->topZonesForSnapshot($record),
                         ];

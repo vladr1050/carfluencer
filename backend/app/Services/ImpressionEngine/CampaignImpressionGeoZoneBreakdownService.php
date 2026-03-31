@@ -9,6 +9,7 @@ use App\Models\ImpressionCoefficient;
 use App\Models\MobilityReferenceCell;
 use App\Services\ImpressionEngine\Contracts\H3IndexerInterface;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * Estimates impression contribution per active {@see GeoZone} for a completed snapshot,
@@ -104,55 +105,61 @@ final class CampaignImpressionGeoZoneBreakdownService
                 $zones,
             ): void {
                 foreach ($chunk as $row) {
-                    $cellId = (string) $row->cell_id;
-                    $hour = (int) $row->hour;
-                    $exposureSeconds = (int) $row->exposure_seconds;
-                    $mode = (string) $row->mode;
-                    $avgSpeed = (float) ($row->avg_vehicle_speed ?? 0.0);
+                    try {
+                        $cellId = (string) $row->cell_id;
+                        $hour = (int) $row->hour;
+                        $exposureSeconds = (int) $row->exposure_seconds;
+                        $mode = (string) $row->mode;
+                        $avgSpeed = (float) ($row->avg_vehicle_speed ?? 0.0);
 
-                    $mobilityArr = null;
-                    if (isset($direct[$cellId])) {
-                        $c = $direct[$cellId];
-                        $mobilityArr = [
-                            'vehicle_aadt' => $c->vehicle_aadt,
-                            'pedestrian_daily' => $c->pedestrian_daily,
-                            'hourly_peak_factor' => $c->hourly_peak_factor,
-                        ];
-                    } else {
-                        $geo = $this->h3->cellIdToLatLng($cellId);
-                        $near = $spatial->nearestWithin($geo['lat'], $geo['lng'], $maxM);
-                        if ($near !== null) {
-                            $mobilityArr = $near['row'];
+                        $mobilityArr = null;
+                        if (isset($direct[$cellId])) {
+                            $c = $direct[$cellId];
+                            $mobilityArr = [
+                                'vehicle_aadt' => $c->vehicle_aadt,
+                                'pedestrian_daily' => $c->pedestrian_daily,
+                                'hourly_peak_factor' => $c->hourly_peak_factor,
+                            ];
+                        } else {
+                            $geo = $this->h3->cellIdToLatLng($cellId);
+                            $near = $spatial->nearestWithin($geo['lat'], $geo['lng'], $maxM);
+                            if ($near !== null) {
+                                $mobilityArr = $near['row'];
+                            }
                         }
-                    }
 
-                    if ($mobilityArr === null) {
+                        if ($mobilityArr === null) {
+                            continue;
+                        }
+
+                        if ($mode === 'driving') {
+                            $imp = ImpressionFormula::drivingImpressions(
+                                $exposureSeconds,
+                                $hour,
+                                $avgSpeed,
+                                $mobilityArr,
+                                $coeff
+                            );
+                        } else {
+                            $imp = ImpressionFormula::parkingImpressions(
+                                $exposureSeconds,
+                                $hour,
+                                $mobilityArr,
+                                $coeff
+                            );
+                        }
+
+                        $center = $this->h3->cellIdToLatLng($cellId);
+                        $zoneKey = $this->firstZoneContaining($zones, $center['lat'], $center['lng']);
+                        if ($zoneKey === null) {
+                            $unattributed += $imp;
+                        } else {
+                            $sums[$zoneKey] = ($sums[$zoneKey] ?? 0.0) + $imp;
+                        }
+                    } catch (Throwable $e) {
+                        report($e);
+
                         continue;
-                    }
-
-                    if ($mode === 'driving') {
-                        $imp = ImpressionFormula::drivingImpressions(
-                            $exposureSeconds,
-                            $hour,
-                            $avgSpeed,
-                            $mobilityArr,
-                            $coeff
-                        );
-                    } else {
-                        $imp = ImpressionFormula::parkingImpressions(
-                            $exposureSeconds,
-                            $hour,
-                            $mobilityArr,
-                            $coeff
-                        );
-                    }
-
-                    $center = $this->h3->cellIdToLatLng($cellId);
-                    $zoneKey = $this->firstZoneContaining($zones, $center['lat'], $center['lng']);
-                    if ($zoneKey === null) {
-                        $unattributed += $imp;
-                    } else {
-                        $sums[$zoneKey] = ($sums[$zoneKey] ?? 0.0) + $imp;
                     }
                 }
             });
