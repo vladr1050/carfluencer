@@ -4,6 +4,9 @@ namespace App\Filament\Resources\CampaignImpressionStats\Tables;
 
 use App\Filament\Resources\CampaignImpressionStats\CampaignImpressionStatResource;
 use App\Models\CampaignImpressionStat;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -30,8 +33,11 @@ class CampaignImpressionStatsTable
                 TextColumn::make('driving_impressions')->numeric()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('parking_impressions')->numeric()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('cpm')->numeric(decimalPlaces: 4)->sortable(),
-                TextColumn::make('mobility_data_version')->limit(24)->toggleable(),
-                TextColumn::make('coefficients_version')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('mobility_data_version')->label('Mobility version')->limit(24)->toggleable(),
+                TextColumn::make('coefficients_version')
+                    ->label('Coefficients version')
+                    ->limit(24)
+                    ->toggleable(),
                 TextColumn::make('error_message')
                     ->label('Last error')
                     ->limit(60)
@@ -41,6 +47,14 @@ class CampaignImpressionStatsTable
             ])
             ->contentFooter(view('filament.impression-engine.impression-snapshots-explainer'))
             ->recordUrl(fn (CampaignImpressionStat $record): string => CampaignImpressionStatResource::getUrl('view', ['record' => $record]))
+            ->recordActions([
+                DeleteAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ])
             ->defaultSort('id', 'desc');
     }
 }

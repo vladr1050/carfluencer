@@ -50,11 +50,6 @@ class CampaignImpressionStatResource extends Resource
         return false;
     }
 
-    public static function canDelete($record): bool
-    {
-        return false;
-    }
-
     public static function table(Table $table): Table
     {
         return CampaignImpressionStatsTable::configure($table);
