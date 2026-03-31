@@ -91,6 +91,11 @@ final class CampaignImpressionGeoZoneBreakdownService
         $from = $stat->date_from->toDateString();
         $to = $stat->date_to->toDateString();
 
+        $hourlyRowCount = CampaignVehicleExposureHourly::query()
+            ->where('campaign_id', $stat->campaign_id)
+            ->whereBetween('date', [$from, $to])
+            ->count();
+
         CampaignVehicleExposureHourly::query()
             ->where('campaign_id', $stat->campaign_id)
             ->whereBetween('date', [$from, $to])
@@ -173,7 +178,11 @@ final class CampaignImpressionGeoZoneBreakdownService
         $totalBreakdown = array_sum($rounded) + $unattributedInt;
         $note = null;
         if ($totalBreakdown === 0 && (int) $stat->total_gross_impressions > 0) {
-            $note = 'No hourly exposure rows for this period. Set IMPRESSION_ENGINE_STORE_EXPOSURE_HOURLY=true, then queue calculation again for the same campaign and dates to backfill exposure (idempotent runs now write hourly rows).';
+            if ($hourlyRowCount === 0) {
+                $note = 'No hourly exposure rows for this period. Set IMPRESSION_ENGINE_STORE_EXPOSURE_HOURLY=true, deploy the latest engine code, then queue calculation again for the same campaign and dates. Run php artisan config:clear on the server if env was changed.';
+            } else {
+                $note = 'Hourly exposure rows exist ('.$hourlyRowCount.') but attributed impressions are zero — check mobility version matches imported cells, H3/cell_id alignment, and that active Geo zones cover these locations.';
+            }
         }
 
         arsort($rounded, SORT_NUMERIC);

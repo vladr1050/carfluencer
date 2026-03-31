@@ -124,6 +124,12 @@ final class ImpressionExposureAggregatorService
      */
     public function persist(Campaign $campaign, string $dateFrom, string $dateTo, array $buckets, int $samplingSeconds): void
     {
+        if ($buckets === []) {
+            // Do not delete existing hourly rows when there is nothing to write (e.g. idempotent
+            // re-run with no telemetry in range would otherwise wipe previously stored exposure).
+            return;
+        }
+
         $tz = (string) config('impression_engine.calculation.timezone', 'Europe/Riga');
         $startLocal = CarbonImmutable::parse($dateFrom, $tz)->toDateString();
         $endLocal = CarbonImmutable::parse($dateTo, $tz)->toDateString();
