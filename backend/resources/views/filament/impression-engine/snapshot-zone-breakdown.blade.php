@@ -32,80 +32,103 @@
                 No attributed impressions to active Geo zones for this period (check zones or exposure data).
             </p>
         @else
-            <div class="mt-4 min-w-0 overflow-x-auto rounded-lg ring-1 ring-gray-200 dark:ring-white/10">
+            {{-- fi-not-prose: Filament .fi-prose forces th/td text-align:start and padding resets on nested tables. --}}
+            <div
+                class="fi-not-prose mt-4 min-w-0 overflow-x-auto rounded-lg ring-1 ring-gray-200 dark:ring-white/10"
+            >
                 <table
-                    class="w-full min-w-[40rem] table-fixed border-collapse text-left text-sm text-gray-900 dark:text-gray-100"
+                    class="min-w-[40rem] border-collapse text-sm text-gray-900 dark:text-gray-100"
+                    style="display: table; width: 100%; table-layout: fixed; border-collapse: collapse;"
                 >
                     <colgroup>
-                        <col class="w-[28%]" />
-                        <col class="w-[26%]" />
-                        <col class="w-[14%]" />
-                        <col class="w-[12%]" />
-                        <col class="w-[20%]" />
+                        <col style="width: 28%;" />
+                        <col style="width: 26%;" />
+                        <col style="width: 14%;" />
+                        <col style="width: 12%;" />
+                        <col style="width: 20%;" />
                     </colgroup>
-                    <thead>
-                        <tr class="border-b border-gray-200 bg-gray-50/90 dark:border-white/10 dark:bg-white/5">
+                    <thead style="display: table-header-group;">
+                        <tr
+                            class="border-b border-gray-200 bg-gray-50/90 dark:border-white/10 dark:bg-white/5"
+                            style="display: table-row;"
+                        >
                             <th
                                 scope="col"
-                                class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                                class="border-r border-gray-200 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-white/10 dark:text-gray-400"
+                                style="display: table-cell; text-align: left; vertical-align: bottom;"
                             >
                                 District
                             </th>
                             <th
                                 scope="col"
-                                class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                                class="border-r border-gray-200 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-white/10 dark:text-gray-400"
+                                style="display: table-cell; text-align: left; vertical-align: bottom;"
                             >
                                 Code
                             </th>
                             <th
                                 scope="col"
-                                class="border-l-2 border-dashed border-gray-300 px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-white/20 dark:text-gray-400"
+                                class="border-r-2 border-dashed border-gray-300 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-white/20 dark:text-gray-400"
+                                style="display: table-cell; text-align: right; vertical-align: bottom;"
                             >
                                 Impressions
                             </th>
                             <th
                                 scope="col"
-                                class="border-l border-gray-200 px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-white/15 dark:text-gray-400"
+                                class="border-r border-gray-200 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-white/15 dark:text-gray-400"
+                                style="display: table-cell; text-align: right; vertical-align: bottom;"
                             >
                                 Share
                             </th>
                             <th
                                 scope="col"
                                 class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                                style="display: table-cell; text-align: left; vertical-align: bottom;"
                             >
                                 Visual
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                    <tbody class="divide-y divide-gray-100 dark:divide-white/5" style="display: table-row-group;">
                         @foreach ($rows as $row)
                             @php
                                 $imp = (int) ($row['impressions'] ?? 0);
                                 $pct = (float) ($row['share_pct'] ?? 0);
                                 $barW = $maxImp > 0 ? round(100 * $imp / $maxImp) : 0;
                             @endphp
-                            <tr class="align-top">
-                                <td class="max-w-[14rem] px-4 py-3.5">
+                            <tr class="align-top" style="display: table-row;">
+                                <td
+                                    class="max-w-[14rem] border-r border-gray-100 px-4 py-3.5 dark:border-white/5"
+                                    style="display: table-cell; text-align: left; vertical-align: top;"
+                                >
                                     <span class="line-clamp-2 break-words text-gray-900 dark:text-gray-100">
                                         {{ $row['name'] ?? '—' }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3.5">
+                                <td
+                                    class="border-r border-gray-100 px-4 py-3.5 dark:border-white/5"
+                                    style="display: table-cell; text-align: left; vertical-align: top;"
+                                >
                                     <span class="font-mono text-xs leading-snug tracking-tight text-gray-700 dark:text-gray-300">
                                         {{ $row['code'] ?? '—' }}
                                     </span>
                                 </td>
                                 <td
-                                    class="border-l-2 border-dashed border-gray-300 px-6 py-3.5 text-right text-base font-semibold tabular-nums text-gray-950 dark:border-white/25 dark:text-white"
+                                    class="border-r-2 border-dashed border-gray-200 px-5 py-3.5 tabular-nums text-gray-950 dark:border-white/15 dark:text-white"
+                                    style="display: table-cell; text-align: right; vertical-align: top; font-weight: 600; font-size: 1rem;"
                                 >
                                     {{ number_format($imp) }}
                                 </td>
                                 <td
-                                    class="border-l border-gray-200 px-5 py-3.5 text-right tabular-nums text-gray-800 dark:border-white/15 dark:text-gray-100"
+                                    class="border-r border-gray-100 px-4 py-3.5 tabular-nums text-gray-800 dark:border-white/10 dark:text-gray-100"
+                                    style="display: table-cell; text-align: right; vertical-align: top;"
                                 >
                                     {{ number_format($pct, 2) }}%
                                 </td>
-                                <td class="min-w-[6rem] px-4 py-3.5">
+                                <td
+                                    class="min-w-[6rem] px-4 py-3.5"
+                                    style="display: table-cell; text-align: left; vertical-align: middle;"
+                                >
                                     <div class="h-2 w-full overflow-hidden rounded bg-gray-100 dark:bg-white/10">
                                         <div
                                             class="h-2 rounded bg-amber-500 dark:bg-amber-400"
