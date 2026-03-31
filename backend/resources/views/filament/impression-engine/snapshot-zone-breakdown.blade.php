@@ -32,31 +32,60 @@
                 No attributed impressions to active Geo zones for this period (check zones or exposure data).
             </p>
         @else
-            <div class="mt-4 overflow-x-auto">
-                <table class="w-full text-left text-sm text-gray-900 dark:text-gray-100">
+            <div class="mt-4 min-w-0 overflow-x-auto rounded-lg ring-1 ring-gray-200 dark:ring-white/10">
+                <table class="w-full min-w-[42rem] table-fixed border-collapse text-left text-sm text-gray-900 dark:text-gray-100">
+                    <colgroup>
+                        <col class="w-[32%]" />
+                        <col class="w-[26%]" />
+                        <col class="w-[14%]" />
+                        <col class="w-[10%]" />
+                        <col class="w-[18%]" />
+                    </colgroup>
                     <thead>
-                        <tr class="border-b border-gray-200 dark:border-white/10">
-                            <th class="py-2 pr-4 font-medium">District</th>
-                            <th class="py-2 pr-4 font-medium">Code</th>
-                            <th class="py-2 pr-4 text-right font-medium">Impressions</th>
-                            <th class="py-2 pr-4 text-right font-medium">Share</th>
-                            <th class="py-2 font-medium">Visual</th>
+                        <tr class="border-b border-gray-200 bg-gray-50/80 dark:border-white/10 dark:bg-white/5">
+                            <th class="px-3 py-2.5 align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                District
+                            </th>
+                            <th class="px-3 py-2.5 align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                Code
+                            </th>
+                            <th class="px-3 py-2.5 text-right align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                Impressions
+                            </th>
+                            <th class="px-3 py-2.5 text-right align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                Share
+                            </th>
+                            <th class="px-3 py-2.5 align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                Visual
+                            </th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-gray-100 dark:divide-white/5">
                         @foreach ($rows as $row)
                             @php
                                 $imp = (int) ($row['impressions'] ?? 0);
                                 $pct = (float) ($row['share_pct'] ?? 0);
                                 $barW = $maxImp > 0 ? round(100 * $imp / $maxImp) : 0;
                             @endphp
-                            <tr class="border-b border-gray-100 dark:border-white/5">
-                                <td class="py-2 pr-4">{{ $row['name'] ?? '—' }}</td>
-                                <td class="py-2 pr-4 font-mono text-xs text-gray-600 dark:text-gray-400">{{ $row['code'] ?? '—' }}</td>
-                                <td class="py-2 pr-4 text-right tabular-nums">{{ number_format($imp) }}</td>
-                                <td class="py-2 pr-4 text-right tabular-nums">{{ number_format($pct, 2) }}%</td>
-                                <td class="py-2">
-                                    <div class="h-2 w-full max-w-xs overflow-hidden rounded bg-gray-100 dark:bg-white/10">
+                            <tr class="align-middle">
+                                <td class="max-w-0 px-3 py-2.5 align-top">
+                                    <span class="line-clamp-2 break-words text-gray-900 dark:text-gray-100">
+                                        {{ $row['name'] ?? '—' }}
+                                    </span>
+                                </td>
+                                <td class="px-3 py-2.5 align-top">
+                                    <span class="inline-block whitespace-nowrap font-mono text-xs text-gray-700 dark:text-gray-300">
+                                        {{ $row['code'] ?? '—' }}
+                                    </span>
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-gray-900 dark:text-gray-100">
+                                    {{ number_format($imp) }}
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-gray-900 dark:text-gray-100">
+                                    {{ number_format($pct, 2) }}%
+                                </td>
+                                <td class="px-3 py-2.5 align-middle">
+                                    <div class="h-2 min-w-[4rem] overflow-hidden rounded bg-gray-100 dark:bg-white/10">
                                         <div
                                             class="h-2 rounded bg-amber-500 dark:bg-amber-400"
                                             style="width: {{ $barW }}%"
