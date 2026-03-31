@@ -7,6 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CampaignImpressionStat extends Model
 {
+    public const STATUS_QUEUED = 'queued';
+
+    public const STATUS_PROCESSING = 'processing';
+
+    public const STATUS_DONE = 'done';
+
+    public const STATUS_FAILED = 'failed';
+
     protected $fillable = [
         'campaign_id',
         'date_from',
@@ -25,6 +33,8 @@ class CampaignImpressionStat extends Model
         'matched_direct_count',
         'matched_fallback_count',
         'unmatched_count',
+        'status',
+        'error_message',
     ];
 
     protected function casts(): array

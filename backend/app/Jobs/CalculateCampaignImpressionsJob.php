@@ -3,10 +3,12 @@
 namespace App\Jobs;
 
 use App\Models\Campaign;
+use App\Models\CampaignImpressionStat;
 use App\Models\Vehicle;
 use App\Services\ImpressionEngine\CampaignImpressionCalculationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Throwable;
 
 class CalculateCampaignImpressionsJob implements ShouldQueue
 {
@@ -20,10 +22,23 @@ class CalculateCampaignImpressionsJob implements ShouldQueue
         public string $dateTo,
         public string $mobilityDataVersion,
         public bool $forceRecalculate = false,
+        public ?string $coefficientsVersion = null,
+        public ?int $snapshotId = null,
     ) {}
 
     public function handle(CampaignImpressionCalculationService $calculation): void
     {
+        $snapshot = $this->snapshotId !== null
+            ? CampaignImpressionStat::query()->find($this->snapshotId)
+            : null;
+
+        if ($snapshot !== null) {
+            $snapshot->update([
+                'status' => CampaignImpressionStat::STATUS_PROCESSING,
+                'error_message' => null,
+            ]);
+        }
+
         $campaign = Campaign::query()->findOrFail($this->campaignId);
 
         $vehicleIds = Vehicle::query()
@@ -35,13 +50,26 @@ class CalculateCampaignImpressionsJob implements ShouldQueue
             ->values()
             ->all();
 
-        $calculation->calculate(
-            $campaign,
-            $this->dateFrom,
-            $this->dateTo,
-            $this->mobilityDataVersion,
-            $this->forceRecalculate,
-            $vehicleIds,
-        );
+        try {
+            $calculation->calculate(
+                $campaign,
+                $this->dateFrom,
+                $this->dateTo,
+                $this->mobilityDataVersion,
+                $this->forceRecalculate,
+                $vehicleIds,
+                $this->coefficientsVersion,
+                $snapshot,
+            );
+        } catch (Throwable $e) {
+            if ($snapshot !== null) {
+                $snapshot->update([
+                    'status' => CampaignImpressionStat::STATUS_FAILED,
+                    'error_message' => mb_substr($e->getMessage(), 0, 2000),
+                ]);
+            }
+
+            throw $e;
+        }
     }
 }

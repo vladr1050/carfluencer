@@ -26,9 +26,17 @@ final class CampaignImpressionCalculationService
         string $mobilityDataVersion,
         bool $forceRecalculate,
         array $vehicleIds,
+        ?string $coeffVersion = null,
+        ?CampaignImpressionStat $targetSnapshot = null,
     ): CampaignImpressionStat {
-        $coeff = ImpressionCoefficient::query()->orderByDesc('id')->first();
+        $coeff = $coeffVersion !== null
+            ? ImpressionCoefficient::query()->where('version', $coeffVersion)->first()
+            : ImpressionCoefficient::query()->orderByDesc('id')->first();
         if ($coeff === null) {
+            if ($coeffVersion !== null) {
+                throw new RuntimeException("Impression coefficient version [{$coeffVersion}] not found.");
+            }
+
             throw new RuntimeException('No impression_coefficients row; run migrations.');
         }
 
@@ -52,10 +60,40 @@ final class CampaignImpressionCalculationService
         if (! $forceRecalculate) {
             $existing = CampaignImpressionStat::query()->where('input_fingerprint', $fingerprint)->first();
             if ($existing !== null) {
+                if ($targetSnapshot !== null && $targetSnapshot->id !== $existing->id) {
+                    $targetSnapshot->fill([
+                        'vehicles_count' => $existing->vehicles_count,
+                        'driving_impressions' => $existing->driving_impressions,
+                        'parking_impressions' => $existing->parking_impressions,
+                        'total_gross_impressions' => $existing->total_gross_impressions,
+                        'campaign_price' => $existing->campaign_price,
+                        'cpm' => $existing->cpm,
+                        'calculation_version' => $existing->calculation_version,
+                        'mobility_data_version' => $existing->mobility_data_version,
+                        'coefficients_version' => $existing->coefficients_version,
+                        'telemetry_sampling_seconds' => $existing->telemetry_sampling_seconds,
+                        'input_fingerprint' => $existing->input_fingerprint,
+                        'matched_direct_count' => $existing->matched_direct_count,
+                        'matched_fallback_count' => $existing->matched_fallback_count,
+                        'unmatched_count' => $existing->unmatched_count,
+                        'status' => CampaignImpressionStat::STATUS_DONE,
+                        'error_message' => null,
+                    ]);
+                    $targetSnapshot->save();
+
+                    return $targetSnapshot->refresh();
+                }
+
                 return $existing;
             }
         } else {
-            CampaignImpressionStat::query()->where('input_fingerprint', $fingerprint)->delete();
+            CampaignImpressionStat::query()
+                ->where('input_fingerprint', $fingerprint)
+                ->when(
+                    $targetSnapshot !== null,
+                    fn ($q) => $q->where('id', '!=', $targetSnapshot->id),
+                )
+                ->delete();
         }
 
         $mobilityRows = MobilityReferenceCell::query()
@@ -134,7 +172,7 @@ final class CampaignImpressionCalculationService
         $total = $drivingRounded + $parkingRounded;
         $cpm = $total > 0 ? round($priceNum / ($total / 1000.0), 4) : null;
 
-        return CampaignImpressionStat::query()->create([
+        $payload = [
             'campaign_id' => $campaign->id,
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
@@ -152,7 +190,18 @@ final class CampaignImpressionCalculationService
             'matched_direct_count' => $matchedDirect,
             'matched_fallback_count' => $matchedFallback,
             'unmatched_count' => $unmatched,
-        ]);
+            'status' => CampaignImpressionStat::STATUS_DONE,
+            'error_message' => null,
+        ];
+
+        if ($targetSnapshot !== null) {
+            $targetSnapshot->fill($payload);
+            $targetSnapshot->save();
+
+            return $targetSnapshot->refresh();
+        }
+
+        return CampaignImpressionStat::query()->create($payload);
     }
 
     private function priceString(Campaign $campaign): string

@@ -23,6 +23,7 @@ class AdvertiserCampaignImpressionController extends Controller
             ->where('campaign_id', $campaign->id)
             ->whereDate('date_from', $data['date_from'])
             ->whereDate('date_to', $data['date_to'])
+            ->where('status', CampaignImpressionStat::STATUS_DONE)
             ->orderByDesc('id')
             ->first();
 
