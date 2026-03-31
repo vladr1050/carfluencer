@@ -173,7 +173,7 @@ final class CampaignImpressionGeoZoneBreakdownService
         $totalBreakdown = array_sum($rounded) + $unattributedInt;
         $note = null;
         if ($totalBreakdown === 0 && (int) $stat->total_gross_impressions > 0) {
-            $note = 'No hourly exposure rows found for this period. Re-run the calculation with IMPRESSION_ENGINE_STORE_EXPOSURE_HOURLY enabled, or the snapshot predates exposure storage.';
+            $note = 'No hourly exposure rows for this period. Set IMPRESSION_ENGINE_STORE_EXPOSURE_HOURLY=true, then queue calculation again for the same campaign and dates to backfill exposure (idempotent runs now write hourly rows).';
         }
 
         arsort($rounded, SORT_NUMERIC);

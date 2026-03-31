@@ -12,6 +12,7 @@ use App\Services\ImpressionEngine\CampaignImpressionCalculationService;
 use App\Services\ImpressionEngine\Contracts\H3IndexerInterface;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -204,5 +205,66 @@ class CampaignImpressionCalculationTest extends TestCase
         $this->assertNotSame($first->id, $second->id);
         $this->assertSame(1, CampaignImpressionStat::query()->count());
         $this->assertSame($first->input_fingerprint, $second->input_fingerprint);
+    }
+
+    public function test_duplicate_fingerprint_backfills_hourly_exposure_when_storage_turned_on(): void
+    {
+        config(['impression_engine.calculation.store_exposure_hourly' => false]);
+
+        $h3 = app(H3IndexerInterface::class);
+        $cellId = $h3->latLngToCellId(56.92, 24.42);
+
+        MobilityReferenceCell::query()->create([
+            'cell_id' => $cellId,
+            'lat_center' => 56.92,
+            'lng_center' => 24.42,
+            'vehicle_aadt' => 600_000,
+            'pedestrian_daily' => 1_200,
+            'average_speed_kmh' => 42,
+            'hourly_peak_factor' => 1.1,
+            'data_version' => 'calc_test_v4',
+            'records_count' => 1,
+        ]);
+
+        $mediaOwner = User::factory()->mediaOwner()->create();
+        $vehicle = Vehicle::query()->create([
+            'media_owner_id' => $mediaOwner->id,
+            'brand' => 'T',
+            'model' => 'V',
+            'imei' => 'Z'.Str::upper(Str::random(8)),
+            'status' => 'active',
+        ]);
+        $advertiser = User::factory()->advertiser()->create();
+        $campaign = Campaign::query()->create([
+            'advertiser_id' => $advertiser->id,
+            'name' => 'C4',
+            'status' => 'active',
+            'total_price' => 300,
+        ]);
+        $campaign->vehicles()->attach($vehicle->id, [
+            'placement_size_class' => 'M',
+            'agreed_price' => 30,
+            'status' => 'active',
+        ]);
+
+        $digits = preg_replace('/\D+/', '', (string) $vehicle->imei);
+        $eventAt = CarbonImmutable::parse('2026-06-01 11:00:00', 'Europe/Riga')->utc();
+        DeviceLocation::query()->create([
+            'device_id' => $digits,
+            'event_at' => $eventAt,
+            'latitude' => 56.92,
+            'longitude' => 24.42,
+            'speed' => 42.0,
+        ]);
+
+        $svc = app(CampaignImpressionCalculationService::class);
+        $svc->calculate($campaign, '2026-06-01', '2026-06-01', 'calc_test_v4', false, [$vehicle->id]);
+
+        $this->assertSame(0, (int) DB::table('campaign_vehicle_exposure_hourly')->count());
+
+        config(['impression_engine.calculation.store_exposure_hourly' => true]);
+        $svc->calculate($campaign, '2026-06-01', '2026-06-01', 'calc_test_v4', false, [$vehicle->id]);
+
+        $this->assertGreaterThan(0, (int) DB::table('campaign_vehicle_exposure_hourly')->count());
     }
 }

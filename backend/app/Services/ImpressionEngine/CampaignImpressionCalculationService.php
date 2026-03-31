@@ -60,6 +60,11 @@ final class CampaignImpressionCalculationService
         if (! $forceRecalculate) {
             $existing = CampaignImpressionStat::query()->where('input_fingerprint', $fingerprint)->first();
             if ($existing !== null) {
+                // Idempotent return skips the main aggregate/persist path below; still backfill hourly
+                // exposure when enabled so zone breakdown and analytics work after toggling the flag
+                // or re-queuing the same inputs.
+                $this->persistHourlyExposureIfConfigured($campaign, $dateFrom, $dateTo);
+
                 if ($targetSnapshot !== null && $targetSnapshot->id !== $existing->id) {
                     $targetSnapshot->fill([
                         'vehicles_count' => $existing->vehicles_count,
@@ -202,6 +207,17 @@ final class CampaignImpressionCalculationService
         }
 
         return CampaignImpressionStat::query()->create($payload);
+    }
+
+    private function persistHourlyExposureIfConfigured(Campaign $campaign, string $dateFrom, string $dateTo): void
+    {
+        if (! filter_var(config('impression_engine.calculation.store_exposure_hourly', true), FILTER_VALIDATE_BOOLEAN)) {
+            return;
+        }
+
+        $sampling = (int) config('impression_engine.calculation.telemetry_assumed_seconds_per_point', 10);
+        $buckets = $this->exposureAggregator->aggregate($campaign, $dateFrom, $dateTo, $sampling);
+        $this->exposureAggregator->persist($campaign, $dateFrom, $dateTo, $buckets, $sampling);
     }
 
     private function priceString(Campaign $campaign): string
