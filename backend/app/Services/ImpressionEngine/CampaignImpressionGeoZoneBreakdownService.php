@@ -121,23 +121,43 @@ final class CampaignImpressionGeoZoneBreakdownService
                         $avgSpeed = (float) ($row->avg_vehicle_speed ?? 0.0);
 
                         $mobilityArr = null;
+                        /** @var float|null $zoneLat */
+                        $zoneLat = null;
+                        /** @var float|null $zoneLng */
+                        $zoneLng = null;
+
                         if (isset($direct[$cellId])) {
+                            /** @var MobilityReferenceCell $c */
                             $c = $direct[$cellId];
                             $mobilityArr = [
                                 'vehicle_aadt' => $c->vehicle_aadt,
                                 'pedestrian_daily' => $c->pedestrian_daily,
                                 'hourly_peak_factor' => $c->hourly_peak_factor,
                             ];
+                            $latC = (float) $c->lat_center;
+                            $lngC = (float) $c->lng_center;
+                            if (abs($latC) > 1e-9 || abs($lngC) > 1e-9) {
+                                $zoneLat = $latC;
+                                $zoneLng = $lngC;
+                            }
                         } else {
                             $geo = $this->h3->cellIdToLatLng($cellId);
                             $near = $spatial->nearestWithin($geo['lat'], $geo['lng'], $maxM);
                             if ($near !== null) {
                                 $mobilityArr = $near['row'];
+                                $zoneLat = $geo['lat'];
+                                $zoneLng = $geo['lng'];
                             }
                         }
 
                         if ($mobilityArr === null) {
                             continue;
+                        }
+
+                        if ($zoneLat === null || $zoneLng === null) {
+                            $geo = $this->h3->cellIdToLatLng($cellId);
+                            $zoneLat = $geo['lat'];
+                            $zoneLng = $geo['lng'];
                         }
 
                         if ($mode === 'driving') {
@@ -157,8 +177,7 @@ final class CampaignImpressionGeoZoneBreakdownService
                             );
                         }
 
-                        $center = $this->h3->cellIdToLatLng($cellId);
-                        $zoneKey = $this->firstZoneContaining($zones, $center['lat'], $center['lng']);
+                        $zoneKey = $this->firstZoneContaining($zones, $zoneLat, $zoneLng);
                         if ($zoneKey === null) {
                             $unattributed += $imp;
                         } else {
