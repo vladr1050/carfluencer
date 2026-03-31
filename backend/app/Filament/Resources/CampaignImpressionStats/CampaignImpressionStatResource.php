@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\CampaignImpressionStats;
 
 use App\Filament\Resources\CampaignImpressionStats\Pages\ListCampaignImpressionStats;
+use App\Filament\Resources\CampaignImpressionStats\Pages\ViewCampaignImpressionStat;
 use App\Filament\Resources\CampaignImpressionStats\Schemas\CampaignImpressionStatForm;
+use App\Filament\Resources\CampaignImpressionStats\Schemas\CampaignImpressionStatInfolist;
 use App\Filament\Resources\CampaignImpressionStats\Tables\CampaignImpressionStatsTable;
 use App\Models\CampaignImpressionStat;
 use BackedEnum;
@@ -33,6 +35,11 @@ class CampaignImpressionStatResource extends Resource
         return CampaignImpressionStatForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return CampaignImpressionStatInfolist::configure($schema);
+    }
+
     public static function canCreate(): bool
     {
         return false;
@@ -57,6 +64,7 @@ class CampaignImpressionStatResource extends Resource
     {
         return [
             'index' => ListCampaignImpressionStats::route('/'),
+            'view' => ViewCampaignImpressionStat::route('/{record}'),
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CampaignImpressionStats\Tables;
 
+use App\Filament\Resources\CampaignImpressionStats\CampaignImpressionStatResource;
 use App\Models\CampaignImpressionStat;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -39,6 +40,7 @@ class CampaignImpressionStatsTable
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->contentFooter(view('filament.impression-engine.impression-snapshots-explainer'))
+            ->recordUrl(fn (CampaignImpressionStat $record): string => CampaignImpressionStatResource::getUrl('view', ['record' => $record]))
             ->defaultSort('id', 'desc');
     }
 }
