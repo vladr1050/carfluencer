@@ -32,70 +32,78 @@
                 No attributed impressions to active Geo zones for this period (check zones or exposure data).
             </p>
         @else
+            @php
+                $zoneGrid = 'grid items-start gap-x-6 gap-y-2 sm:gap-x-10 [grid-template-columns:minmax(0,1.35fr)_minmax(0,1.15fr)_auto_auto_minmax(0,1fr)]';
+            @endphp
             <div class="mt-4 min-w-0 overflow-x-auto rounded-lg ring-1 ring-gray-200 dark:ring-white/10">
-                <table class="w-full min-w-[42rem] table-fixed border-collapse text-left text-sm text-gray-900 dark:text-gray-100">
-                    <colgroup>
-                        <col class="w-[32%]" />
-                        <col class="w-[26%]" />
-                        <col class="w-[14%]" />
-                        <col class="w-[10%]" />
-                        <col class="w-[18%]" />
-                    </colgroup>
-                    <thead>
-                        <tr class="border-b border-gray-200 bg-gray-50/80 dark:border-white/10 dark:bg-white/5">
-                            <th class="px-3 py-2.5 align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                District
-                            </th>
-                            <th class="px-3 py-2.5 align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                Code
-                            </th>
-                            <th class="px-3 py-2.5 text-right align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                Impressions
-                            </th>
-                            <th class="px-3 py-2.5 text-right align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                Share
-                            </th>
-                            <th class="px-3 py-2.5 align-bottom text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                Visual
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                <div class="min-w-[52rem] text-sm text-gray-900 dark:text-gray-100">
+                    {{-- CSS grid so Filament/parent styles cannot collapse table cells into one line --}}
+                    <div
+                        role="row"
+                        class="{{ $zoneGrid }} border-b border-gray-200 bg-gray-50/90 px-4 py-3 dark:border-white/10 dark:bg-white/5"
+                    >
+                        <div role="columnheader" class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            District
+                        </div>
+                        <div role="columnheader" class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Code
+                        </div>
+                        <div
+                            role="columnheader"
+                            class="border-l-2 border-dashed border-gray-300 pl-6 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-white/20 dark:text-gray-400"
+                        >
+                            Impressions
+                        </div>
+                        <div
+                            role="columnheader"
+                            class="border-l border-gray-200 pl-5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-white/15 dark:text-gray-400"
+                        >
+                            Share
+                        </div>
+                        <div role="columnheader" class="pl-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Visual
+                        </div>
+                    </div>
+                    <div class="divide-y divide-gray-100 dark:divide-white/5">
                         @foreach ($rows as $row)
                             @php
                                 $imp = (int) ($row['impressions'] ?? 0);
                                 $pct = (float) ($row['share_pct'] ?? 0);
                                 $barW = $maxImp > 0 ? round(100 * $imp / $maxImp) : 0;
                             @endphp
-                            <tr class="align-middle">
-                                <td class="max-w-0 px-3 py-2.5 align-top">
+                            <div role="row" class="{{ $zoneGrid }} px-4 py-3.5">
+                                <div class="min-w-0 pr-2">
                                     <span class="line-clamp-2 break-words text-gray-900 dark:text-gray-100">
                                         {{ $row['name'] ?? '—' }}
                                     </span>
-                                </td>
-                                <td class="px-3 py-2.5 align-top">
-                                    <span class="inline-block whitespace-nowrap font-mono text-xs text-gray-700 dark:text-gray-300">
+                                </div>
+                                <div class="min-w-0 pr-2">
+                                    <span class="block font-mono text-xs leading-snug tracking-tight text-gray-700 dark:text-gray-300">
                                         {{ $row['code'] ?? '—' }}
                                     </span>
-                                </td>
-                                <td class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-gray-900 dark:text-gray-100">
+                                </div>
+                                <div
+                                    class="shrink-0 border-l-2 border-dashed border-gray-300 pl-6 text-right text-base font-semibold tabular-nums text-gray-950 dark:border-white/25 dark:text-white"
+                                >
                                     {{ number_format($imp) }}
-                                </td>
-                                <td class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-gray-900 dark:text-gray-100">
+                                </div>
+                                <div
+                                    class="shrink-0 border-l border-gray-200 pl-5 text-right tabular-nums text-gray-800 dark:border-white/15 dark:text-gray-100"
+                                >
                                     {{ number_format($pct, 2) }}%
-                                </td>
-                                <td class="px-3 py-2.5 align-middle">
-                                    <div class="h-2 min-w-[4rem] overflow-hidden rounded bg-gray-100 dark:bg-white/10">
+                                </div>
+                                <div class="min-w-[6rem] pl-4">
+                                    <div class="h-2 w-full overflow-hidden rounded bg-gray-100 dark:bg-white/10">
                                         <div
                                             class="h-2 rounded bg-amber-500 dark:bg-amber-400"
                                             style="width: {{ $barW }}%"
                                         ></div>
                                     </div>
-                                </td>
-                            </tr>
+                                </div>
+                            </div>
                         @endforeach
-                    </tbody>
-                </table>
+                    </div>
+                </div>
             </div>
         @endif
 
