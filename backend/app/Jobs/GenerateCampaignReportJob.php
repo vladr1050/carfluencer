@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\CampaignReportStatus;
+use App\Models\CampaignImpressionStat;
 use App\Models\CampaignReport;
 use App\Services\Analytics\CampaignAnalyticsService;
 use App\Services\Reports\CampaignReportDateSpan;
@@ -66,6 +67,33 @@ class GenerateCampaignReportJob implements ShouldQueue
             $analyticsSnapshot = $campaignAnalytics->buildSnapshot($campaign->id, $from, $to, $vehicleIds);
             $kpis = CampaignReportLegacyKpisProjection::fromAnalyticsSnapshot($analyticsSnapshot);
 
+            $impressionSnapshot = null;
+            if ($report->campaign_impression_stat_id !== null) {
+                $impressionSnapshot = CampaignImpressionStat::query()->find($report->campaign_impression_stat_id);
+
+                if ($impressionSnapshot === null) {
+                    throw ValidationException::withMessages([
+                        'campaign_impression_stat_id' => ['Selected impressions snapshot was not found.'],
+                    ]);
+                }
+
+                if ((int) $impressionSnapshot->campaign_id !== (int) $campaign->id) {
+                    throw ValidationException::withMessages([
+                        'campaign_impression_stat_id' => ['Selected impressions snapshot belongs to another campaign.'],
+                    ]);
+                }
+
+                if ($impressionSnapshot->status !== CampaignImpressionStat::STATUS_DONE) {
+                    throw ValidationException::withMessages([
+                        'campaign_impression_stat_id' => ['Selected impressions snapshot is not completed (status must be done).'],
+                    ]);
+                }
+
+                $snapshotImpressions = (int) $impressionSnapshot->total_gross_impressions;
+                $analyticsSnapshot['kpis']['impressions'] = $snapshotImpressions;
+                $kpis['impressions'] = $snapshotImpressions;
+            }
+
             $disk = Storage::disk('local');
             $baseRel = $report->storageDirectoryRelative();
             $disk->makeDirectory($baseRel);
@@ -124,6 +152,15 @@ class GenerateCampaignReportJob implements ShouldQueue
                     'name' => $campaign->name,
                     'advertiser_name' => $advertiserName,
                 ],
+                'impression_snapshot' => $impressionSnapshot ? [
+                    'id' => $impressionSnapshot->id,
+                    'date_from' => $impressionSnapshot->date_from->toDateString(),
+                    'date_to' => $impressionSnapshot->date_to->toDateString(),
+                    'total_gross_impressions' => (int) $impressionSnapshot->total_gross_impressions,
+                    'mobility_data_version' => (string) $impressionSnapshot->mobility_data_version,
+                    'coefficients_version' => (string) $impressionSnapshot->coefficients_version,
+                    'calculation_version' => (string) $impressionSnapshot->calculation_version,
+                ] : null,
                 'assets' => [
                     'heatmap_pngs' => [
                         'driving' => $report->include_driving_heatmap ? $drivingRel : [],

@@ -3,8 +3,9 @@
 namespace App\Models;
 
 use App\Enums\CampaignReportStatus;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\CampaignImpressionStat;
+use Illuminate\Database\Eloquent\Model;
 
 class CampaignReport extends Model
 {
@@ -15,6 +16,7 @@ class CampaignReport extends Model
         'report_type',
         'date_from',
         'date_to',
+        'campaign_impression_stat_id',
         'status',
         'include_driving_heatmap',
         'include_parking_heatmap',
@@ -49,6 +51,11 @@ class CampaignReport extends Model
     public function advertiser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'advertiser_id');
+    }
+
+    public function impressionSnapshot(): BelongsTo
+    {
+        return $this->belongsTo(CampaignImpressionStat::class, 'campaign_impression_stat_id');
     }
 
     public function createdBy(): BelongsTo
