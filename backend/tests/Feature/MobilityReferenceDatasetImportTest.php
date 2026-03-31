@@ -38,6 +38,8 @@ class MobilityReferenceDatasetImportTest extends TestCase
         $this->assertEqualsWithDelta(55.0, (float) $row->average_speed_kmh, 0.01);
         $this->assertEqualsWithDelta(1.75, (float) $row->hourly_peak_factor, 0.001);
         $this->assertSame(2, $row->records_count);
+        $this->assertEqualsWithDelta(56.9, (float) $row->lat_center, 0.001);
+        $this->assertEqualsWithDelta(24.4, (float) $row->lng_center, 0.001);
     }
 
     public function test_import_skips_row_with_missing_coordinates(): void

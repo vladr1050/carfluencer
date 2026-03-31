@@ -72,6 +72,11 @@ class Campaign extends Model
         return $this->hasMany(CampaignReport::class);
     }
 
+    public function impressionStats(): HasMany
+    {
+        return $this->hasMany(CampaignImpressionStat::class);
+    }
+
     /**
      * Aggregated ClickHouse → PostgreSQL sync stats for vehicles on this campaign (admin UX).
      */

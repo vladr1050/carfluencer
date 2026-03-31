@@ -6,15 +6,15 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 
 /**
- * Appends telemetry-related keys from deploy/telemetry.env.fragment into backend/.env
- * when those keys are missing (idempotent). Safe to run on every deploy.
+ * Appends keys from deploy/*.env.fragment into backend/.env when those keys are missing
+ * (idempotent). Safe to run on every deploy.
  */
 class TelemetryEnsureEnvCommand extends Command
 {
     protected $signature = 'telemetry:ensure-env
                             {--dry-run : Print lines that would be appended, do not write}';
 
-    protected $description = 'Merge missing TELEMETRY_* keys from deploy/telemetry.env.fragment into .env';
+    protected $description = 'Merge missing keys from deploy/*.env.fragment files into .env';
 
     public function handle(): int
     {
@@ -25,56 +25,76 @@ class TelemetryEnsureEnvCommand extends Command
             return self::SUCCESS;
         }
 
-        $fragmentPath = dirname(base_path()).DIRECTORY_SEPARATOR.'deploy'.DIRECTORY_SEPARATOR.'telemetry.env.fragment';
-        if (! is_file($fragmentPath)) {
-            $this->warn("Fragment not found: {$fragmentPath}");
-
-            return self::SUCCESS;
-        }
+        $deployDir = dirname(base_path()).DIRECTORY_SEPARATOR.'deploy';
+        $fragmentPaths = [
+            $deployDir.DIRECTORY_SEPARATOR.'telemetry.env.fragment',
+            $deployDir.DIRECTORY_SEPARATOR.'impression_engine.env.fragment',
+        ];
 
         $envContent = (string) file_get_contents($envPath);
         $existingKeys = $this->parseExistingKeys($envContent);
 
-        $toAppend = [];
-        $lines = preg_split("/\r\n|\n|\r/", (string) file_get_contents($fragmentPath)) ?: [];
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '' || str_starts_with($line, '#')) {
+        $sections = [];
+        foreach ($fragmentPaths as $fragmentPath) {
+            if (! is_file($fragmentPath)) {
                 continue;
             }
-            if (! str_contains($line, '=')) {
-                continue;
+
+            $toAppend = [];
+            $lines = preg_split("/\r\n|\n|\r/", (string) file_get_contents($fragmentPath)) ?: [];
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '' || str_starts_with($line, '#')) {
+                    continue;
+                }
+                if (! str_contains($line, '=')) {
+                    continue;
+                }
+                $key = trim(Str::before($line, '='));
+                if ($key === '') {
+                    continue;
+                }
+                if (array_key_exists($key, $existingKeys)) {
+                    continue;
+                }
+                $toAppend[] = $line;
+                $existingKeys[$key] = true;
             }
-            $key = trim(Str::before($line, '='));
-            if ($key === '') {
-                continue;
+
+            if ($toAppend !== []) {
+                $sections[] = [
+                    'file' => basename($fragmentPath),
+                    'lines' => $toAppend,
+                ];
             }
-            if (array_key_exists($key, $existingKeys)) {
-                continue;
-            }
-            $toAppend[] = $line;
-            $existingKeys[$key] = true;
         }
 
-        if ($toAppend === []) {
-            $this->comment('Telemetry env: all fragment keys already present in .env.');
+        if ($sections === []) {
+            $this->comment('Env fragments: all keys already present in .env.');
 
             return self::SUCCESS;
         }
 
         if ($this->option('dry-run')) {
             $this->info('Would append:');
-            foreach ($toAppend as $l) {
-                $this->line('  '.$l);
+            foreach ($sections as $section) {
+                $this->line('  # from deploy/'.$section['file']);
+                foreach ($section['lines'] as $l) {
+                    $this->line('  '.$l);
+                }
             }
 
             return self::SUCCESS;
         }
 
-        $block = "\n# --- Telemetry (auto from deploy/telemetry.env.fragment) ---\n";
-        $block .= implode("\n", $toAppend)."\n";
+        $block = '';
+        foreach ($sections as $section) {
+            $block .= "\n# --- Auto from deploy/{$section['file']} ---\n";
+            $block .= implode("\n", $section['lines'])."\n";
+        }
         file_put_contents($envPath, $envContent.$block, LOCK_EX);
-        $this->info('Appended '.count($toAppend).' telemetry key(s) to .env.');
+        $total = array_sum(array_map(fn (array $s): int => count($s['lines']), $sections));
+        $this->info("Appended {$total} key(s) to .env from ".count($sections).' fragment file(s).');
 
         return self::SUCCESS;
     }

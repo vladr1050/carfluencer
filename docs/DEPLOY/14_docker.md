@@ -12,7 +12,9 @@
 
 ClickHouse **в compose не входит** — остаётся внешний URL в `backend/.env` (`TELEMETRY_CLICKHOUSE_*`).
 
-Образ **`docker/php/Dockerfile`** уже содержит **Node.js 22**, **Chromium** и зависимости для **Browsershot** (PDF/heatmap отчётов). В `docker-compose.yml` для `app` / `queue` / `scheduler` заданы `CAMPAIGN_REPORT_CHROME_PATH=/usr/bin/chromium`. После смены Dockerfile выполните **`docker compose build --no-cache`** и перезапустите контейнеры.
+Образ **`docker/php/Dockerfile`** уже содержит **Node.js 22**, **Chromium**, сборку **Uber H3 v3.7.2** из исходников (совместимость с `michaellindahl/php-h3`), расширение **FFI** и **`ffi.enable=true`** (Impression Engine / H3), а также зависимости для **Browsershot** (PDF/heatmap отчётов). В `docker-compose.yml` для `app` / `queue` / `scheduler` заданы `CAMPAIGN_REPORT_CHROME_PATH=/usr/bin/chromium`. После смены Dockerfile выполните **`docker compose build --no-cache`** и перезапустите контейнеры.
+
+В **`backend/.env`** для продакшена задайте **`IMPRESSION_ENGINE_H3_DRIVER=real`** (см. **`deploy/impression_engine.env.fragment`** и **`backend/.env.production.example`**).
 
 ---
 

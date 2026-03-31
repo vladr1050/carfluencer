@@ -15,4 +15,9 @@ final class FakeH3Indexer implements H3IndexerInterface
 
         return 'fake_'.substr(hash('sha256', sprintf('%.6f|%.6f|%d', $lat, $lng, $res)), 0, 20);
     }
+
+    public function cellIdToLatLng(string $cellId): array
+    {
+        return ['lat' => 56.95, 'lng' => 24.11];
+    }
 }

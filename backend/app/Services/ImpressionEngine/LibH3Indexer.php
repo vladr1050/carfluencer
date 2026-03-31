@@ -20,6 +20,15 @@ final class LibH3Indexer implements H3IndexerInterface
         return self::normalizeH3Hex($hex);
     }
 
+    public function cellIdToLatLng(string $cellId): array
+    {
+        $lib = $this->libraryPath();
+        $h3 = new H3($lib);
+        $geo = $h3->h3ToGeo($cellId);
+
+        return ['lat' => (float) $geo->lat, 'lng' => (float) $geo->lon];
+    }
+
     public function libraryPath(): string
     {
         $configured = config('impression_engine.h3.library_path');

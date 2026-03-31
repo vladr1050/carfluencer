@@ -8,6 +8,8 @@ class MobilityReferenceCell extends Model
 {
     protected $fillable = [
         'cell_id',
+        'lat_center',
+        'lng_center',
         'vehicle_aadt',
         'pedestrian_daily',
         'average_speed_kmh',
@@ -19,6 +21,8 @@ class MobilityReferenceCell extends Model
     protected function casts(): array
     {
         return [
+            'lat_center' => 'float',
+            'lng_center' => 'float',
             'vehicle_aadt' => 'integer',
             'pedestrian_daily' => 'integer',
             'average_speed_kmh' => 'decimal:2',

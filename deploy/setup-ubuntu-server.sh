@@ -44,8 +44,15 @@ apt-get install -y -qq \
   postgresql postgresql-contrib \
   php8.4-fpm php8.4-cli php8.4-pgsql php8.4-xml php8.4-mbstring \
   php8.4-curl php8.4-zip php8.4-bcmath php8.4-intl php8.4-gd \
+  php8.4-ffi \
   git unzip curl composer python3 supervisor \
   ca-certificates gnupg
+
+# Impression Engine: Uber H3 via PHP FFI (michaellindahl/php-h3). Библиотека должна быть ветки v3 (символы geoToH3/h3ToGeo).
+# Если в дистрибутиве только libh4 — соберите v3.7.2 из исходников: deploy/install-h3-v3-from-source-ubuntu.sh
+apt-get install -y -qq libh3-dev 2>/dev/null || {
+  echo "Предупреждение: пакет libh3-dev недоступен в apt — см. deploy/install-h3-v3-from-source-ubuntu.sh или Docker (docker/php/Dockerfile)." >&2
+}
 
 # Node.js 22 + Chromium (Campaign PDF / Browsershot; тот же PHP-процесс, что и Supervisor queue:work)
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
@@ -69,6 +76,16 @@ PHP_VER=8.4
 for INI in "/etc/php/${PHP_VER}/fpm/php.ini" "/etc/php/${PHP_VER}/cli/php.ini"; do
   if [[ -f "$INI" ]]; then
     sed -ri 's/^;?[[:space:]]*memory_limit[[:space:]]*=.*/memory_limit = 512M/' "$INI"
+  fi
+done
+# PHP 8+ default ffi.enable=preload can block FFI outside CLI/preload; H3 needs runtime FFI in FPM + queue workers.
+for SAPI in cli fpm; do
+  CONF_DIR="/etc/php/${PHP_VER}/${SAPI}/conf.d"
+  if [[ -d "$CONF_DIR" ]] && [[ ! -f "${CONF_DIR}/99-ffi-enable.ini" ]]; then
+    {
+      echo '; Impression Engine (Uber H3 via FFI — michaellindahl/php-h3)'
+      echo 'ffi.enable=true'
+    } > "${CONF_DIR}/99-ffi-enable.ini"
   fi
 done
 systemctl reload "php${PHP_VER}-fpm"
@@ -117,6 +134,12 @@ if [[ -n "$CHROME_BIN" ]]; then
 else
   echo "Предупреждение: Chromium не найден — задай CAMPAIGN_REPORT_CHROME_PATH вручную в $ENV_FILE" >&2
 fi
+
+{
+  echo ''
+  echo '# Impression Engine (H3 + mobility import; requires libh3 + php8.4-ffi)'
+  echo 'IMPRESSION_ENGINE_H3_DRIVER=real'
+} >> "$ENV_FILE"
 
 # Чтение .env для www-data (очередь + cron)
 chgrp www-data "$ENV_FILE"

@@ -109,6 +109,8 @@ final class MobilityReferenceDatasetImportService
                             'sum_ped' => 0.0,
                             'sum_speed' => 0.0,
                             'sum_peak' => 0.0,
+                            'sum_lat' => 0.0,
+                            'sum_lon' => 0.0,
                             'count' => 0,
                         ];
                     }
@@ -116,6 +118,8 @@ final class MobilityReferenceDatasetImportService
                     $agg[$cellId]['sum_ped'] += $ped;
                     $agg[$cellId]['sum_speed'] += $speed;
                     $agg[$cellId]['sum_peak'] += $peak;
+                    $agg[$cellId]['sum_lat'] += $lat;
+                    $agg[$cellId]['sum_lon'] += $lon;
                     $agg[$cellId]['count']++;
                 }
                 break;
@@ -138,6 +142,8 @@ final class MobilityReferenceDatasetImportService
                 $n = max(1, $bucket['count']);
                 $batch[] = [
                     'cell_id' => $cellId,
+                    'lat_center' => round($bucket['sum_lat'] / $n, 7),
+                    'lng_center' => round($bucket['sum_lon'] / $n, 7),
                     'vehicle_aadt' => (int) round($bucket['sum_aadt'] / $n),
                     'pedestrian_daily' => (int) round($bucket['sum_ped'] / $n),
                     'average_speed_kmh' => round($bucket['sum_speed'] / $n, 2),

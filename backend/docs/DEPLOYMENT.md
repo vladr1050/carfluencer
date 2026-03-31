@@ -75,6 +75,18 @@ For a separate React origin, configure `config/cors.php` (publish if needed) and
 
 Terminate TLS at Nginx with Let’s Encrypt (`certbot`).
 
+## Impression Engine (H3 + mobility import)
+
+Production uses **Uber H3** through PHP **FFI** (`michaellindahl/php-h3`). The Composer package expects the **H3 v3 C API** (`geoToH3`, `h3ToGeo`). **H3 v4** renamed symbols — if your distro ships `libh3` v4 only, use **`deploy/install-h3-v3-from-source-ubuntu.sh`** (builds **v3.7.2** into `/usr/local`, same as **`docker/php/Dockerfile`**).
+
+On the server you need:
+
+- **`libh3.so`** (v3): Ubuntu `libh3-dev` when it provides v3; otherwise build from source (see above).
+- PHP extension **`ffi`** (`php8.4-ffi`) and **`ffi.enable=true`** in **`cli`** and **`fpm`** (see **`deploy/setup-ubuntu-server.sh`** — `99-ffi-enable.ini`). The default `ffi.enable=preload` is not enough for runtime FFI in FPM.
+- **`.env`**: `IMPRESSION_ENGINE_H3_DRIVER=real` (merged from **`deploy/impression_engine.env.fragment`** via `php artisan telemetry:ensure-env` in **`deploy/post-pull.sh`**).
+
+**Docker:** **`docker/php/Dockerfile`** builds **Uber H3 v3.7.2** from source, enables **`ffi`**, and sets **`ffi.enable=true`** (works on **amd64** and **arm64**).
+
 ## GitHub
 
 Push this repository to GitHub; deploy via SSH pull, GitHub Actions, or your CI of choice. Keep `.env` out of version control.
