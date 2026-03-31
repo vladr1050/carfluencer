@@ -11,6 +11,7 @@ use App\Services\Reports\CampaignReportLegacyKpisProjection;
 use App\Services\Reports\CampaignReportVehicleResolver;
 use App\Services\Reports\Contracts\CampaignReportPdfServiceInterface;
 use App\Services\Reports\Contracts\HeatmapImageServiceInterface;
+use App\Services\ImpressionEngine\CampaignImpressionGeoZoneBreakdownService;
 use App\Services\Reports\ReportHeatmapViewports;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -34,6 +35,7 @@ class GenerateCampaignReportJob implements ShouldQueue
         HeatmapImageServiceInterface $heatmapImages,
         CampaignReportPdfServiceInterface $pdfService,
         CampaignAnalyticsService $campaignAnalytics,
+        CampaignImpressionGeoZoneBreakdownService $impressionZoneBreakdown,
     ): void {
         $mem = (string) config('reports.php_memory_limit', '512M');
         if ($mem !== '' && $mem !== '0') {
@@ -68,6 +70,7 @@ class GenerateCampaignReportJob implements ShouldQueue
             $kpis = CampaignReportLegacyKpisProjection::fromAnalyticsSnapshot($analyticsSnapshot);
 
             $impressionSnapshot = null;
+            $impressionZoneBreakdownPayload = null;
             if ($report->campaign_impression_stat_id !== null) {
                 $impressionSnapshot = CampaignImpressionStat::query()->find($report->campaign_impression_stat_id);
 
@@ -161,6 +164,7 @@ class GenerateCampaignReportJob implements ShouldQueue
                     'coefficients_version' => (string) $impressionSnapshot->coefficients_version,
                     'calculation_version' => (string) $impressionSnapshot->calculation_version,
                 ] : null,
+                'impression_zone_breakdown' => $impressionZoneBreakdownPayload,
                 'assets' => [
                     'heatmap_pngs' => [
                         'driving' => $report->include_driving_heatmap ? $drivingRel : [],

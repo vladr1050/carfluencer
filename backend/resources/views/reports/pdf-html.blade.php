@@ -24,6 +24,7 @@
         table.data { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10px; }
         table.data th, table.data td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
         table.data th { background: #f5f5f5; }
+        table.data td.num, table.data th.num { text-align: right; }
         .insights-summary { margin: 8px 0; line-height: 1.45; font-size: 10.5px; }
         .insights-highlights { margin: 8px 0 0 18px; padding: 0; font-size: 10px; line-height: 1.4; }
         .insights-highlights li { margin: 4px 0; }
@@ -59,6 +60,67 @@
         <div class="kpi"><div class="label">Hours driving</div><div class="value">{{ $aKpis['driving_hours'] ?? '—' }}</div></div>
         <div class="kpi"><div class="label">Hours parked</div><div class="value">{{ $aKpis['parking_hours'] ?? '—' }}</div></div>
     </div>
+    @if($impSnap)
+        <p class="note"><strong>Impressions (KPI above):</strong> total gross impressions from impression engine snapshot #{{ $impSnap['id'] }} (same value as snapshot total below).</p>
+    @endif
+
+    @if($impSnap)
+        <h2>Impressions (impression engine)</h2>
+        <p class="insights-summary">
+            Estimated impressions combine campaign vehicle exposure in time (driving and parking) with impression coefficients,
+            and align locations to a mobility reference grid. Gross totals allocate campaign price into impression units for reporting.
+            Geo zone rows below attribute estimated impressions to active Geo zones when the underlying exposure can be mapped to a zone;
+            the remainder is reported as outside zones.
+        </p>
+        <div class="meta">
+            <div><strong>Snapshot ID:</strong> #{{ $impSnap['id'] }}</div>
+            <div><strong>Snapshot period:</strong> {{ $impSnap['date_from'] }} — {{ $impSnap['date_to'] }}</div>
+            <div><strong>Total gross impressions (snapshot):</strong> {{ number_format((int) ($impSnap['total_gross_impressions'] ?? 0)) }}</div>
+            <div><strong>Mobility data version:</strong> {{ $impSnap['mobility_data_version'] ?? '—' }}</div>
+            <div><strong>Coefficients version:</strong> {{ $impSnap['coefficients_version'] ?? '—' }}</div>
+            <div><strong>Engine version:</strong> {{ $impSnap['calculation_version'] ?? '—' }}</div>
+        </div>
+
+        @if($impZones && !empty($impZones['available']))
+            @if(!empty($impZones['note']))
+                <p class="note">{{ $impZones['note'] }}</p>
+            @endif
+            <h3>Top 10 districts (Geo zones) by estimated impressions</h3>
+            @if(!empty($impZones['top_zones']) && is_array($impZones['top_zones']))
+                <table class="data">
+                    <thead>
+                    <tr>
+                        <th>District</th>
+                        <th>Code</th>
+                        <th class="num">Impressions</th>
+                        <th class="num">Share</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach($impZones['top_zones'] as $z)
+                        @if(is_array($z))
+                            <tr>
+                                <td>{{ $z['name'] ?? '—' }}</td>
+                                <td>{{ $z['code'] ?? '—' }}</td>
+                                <td class="num">{{ number_format((int) ($z['impressions'] ?? 0)) }}</td>
+                                <td class="num">{{ number_format((float) ($z['share_pct'] ?? 0), 2) }}%</td>
+                            </tr>
+                        @endif
+                    @endforeach
+                    </tbody>
+                </table>
+                <p class="note">
+                    <strong>Attributed total (zones):</strong> {{ number_format((int) ($impZones['total_impressions'] ?? 0)) }}.
+                    <strong>Outside zones:</strong> {{ number_format((int) ($impZones['unattributed_impressions'] ?? 0)) }}
+                    ({{ number_format((float) ($impZones['unattributed_share_pct'] ?? 0), 2) }}%).
+                </p>
+            @else
+                <p class="note">No zone rows returned for this snapshot.</p>
+            @endif
+        @else
+            <p class="note">{{ is_array($impZones) ? ($impZones['reason'] ?? 'Zone breakdown is not available.') : 'Zone breakdown is not available.' }}</p>
+        @endif
+    @endif
 
     <h2>Exposure split</h2>
     <div class="meta">

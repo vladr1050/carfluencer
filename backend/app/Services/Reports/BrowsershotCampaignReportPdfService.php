@@ -27,6 +27,8 @@ final class BrowsershotCampaignReportPdfService implements CampaignReportPdfServ
             'includeParking' => ! empty($snapshot['settings']['include_parking_heatmap']),
             'drivingViewports' => $drivingViews,
             'parkingViewports' => $parkingViews,
+            'impressionSnapshot' => is_array($snapshot['impression_snapshot'] ?? null) ? $snapshot['impression_snapshot'] : null,
+            'impressionZoneBreakdown' => is_array($snapshot['impression_zone_breakdown'] ?? null) ? $snapshot['impression_zone_breakdown'] : null,
         ])->render();
 
         $timeout = (int) config('reports.browsershot_timeout', 180);
