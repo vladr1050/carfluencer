@@ -231,7 +231,8 @@ class CampaignImpressionCalculationTest extends TestCase
             'media_owner_id' => $mediaOwner->id,
             'brand' => 'T',
             'model' => 'V',
-            'imei' => 'Z'.Str::upper(Str::random(8)),
+            // Digits required: aggregate() maps device_locations.device_id via stripped IMEI; all-alpha random yields no rows.
+            'imei' => 'IMEI555'.Str::upper(Str::random(6)),
             'status' => 'active',
         ]);
         $advertiser = User::factory()->advertiser()->create();
