@@ -41,6 +41,8 @@
     $aInsights = $analytics['insights'] ?? [];
     $aCoverage = is_array($analytics['coverage'] ?? null) ? $analytics['coverage'] : [];
     $aParkingByZone = is_array($analytics['parking_by_zone'] ?? null) ? $analytics['parking_by_zone'] : null;
+    $impSnap = isset($impressionSnapshot) && is_array($impressionSnapshot) ? $impressionSnapshot : null;
+    $impZones = isset($impressionZoneBreakdown) && is_array($impressionZoneBreakdown) ? $impressionZoneBreakdown : null;
 @endphp
 
 <section>
