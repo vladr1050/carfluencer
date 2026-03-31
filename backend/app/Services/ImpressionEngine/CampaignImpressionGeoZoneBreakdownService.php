@@ -78,7 +78,10 @@ final class CampaignImpressionGeoZoneBreakdownService
         }
 
         /** @var array<string, MobilityReferenceCell> $direct */
-        $direct = $mobilityRows->keyBy('cell_id')->all();
+        $direct = [];
+        foreach ($mobilityRows as $c) {
+            $direct[LibH3Indexer::normalizeCellIdForIndex((string) $c->cell_id)] = $c;
+        }
         $spatial = new MobilitySpatialIndex($mobilityRows);
         $maxM = (float) config('impression_engine.calculation.mobility_fallback_max_meters', 300);
 
@@ -111,7 +114,7 @@ final class CampaignImpressionGeoZoneBreakdownService
             ): void {
                 foreach ($chunk as $row) {
                     try {
-                        $cellId = (string) $row->cell_id;
+                        $cellId = LibH3Indexer::normalizeCellIdForIndex((string) $row->cell_id);
                         $hour = (int) $row->hour;
                         $exposureSeconds = (int) $row->exposure_seconds;
                         $mode = (string) $row->mode;

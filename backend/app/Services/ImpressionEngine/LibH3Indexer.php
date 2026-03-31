@@ -48,4 +48,18 @@ final class LibH3Indexer implements H3IndexerInterface
 
         return str_pad($hex, 15, '0', STR_PAD_LEFT);
     }
+
+    /**
+     * Canonical H3 index string for lookups against DB and FFI (skip test fake ids).
+     */
+    public static function normalizeCellIdForIndex(string $cellId): string
+    {
+        $cellId = trim($cellId);
+
+        if (str_starts_with($cellId, 'fake_')) {
+            return $cellId;
+        }
+
+        return self::normalizeH3Hex($cellId);
+    }
 }

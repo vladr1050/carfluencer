@@ -110,7 +110,10 @@ final class CampaignImpressionCalculationService
         }
 
         /** @var array<string, MobilityReferenceCell> $direct */
-        $direct = $mobilityRows->keyBy('cell_id')->all();
+        $direct = [];
+        foreach ($mobilityRows as $c) {
+            $direct[LibH3Indexer::normalizeCellIdForIndex((string) $c->cell_id)] = $c;
+        }
         $spatial = new MobilitySpatialIndex($mobilityRows);
         $maxM = (float) config('impression_engine.calculation.mobility_fallback_max_meters', 300);
 
@@ -127,7 +130,7 @@ final class CampaignImpressionCalculationService
         $unmatched = 0;
 
         foreach ($buckets as $b) {
-            $cellId = $b['cell_id'];
+            $cellId = LibH3Indexer::normalizeCellIdForIndex((string) $b['cell_id']);
             $hour = $b['hour'];
             $exposureSeconds = $b['point_count'] * $sampling;
             $avgSpeed = $b['point_count'] > 0 ? $b['sum_speed'] / $b['point_count'] : 0.0;
