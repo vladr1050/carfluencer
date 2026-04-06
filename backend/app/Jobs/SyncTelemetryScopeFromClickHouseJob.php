@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\TelemetrySyncEvent;
 use App\Services\Telemetry\ClickHouseLocationCollector;
+use App\Services\Telemetry\HeatmapRollupAfterTelemetryImport;
 use App\Services\Telemetry\TelemetrySyncEventRecorder;
 use App\Services\Telemetry\TelemetrySyncImeiResolver;
 use App\Services\Telemetry\TelemetryVehicleSyncState;
@@ -144,6 +145,8 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
                     $failures !== [] ? implode('; ', array_column($failures, 'message')) : null,
                 );
 
+                HeatmapRollupAfterTelemetryImport::dispatchRollingAfterIncremental($n);
+
                 return;
             }
 
@@ -176,6 +179,8 @@ class SyncTelemetryScopeFromClickHouseJob implements ShouldQueue
                         'rows' => $n,
                     ],
                 );
+
+                HeatmapRollupAfterTelemetryImport::dispatchForHistoricalWindow($this->dateFrom, $this->dateTo);
             }
         } catch (Throwable $e) {
             // Incremental path records per-IMEI above; only historical uses this bulk failure.

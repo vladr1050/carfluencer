@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Telemetry\ClickHouseLocationCollector;
+use App\Services\Telemetry\HeatmapRollupAfterTelemetryImport;
 use Illuminate\Console\Command;
 
 class TelemetrySyncIncrementalCommand extends Command
@@ -23,6 +24,7 @@ class TelemetrySyncIncrementalCommand extends Command
         $limit = ($raw !== null && $raw !== '') ? (int) $raw : null;
         $n = $collector->syncIncremental($limit);
         $this->info("Imported {$n} location row(s).");
+        HeatmapRollupAfterTelemetryImport::dispatchRollingAfterIncremental($n);
 
         return self::SUCCESS;
     }

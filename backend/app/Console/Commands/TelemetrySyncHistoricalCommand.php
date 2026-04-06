@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Telemetry\ClickHouseLocationCollector;
+use App\Services\Telemetry\HeatmapRollupAfterTelemetryImport;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -31,12 +32,22 @@ class TelemetrySyncHistoricalCommand extends Command
             return self::FAILURE;
         }
 
+        $fromC = Carbon::parse($from, 'UTC');
+        $toC = Carbon::parse($to, 'UTC');
         $n = $collector->syncHistorical(
-            Carbon::parse($from, 'UTC'),
-            Carbon::parse($to, 'UTC'),
+            $fromC,
+            $toC,
             (int) $this->option('limit')
         );
         $this->info("Imported {$n} location row(s).");
+
+        $toInclusive = $toC->copy()->subMicrosecond();
+        if ($toInclusive->gte($fromC)) {
+            HeatmapRollupAfterTelemetryImport::dispatchForHistoricalWindow(
+                $fromC->toDateString(),
+                $toInclusive->toDateString(),
+            );
+        }
 
         return self::SUCCESS;
     }

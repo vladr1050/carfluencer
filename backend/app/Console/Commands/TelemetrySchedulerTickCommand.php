@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\PlatformSetting;
 use App\Models\TelemetrySyncEvent;
 use App\Services\Telemetry\ClickHouseLocationCollector;
+use App\Services\Telemetry\HeatmapRollupAfterTelemetryImport;
 use App\Services\Telemetry\TelemetrySchedulerConfig;
 use App\Services\Telemetry\TelemetrySyncEventRecorder;
 use App\Services\Telemetry\TelemetrySyncImeiResolver;
@@ -145,6 +146,8 @@ class TelemetrySchedulerTickCommand extends Command
             ],
             $failures !== [] ? implode('; ', array_column($failures, 'message')) : null,
         );
+
+        HeatmapRollupAfterTelemetryImport::dispatchRollingAfterIncremental($n);
     }
 
     private function maybeRunDailyJobs(): void

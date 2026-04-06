@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\SyncVehicleTelemetryFromClickHouseJob;
 use App\Models\Vehicle;
 use App\Services\Telemetry\ClickHouseLocationCollector;
+use App\Services\Telemetry\HeatmapRollupAfterTelemetryImport;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -46,6 +47,7 @@ class TelemetrySyncVehicleCommand extends Command
             if ($this->option('sync')) {
                 $n = $collector->syncIncrementalForImei($vehicle->imei);
                 $this->info("Imported {$n} row(s) (incremental).");
+                HeatmapRollupAfterTelemetryImport::dispatchRollingAfterIncremental($n);
             } else {
                 SyncVehicleTelemetryFromClickHouseJob::dispatch($vehicle->id, 'incremental', null, null);
                 $this->info('Queued incremental telemetry sync for vehicle #'.$vehicle->id);
@@ -60,6 +62,7 @@ class TelemetrySyncVehicleCommand extends Command
                 $t = Carbon::parse($to, 'UTC')->endOfDay()->addSecond();
                 $n = $collector->syncHistoricalForImei($vehicle->imei, $f, $t);
                 $this->info("Imported {$n} row(s) (historical).");
+                HeatmapRollupAfterTelemetryImport::dispatchForHistoricalWindow($from, $to);
             } else {
                 SyncVehicleTelemetryFromClickHouseJob::dispatch($vehicle->id, 'historical', $from, $to);
                 $this->info('Queued historical telemetry sync for vehicle #'.$vehicle->id);

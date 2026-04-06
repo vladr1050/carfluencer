@@ -18,6 +18,7 @@ Future: optional session-weighted parking using `stop_sessions` (see `docs/ARCHI
 
 ## Write path
 
+- After ClickHouse import (jobs `SyncVehicleTelemetryFromClickHouseJob`, `SyncTelemetryScopeFromClickHouseJob`, scheduler tick `telemetry:scheduler-tick`, and CLI `telemetry:sync-*`), the app may queue `HeatmapAggregateRangeAfterTelemetryJob` to refresh rollups (config `telemetry.heatmap.rollup.after_clickhouse_import`, PostgreSQL only). Historical windows wider than `max_historical_range_days_for_auto_job` are skipped (run `heatmap:rebuild` manually).
 - `php artisan heatmap:aggregate --from=Y-m-d --to=Y-m-d` (optional `--day=`, `--tier=`, `--mode=driving|parking`, or `--all-modes`).
 - `php artisan heatmap:aggregate-day Y-m-d` — thin wrapper around `--day=`.
 - `php artisan heatmap:rebuild --from=… --to=…` — same as aggregate for a range.

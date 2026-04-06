@@ -1,5 +1,7 @@
 <?php
 
+use App\Jobs\HeatmapAggregateRangeAfterTelemetryJob;
+
 return [
 
     /*
@@ -133,6 +135,16 @@ return [
              * Driving rollup: exclude GPS points with speed <= this (km/h). Report/PDF export expects meaningful movement only.
              */
             'driving_min_speed_kmh' => (float) env('TELEMETRY_HEATMAP_ROLLUP_DRIVING_MIN_SPEED_KMH', 5.0),
+            /**
+             * Queue {@see HeatmapAggregateRangeAfterTelemetryJob} after ClickHouse rows land in PostgreSQL.
+             */
+            'after_clickhouse_import' => [
+                'enabled' => filter_var(env('TELEMETRY_HEATMAP_ROLLUP_AFTER_CH_IMPORT', true), FILTER_VALIDATE_BOOLEAN),
+                /** UTC calendar days (inclusive of today) to rebuild after incremental sync. */
+                'incremental_calendar_days' => max(1, min(62, (int) env('TELEMETRY_HEATMAP_ROLLUP_AFTER_INCREMENTAL_DAYS', 3))),
+                /** If historical window is wider, skip auto job (run `heatmap:rebuild` manually). */
+                'max_historical_range_days_for_auto_job' => max(1, min(800, (int) env('TELEMETRY_HEATMAP_ROLLUP_AUTO_MAX_HISTORICAL_DAYS', 366))),
+            ],
         ],
     ],
 

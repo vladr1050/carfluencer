@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\TelemetrySyncEvent;
 use App\Models\Vehicle;
 use App\Services\Telemetry\ClickHouseLocationCollector;
+use App\Services\Telemetry\HeatmapRollupAfterTelemetryImport;
 use App\Services\Telemetry\TelemetrySyncEventRecorder;
 use App\Services\Telemetry\TelemetryVehicleSyncState;
 use Carbon\Carbon;
@@ -71,6 +72,8 @@ class SyncVehicleTelemetryFromClickHouseJob implements ShouldQueue
                     ],
                 );
 
+                HeatmapRollupAfterTelemetryImport::dispatchRollingAfterIncremental($n);
+
                 return;
             }
 
@@ -102,6 +105,8 @@ class SyncVehicleTelemetryFromClickHouseJob implements ShouldQueue
                         'rows' => $n,
                     ],
                 );
+
+                HeatmapRollupAfterTelemetryImport::dispatchForHistoricalWindow($this->dateFrom, $this->dateTo);
             }
         } catch (Throwable $e) {
             $syncState->recordFailure($vehicle, $e);
