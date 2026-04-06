@@ -45,6 +45,57 @@
         border-color: rgb(75 85 99);
         color: #f3f4f6;
     }
+    #admin-hm-map-wrap:fullscreen {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        background: rgb(17 24 39);
+    }
+    #admin-hm-map-wrap:-webkit-full-screen {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        background: rgb(17 24 39);
+    }
+    #admin-hm-map-wrap:fullscreen #admin-telemetry-map,
+    #admin-hm-map-wrap:-webkit-full-screen #admin-telemetry-map {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100% !important;
+        max-height: none !important;
+        border-radius: 0;
+    }
+    #admin-hm-fullscreen-btn {
+        position: absolute;
+        z-index: 1100;
+        top: 12px;
+        left: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid rgb(209 213 219);
+        background: rgba(255, 255, 255, 0.95);
+        color: rgb(17 24 39);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    }
+    #admin-hm-fullscreen-btn:hover {
+        background: rgb(243 244 246);
+    }
+    .dark #admin-hm-fullscreen-btn {
+        border-color: rgb(75 85 99);
+        background: rgba(31, 41, 55, 0.96);
+        color: rgb(243 244 246);
+    }
+    .dark #admin-hm-fullscreen-btn:hover {
+        background: rgb(55 65 81);
+    }
 </style>
 <div class="space-y-3">
     <p class="text-sm text-gray-600 dark:text-gray-400">
@@ -74,6 +125,12 @@
         </p>
     </div>
     <div id="admin-hm-map-wrap">
+        <button
+            type="button"
+            id="admin-hm-fullscreen-btn"
+            aria-pressed="false"
+            title="{{ __('Full screen') }}"
+        >{{ __('Full screen') }}</button>
         <div
             id="admin-telemetry-map"
             wire:ignore
@@ -183,6 +240,65 @@
         ? '<a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
+    const hmFsLabels = {
+        enter: {!! json_encode(__('Full screen')) !!},
+        exit: {!! json_encode(__('Exit full screen')) !!},
+    };
+
+    function adminHmMapWrapEl() {
+        return document.getElementById('admin-hm-map-wrap');
+    }
+
+    function adminHmIsMapFullscreen() {
+        const wrap = adminHmMapWrapEl();
+        if (!wrap) {
+            return false;
+        }
+        return document.fullscreenElement === wrap
+            || document.webkitFullscreenElement === wrap;
+    }
+
+    function syncAdminHmFullscreenButton() {
+        const btn = document.getElementById('admin-hm-fullscreen-btn');
+        if (!btn) {
+            return;
+        }
+        const active = adminHmIsMapFullscreen();
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.textContent = active ? hmFsLabels.exit : hmFsLabels.enter;
+        btn.setAttribute('title', active ? hmFsLabels.exit : hmFsLabels.enter);
+    }
+
+    function onAdminHmFullscreenChange() {
+        syncAdminHmFullscreenButton();
+        invalidateMapSize();
+        requestAnimationFrame(invalidateMapSize);
+        setTimeout(invalidateMapSize, 100);
+        setTimeout(invalidateMapSize, 400);
+    }
+
+    function toggleAdminHmFullscreen() {
+        const wrap = adminHmMapWrapEl();
+        if (!wrap) {
+            return;
+        }
+        try {
+            if (!adminHmIsMapFullscreen()) {
+                const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
+                if (req) {
+                    req.call(wrap);
+                }
+            } else {
+                const ex = document.exitFullscreen || document.webkitExitFullscreen;
+                if (ex) {
+                    ex.call(document);
+                }
+            }
+        } catch (e) {
+            /* ignore */
+        }
+    }
+
     function invalidateMapSize() {
         if (map) {
             map.invalidateSize({ animate: false });
@@ -234,6 +350,17 @@
     } else {
         tryInitMap();
     }
+
+    (function bindAdminHmFullscreen() {
+        const btn = document.getElementById('admin-hm-fullscreen-btn');
+        if (btn) {
+            btn.addEventListener('click', function () {
+                toggleAdminHmFullscreen();
+            });
+        }
+        document.addEventListener('fullscreenchange', onAdminHmFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', onAdminHmFullscreenChange);
+    })();
 
     document.addEventListener('livewire:navigated', function () {
         heatLayerMoving = null;
