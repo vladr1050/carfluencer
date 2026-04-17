@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Campaign;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
@@ -15,6 +16,7 @@ class TelemetryBackfillDailyPipelineCommand extends Command
     protected $signature = 'telemetry:backfill-daily-pipeline
                             {--from= : First UTC calendar day (YYYY-MM-DD), inclusive}
                             {--to= : Last UTC calendar day (YYYY-MM-DD), inclusive}
+                            {--campaign= : Stop sessions for this campaign IMEIs only; daily aggregates for this campaign id only}
                             {--skip-sessions : Only run aggregate-daily (skip build-stop-sessions)}
                             {--skip-aggregate : Only run build-stop-sessions (skip aggregate-daily)}';
 
@@ -53,6 +55,19 @@ class TelemetryBackfillDailyPipelineCommand extends Command
             return self::FAILURE;
         }
 
+        $campaignOpt = $this->option('campaign');
+        $campaignArg = null;
+        if (is_string($campaignOpt) && $campaignOpt !== '' && is_numeric($campaignOpt)) {
+            $cid = (int) $campaignOpt;
+            if (! Campaign::query()->whereKey($cid)->exists()) {
+                $this->error('Campaign not found for --campaign='.$cid);
+
+                return self::FAILURE;
+            }
+            $campaignArg = (string) $cid;
+            $this->info("Scoped to campaign #{$cid} (stop_sessions for its IMEIs only; daily rows for this campaign only).");
+        }
+
         $totalDays = (int) $from->diffInDays($to) + 1;
         $this->info("Backfill {$totalDays} UTC day(s): {$from->toDateString()} … {$to->toDateString()}.");
 
@@ -64,14 +79,22 @@ class TelemetryBackfillDailyPipelineCommand extends Command
             $this->line("[{$i}/{$totalDays}] {$d}");
 
             if (! $skipSessions) {
-                Artisan::call('telemetry:build-stop-sessions', ['--date' => $d]);
+                $params = ['--date' => $d];
+                if ($campaignArg !== null) {
+                    $params['--campaign'] = $campaignArg;
+                }
+                Artisan::call('telemetry:build-stop-sessions', $params);
                 $out = trim(Artisan::output());
                 if ($out !== '') {
                     $this->line($out);
                 }
             }
             if (! $skipAggregate) {
-                Artisan::call('telemetry:aggregate-daily', ['--date' => $d]);
+                $params = ['--date' => $d];
+                if ($campaignArg !== null) {
+                    $params['--campaign'] = $campaignArg;
+                }
+                Artisan::call('telemetry:aggregate-daily', $params);
                 $out = trim(Artisan::output());
                 if ($out !== '') {
                     $this->line($out);

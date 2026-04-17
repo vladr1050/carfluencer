@@ -14,16 +14,25 @@ class StopSessionBuilderService
     ) {}
 
     /**
-     * Rebuild stop/driving sessions for all devices that have pings on this calendar day (UTC date).
+     * Rebuild stop/driving sessions for devices that have pings on this calendar day (UTC date).
+     *
+     * @param  list<string>|null  $onlyDeviceIds  When non-null, only these {@see DeviceLocation::device_id} values (e.g. campaign vehicle IMEIs).
      */
-    public function buildForDate(CarbonInterface $date): int
+    public function buildForDate(CarbonInterface $date, ?array $onlyDeviceIds = null): int
     {
         $dateStr = $date->toDateString();
 
-        $deviceIds = DeviceLocation::query()
+        if ($onlyDeviceIds !== null && $onlyDeviceIds === []) {
+            return 0;
+        }
+
+        $q = DeviceLocation::query()
             ->whereDate('event_at', $dateStr)
-            ->distinct()
-            ->pluck('device_id');
+            ->distinct();
+        if ($onlyDeviceIds !== null) {
+            $q->whereIn('device_id', array_values(array_unique($onlyDeviceIds)));
+        }
+        $deviceIds = $q->pluck('device_id');
 
         $total = 0;
         foreach ($deviceIds as $deviceId) {

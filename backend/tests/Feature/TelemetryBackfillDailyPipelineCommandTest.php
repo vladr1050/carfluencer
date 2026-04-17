@@ -32,4 +32,13 @@ class TelemetryBackfillDailyPipelineCommandTest extends TestCase
             '--skip-aggregate' => true,
         ])->assertFailed();
     }
+
+    public function test_rejects_unknown_campaign(): void
+    {
+        $this->artisan('telemetry:backfill-daily-pipeline', [
+            '--from' => '2024-01-01',
+            '--to' => '2024-01-01',
+            '--campaign' => '999999',
+        ])->assertFailed();
+    }
 }

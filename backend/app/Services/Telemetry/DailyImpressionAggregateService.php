@@ -12,23 +12,43 @@ use Carbon\CarbonInterface;
 
 class DailyImpressionAggregateService
 {
-    public function aggregateForDate(CarbonInterface $date): void
+    /**
+     * @param  int|null  $onlyCampaignId  When set, only this campaign's daily rows are deleted and rebuilt (other campaigns unchanged).
+     */
+    public function aggregateForDate(CarbonInterface $date, ?int $onlyCampaignId = null): void
     {
         $d = $date->toDateString();
-        DailyImpression::query()->whereDate('stat_date', $d)->delete();
-        DailyZoneImpression::query()->whereDate('stat_date', $d)->delete();
+
+        if ($onlyCampaignId === null) {
+            DailyImpression::query()->whereDate('stat_date', $d)->delete();
+            DailyZoneImpression::query()->whereDate('stat_date', $d)->delete();
+        } else {
+            DailyImpression::query()->whereDate('stat_date', $d)->where('campaign_id', $onlyCampaignId)->delete();
+            DailyZoneImpression::query()->whereDate('stat_date', $d)->where('campaign_id', $onlyCampaignId)->delete();
+        }
 
         $multiplier = (int) config('telemetry.impression_sample_multiplier');
 
-        $campaigns = Campaign::query()
-            ->where(function ($q) use ($d): void {
-                $q->whereNull('start_date')->orWhereDate('start_date', '<=', $d);
-            })
-            ->where(function ($q) use ($d): void {
-                $q->whereNull('end_date')->orWhereDate('end_date', '>=', $d);
-            })
-            ->with(['campaignVehicles.vehicle'])
-            ->get();
+        if ($onlyCampaignId !== null) {
+            $campaign = Campaign::query()
+                ->whereKey($onlyCampaignId)
+                ->with(['campaignVehicles.vehicle'])
+                ->first();
+            if ($campaign === null || ! $this->campaignCoversCalendarDay($campaign, $d)) {
+                return;
+            }
+            $campaigns = collect([$campaign]);
+        } else {
+            $campaigns = Campaign::query()
+                ->where(function ($q) use ($d): void {
+                    $q->whereNull('start_date')->orWhereDate('start_date', '<=', $d);
+                })
+                ->where(function ($q) use ($d): void {
+                    $q->whereNull('end_date')->orWhereDate('end_date', '>=', $d);
+                })
+                ->with(['campaignVehicles.vehicle'])
+                ->get();
+        }
 
         foreach ($campaigns as $campaign) {
             foreach ($campaign->campaignVehicles as $cv) {
@@ -69,7 +89,17 @@ class DailyImpressionAggregateService
             }
         }
 
-        $this->rollupZoneImpressions($d);
+        $this->rollupZoneImpressions($d, $onlyCampaignId);
+    }
+
+    private function campaignCoversCalendarDay(Campaign $campaign, string $d): bool
+    {
+        $startOk = $campaign->start_date === null
+            || $campaign->start_date->toDateString() <= $d;
+        $endOk = $campaign->end_date === null
+            || $campaign->end_date->toDateString() >= $d;
+
+        return $startOk && $endOk;
     }
 
     private function estimateDrivingDistanceKm(string $imei, CarbonInterface $date): float
@@ -100,7 +130,7 @@ class DailyImpressionAggregateService
         return $sum;
     }
 
-    private function rollupZoneImpressions(string $d): void
+    private function rollupZoneImpressions(string $d, ?int $onlyCampaignId = null): void
     {
         $sessions = StopSession::query()
             ->where('kind', 'parking')
@@ -127,6 +157,9 @@ class DailyImpressionAggregateService
 
             foreach ($session->zones as $zone) {
                 foreach ($campaignIds as $cid) {
+                    if ($onlyCampaignId !== null && (int) $cid !== $onlyCampaignId) {
+                        continue;
+                    }
                     $key = $zone->id.':'.$cid;
                     $buckets[$key] = ($buckets[$key] ?? 0) + $session->point_count;
                 }
