@@ -4,6 +4,7 @@ namespace App\Services\Telemetry;
 
 use App\Models\DeviceLocation;
 use App\Models\StopSession;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
@@ -20,14 +21,16 @@ class StopSessionBuilderService
      */
     public function buildForDate(CarbonInterface $date, ?array $onlyDeviceIds = null): int
     {
-        $dateStr = $date->toDateString();
-
         if ($onlyDeviceIds !== null && $onlyDeviceIds === []) {
             return 0;
         }
 
+        $rangeStart = Carbon::parse($date->toDateString(), 'UTC');
+        $rangeEndExclusive = $rangeStart->copy()->addDay();
+
         $q = DeviceLocation::query()
-            ->whereDate('event_at', $dateStr)
+            ->where('event_at', '>=', $rangeStart)
+            ->where('event_at', '<', $rangeEndExclusive)
             ->distinct();
         if ($onlyDeviceIds !== null) {
             $q->whereIn('device_id', array_values(array_unique($onlyDeviceIds)));
@@ -38,19 +41,21 @@ class StopSessionBuilderService
         foreach ($deviceIds as $deviceId) {
             StopSession::query()
                 ->where('device_id', $deviceId)
-                ->whereDate('started_at', $dateStr)
+                ->where('started_at', '>=', $rangeStart)
+                ->where('started_at', '<', $rangeEndExclusive)
                 ->delete();
 
             $points = DeviceLocation::query()
                 ->where('device_id', $deviceId)
-                ->whereDate('event_at', $dateStr)
+                ->where('event_at', '>=', $rangeStart)
+                ->where('event_at', '<', $rangeEndExclusive)
                 ->orderBy('event_at')
                 ->get();
 
             $total += $this->buildSessionsForPoints((string) $deviceId, $points);
         }
 
-        $this->zoneAttribution->attributeParkingSessionsForDate($date);
+        $this->zoneAttribution->attributeParkingSessionsForDate($date, $onlyDeviceIds);
 
         return $total;
     }
