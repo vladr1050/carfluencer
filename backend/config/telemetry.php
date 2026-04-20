@@ -153,7 +153,7 @@ return [
     | Analytics tuning
     |--------------------------------------------------------------------------
     */
-    'parking_speed_kmh_max' => (float) env('TELEMETRY_PARKING_SPEED_MAX', 3.0),
-    'min_session_seconds' => (int) env('TELEMETRY_MIN_SESSION_SECONDS', 60),
+    'parking_speed_kmh_max' => (float) env('TELEMETRY_PARKING_SPEED_MAX', 1.0),
+    'min_session_seconds' => (int) env('TELEMETRY_MIN_SESSION_SECONDS', 10),
     'impression_sample_multiplier' => (int) env('TELEMETRY_IMPRESSION_MULTIPLIER', 10),
 ];
