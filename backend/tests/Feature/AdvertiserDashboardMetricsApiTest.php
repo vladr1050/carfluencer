@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\DailyImpression;
 use App\Models\User;
 use App\Models\Vehicle;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -80,5 +81,61 @@ class AdvertiserDashboardMetricsApiTest extends TestCase
             ->assertJsonPath('driving_distance_km', 70)
             ->assertJsonPath('driving_time_hours', 2)
             ->assertJsonPath('parking_time_hours', 2);
+    }
+
+    public function test_dashboard_excludes_daily_impressions_before_campaign_start_date(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-04-01 12:00:00', 'UTC'));
+
+        $mediaOwner = User::factory()->mediaOwner()->create();
+        $vehicle = Vehicle::query()->create([
+            'media_owner_id' => $mediaOwner->id,
+            'brand' => 'Test',
+            'model' => 'Van',
+            'imei' => 'IMEI'.Str::upper(Str::random(10)),
+            'status' => 'active',
+        ]);
+
+        $advertiser = User::factory()->advertiser()->create();
+        $campaign = Campaign::query()->create([
+            'advertiser_id' => $advertiser->id,
+            'name' => 'Winter wrap',
+            'status' => 'active',
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-12-31',
+        ]);
+
+        $campaign->vehicles()->attach($vehicle->id, [
+            'placement_size_class' => 'M',
+            'agreed_price' => 100,
+            'status' => 'active',
+        ]);
+
+        DailyImpression::query()->create([
+            'stat_date' => '2025-06-01',
+            'campaign_id' => $campaign->id,
+            'vehicle_id' => $vehicle->id,
+            'impressions' => 50_000,
+            'driving_distance_km' => 900,
+            'parking_minutes' => 6000,
+        ]);
+
+        DailyImpression::query()->create([
+            'stat_date' => '2026-03-01',
+            'campaign_id' => $campaign->id,
+            'vehicle_id' => $vehicle->id,
+            'impressions' => 800,
+            'driving_distance_km' => 40,
+            'parking_minutes' => 60,
+        ]);
+
+        Sanctum::actingAs($advertiser);
+
+        $this->getJson('/api/advertiser/dashboard')
+            ->assertOk()
+            ->assertJsonPath('impressions', 800)
+            ->assertJsonPath('driving_distance_km', 40)
+            ->assertJsonPath('driving_time_hours', 1.1)
+            ->assertJsonPath('parking_time_hours', 1);
     }
 }

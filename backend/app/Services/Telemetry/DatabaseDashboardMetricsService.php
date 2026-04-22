@@ -2,11 +2,13 @@
 
 namespace App\Services\Telemetry;
 
-use App\Models\CampaignVehicle;
+use App\Models\Campaign;
 use App\Models\DailyImpression;
 use App\Models\DeviceLocation;
 use App\Models\User;
 use App\Models\Vehicle;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 
 /**
  * Advertiser dashboard metrics from PostgreSQL (daily_impressions + optional raw locations),
@@ -24,25 +26,11 @@ class DatabaseDashboardMetricsService implements DashboardMetricsServiceInterfac
             return $this->payload($active, 0, 0.0, 0.0, 0.0, null);
         }
 
-        $q = DailyImpression::query()->whereIn('campaign_id', $campaignIds);
-        $impr = (int) $q->sum('impressions');
-        $dist = (float) $q->sum('driving_distance_km');
-        $parkMin = (int) $q->sum('parking_minutes');
+        [$impr, $dist, $parkMin] = $this->sumDailyImpressionsWithinCampaignWindows($campaigns);
 
         if ($impr > 0 || $dist > 0 || $parkMin > 0) {
-            $vehicleIds = CampaignVehicle::query()
-                ->whereIn('campaign_id', $campaignIds)
-                ->pluck('vehicle_id');
-            $imeis = Vehicle::query()
-                ->whereIn('id', $vehicleIds)
-                ->pluck('imei')
-                ->filter()
-                ->values()
-                ->all();
-
             $svc = app(CampaignVehicleTelemetryService::class);
-            $driveMinSessions = $svc->sumStopSessionMinutesForImeis($imeis, 'driving', null, null);
-            $parkMinSessions = $svc->sumStopSessionMinutesForImeis($imeis, 'parking', null, null);
+            [$driveMinSessions, $parkMinSessions] = $this->sumStopSessionMinutesWithinCampaignWindows($campaigns, $svc);
 
             $drivingHours = $driveMinSessions > 0
                 ? round($driveMinSessions / 60, 1)
@@ -61,20 +49,7 @@ class DatabaseDashboardMetricsService implements DashboardMetricsServiceInterfac
             );
         }
 
-        $vehicleIds = CampaignVehicle::query()
-            ->whereIn('campaign_id', $campaignIds)
-            ->pluck('vehicle_id');
-
-        $imeis = Vehicle::query()
-            ->whereIn('id', $vehicleIds)
-            ->pluck('imei')
-            ->filter()
-            ->values()
-            ->all();
-
-        $rawCount = $imeis !== []
-            ? (int) DeviceLocation::query()->whereIn('device_id', $imeis)->count()
-            : 0;
+        $rawCount = $this->countDeviceLocationsWithinCampaignWindows($campaigns);
 
         $mult = (int) config('telemetry.impression_sample_multiplier');
 
@@ -88,6 +63,133 @@ class DatabaseDashboardMetricsService implements DashboardMetricsServiceInterfac
                 ? 'Impressions estimated from location samples until daily aggregates are built (run telemetry jobs / daily impression rollup).'
                 : null,
         );
+    }
+
+    /**
+     * @param  Collection<int, Campaign>  $campaigns
+     * @return array{0: int, 1: float, 2: int}
+     */
+    private function sumDailyImpressionsWithinCampaignWindows(Collection $campaigns): array
+    {
+        $impr = 0;
+        $dist = 0.0;
+        $parkMin = 0;
+
+        foreach ($campaigns as $campaign) {
+            $from = $this->effectiveStatWindowStart($campaign);
+            $to = $this->effectiveStatWindowEnd($campaign);
+            if ($from > $to) {
+                continue;
+            }
+
+            $row = DailyImpression::query()
+                ->where('campaign_id', $campaign->id)
+                ->whereDate('stat_date', '>=', $from)
+                ->whereDate('stat_date', '<=', $to)
+                ->selectRaw('COALESCE(SUM(impressions), 0) as i, COALESCE(SUM(driving_distance_km), 0) as d, COALESCE(SUM(parking_minutes), 0) as p')
+                ->first();
+
+            $impr += (int) ($row->i ?? 0);
+            $dist += (float) ($row->d ?? 0.0);
+            $parkMin += (int) ($row->p ?? 0);
+        }
+
+        return [$impr, $dist, $parkMin];
+    }
+
+    /**
+     * @param  Collection<int, Campaign>  $campaigns
+     * @return array{0: int, 1: int}
+     */
+    private function sumStopSessionMinutesWithinCampaignWindows(Collection $campaigns, CampaignVehicleTelemetryService $svc): array
+    {
+        $driveMinSessions = 0;
+        $parkMinSessions = 0;
+
+        foreach ($campaigns as $campaign) {
+            $from = $this->effectiveStatWindowStart($campaign);
+            $to = $this->effectiveStatWindowEnd($campaign);
+            if ($from > $to) {
+                continue;
+            }
+
+            $vehicleIds = $campaign->campaignVehicles()->pluck('vehicle_id')->map(fn ($id) => (int) $id)->values()->all();
+            if ($vehicleIds === []) {
+                continue;
+            }
+
+            $driveMinSessions += $svc->sumCampaignStopSessionMinutes($campaign->id, 'driving', $from, $to, $vehicleIds);
+            $parkMinSessions += $svc->sumCampaignStopSessionMinutes($campaign->id, 'parking', $from, $to, $vehicleIds);
+        }
+
+        return [$driveMinSessions, $parkMinSessions];
+    }
+
+    /**
+     * @param  Collection<int, Campaign>  $campaigns
+     */
+    private function countDeviceLocationsWithinCampaignWindows(Collection $campaigns): int
+    {
+        $total = 0;
+
+        foreach ($campaigns as $campaign) {
+            $from = $this->effectiveStatWindowStart($campaign);
+            $to = $this->effectiveStatWindowEnd($campaign);
+            if ($from > $to) {
+                continue;
+            }
+
+            $imeis = Vehicle::query()
+                ->whereIn('id', $campaign->campaignVehicles()->pluck('vehicle_id'))
+                ->pluck('imei')
+                ->filter(fn ($i) => is_string($i) && $i !== '')
+                ->values()
+                ->all();
+
+            if ($imeis === []) {
+                continue;
+            }
+
+            $startAt = CarbonImmutable::parse($from, 'UTC')->startOfDay();
+            $endAt = CarbonImmutable::parse($to, 'UTC')->endOfDay();
+
+            $total += (int) DeviceLocation::query()
+                ->whereIn('device_id', $imeis)
+                ->where('event_at', '>=', $startAt)
+                ->where('event_at', '<=', $endAt)
+                ->count();
+        }
+
+        return $total;
+    }
+
+    /**
+     * Inclusive calendar start for dashboard stats (UTC date string).
+     */
+    private function effectiveStatWindowStart(Campaign $campaign): string
+    {
+        if ($campaign->start_date !== null) {
+            return $campaign->start_date->toDateString();
+        }
+
+        if ($campaign->created_at !== null) {
+            return $campaign->created_at->copy()->utc()->toDateString();
+        }
+
+        return '1970-01-01';
+    }
+
+    /**
+     * Inclusive calendar end for dashboard stats (UTC date string), capped at today.
+     */
+    private function effectiveStatWindowEnd(Campaign $campaign): string
+    {
+        $today = now('UTC')->toDateString();
+        if ($campaign->end_date === null) {
+            return $today;
+        }
+
+        return min($campaign->end_date->toDateString(), $today);
     }
 
     /**
