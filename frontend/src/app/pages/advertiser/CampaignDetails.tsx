@@ -255,7 +255,7 @@ export function AdvertiserCampaignDetails() {
                     <td className="p-3 font-mono text-xs">{cv.vehicle?.imei ?? '—'}</td>
                     <td className="p-3">{cv.placement_size_class}</td>
                     <td className="p-3">{cv.agreed_price ?? '—'}</td>
-                    <td className="p-3 text-right tabular-nums">{tel ? Number(tel.impressions).toLocaleString() : '—'}</td>
+                    <td className="p-3 text-right tabular-nums">—</td>
                     <td className="p-3 text-right tabular-nums">{tel ? Number(tel.driving_distance_km).toLocaleString() : '—'}</td>
                     <td className="p-3 text-right tabular-nums">{tel ? Number(tel.driving_time_hours).toLocaleString() : '—'}</td>
                     <td className="p-3 text-right tabular-nums">{tel ? Number(tel.parking_time_hours).toLocaleString() : '—'}</td>
