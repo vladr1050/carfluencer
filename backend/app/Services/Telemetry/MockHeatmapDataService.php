@@ -63,6 +63,7 @@ class MockHeatmapDataService implements HeatmapDataServiceInterface
                 'parking_time_hours' => 156,
                 'data_source' => 'mock',
                 'is_estimated' => false,
+                'impression_engine' => null,
             ], $tripBlock),
         ];
     }

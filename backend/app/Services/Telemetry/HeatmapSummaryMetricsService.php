@@ -5,6 +5,7 @@ namespace App\Services\Telemetry;
 use App\Models\DailyImpression;
 use App\Models\DeviceLocation;
 use App\Models\Vehicle;
+use App\Services\ImpressionEngine\CampaignImpressionSnapshotResolver;
 
 /**
  * Period-level KPIs for the advertiser heatmap: campaign + vehicles + date range only.
@@ -14,6 +15,7 @@ class HeatmapSummaryMetricsService
 {
     public function __construct(
         private readonly CampaignVehicleTelemetryService $stopSessions,
+        private readonly CampaignImpressionSnapshotResolver $impressionSnapshots,
     ) {}
 
     /**
@@ -35,7 +37,7 @@ class HeatmapSummaryMetricsService
         $to = $query->dateTo !== null && $query->dateTo !== '' ? $query->dateTo : null;
 
         if ($from === null || $to === null) {
-            return [
+            return $this->withImpressionEngineSummary([
                 'impressions' => null,
                 'driving_distance_km' => null,
                 'driving_time_hours' => null,
@@ -44,7 +46,7 @@ class HeatmapSummaryMetricsService
                 'is_estimated' => false,
                 'trips' => null,
                 'heatmap_selection' => null,
-            ];
+            ], $campaignId, null, null);
         }
 
         $vehicleIdsArr = $query->resolveCampaignVehicleIds()->all();
@@ -52,7 +54,12 @@ class HeatmapSummaryMetricsService
         $imeis = Vehicle::query()->whereIn('id', $vehicleIdsArr)->pluck('imei')->filter()->values()->all();
 
         if ($vehicleIdsArr === [] || $imeis === []) {
-            return array_merge($this->emptySummaryNone(), TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount));
+            return $this->withImpressionEngineSummary(
+                array_merge($this->emptySummaryNone(), TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount)),
+                $campaignId,
+                $from,
+                $to,
+            );
         }
 
         $q = DailyImpression::query()
@@ -104,31 +111,64 @@ class HeatmapSummaryMetricsService
                 || ($parkMin <= 0 && $parkMinSessions <= 0 && $estimatedParkMin > 0.0);
             $dataSource = $usedGpsEst ? 'daily_impressions_estimated' : 'daily_impressions';
 
-            return array_merge([
-                'impressions' => $impr,
-                'driving_distance_km' => round($effectiveDist, 2),
-                'driving_time_hours' => $drivingHours,
-                'parking_time_hours' => $parkingHours,
-                'data_source' => $dataSource,
-                'is_estimated' => $usedGpsEst,
-            ], TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount));
-        }
-
-        if (filter_var(config('telemetry.heatmap.rollup.advertiser_raw_summary_fallback', false), FILTER_VALIDATE_BOOLEAN)) {
-            return array_merge(
-                $this->rawDeviceLocationsFallback($campaignId, $from, $to, $vehicleIdsArr, $imeis),
-                TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount),
+            return $this->withImpressionEngineSummary(
+                array_merge([
+                    'impressions' => $impr,
+                    'driving_distance_km' => round($effectiveDist, 2),
+                    'driving_time_hours' => $drivingHours,
+                    'parking_time_hours' => $parkingHours,
+                    'data_source' => $dataSource,
+                    'is_estimated' => $usedGpsEst,
+                ], TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount)),
+                $campaignId,
+                $from,
+                $to,
             );
         }
 
-        return array_merge([
-            'impressions' => null,
-            'driving_distance_km' => null,
-            'driving_time_hours' => null,
-            'parking_time_hours' => null,
-            'data_source' => 'insufficient_aggregates',
-            'is_estimated' => false,
-        ], TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount));
+        if (filter_var(config('telemetry.heatmap.rollup.advertiser_raw_summary_fallback', false), FILTER_VALIDATE_BOOLEAN)) {
+            return $this->withImpressionEngineSummary(
+                array_merge(
+                    $this->rawDeviceLocationsFallback($campaignId, $from, $to, $vehicleIdsArr, $imeis),
+                    TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount),
+                ),
+                $campaignId,
+                $from,
+                $to,
+            );
+        }
+
+        return $this->withImpressionEngineSummary(
+            array_merge([
+                'impressions' => null,
+                'driving_distance_km' => null,
+                'driving_time_hours' => null,
+                'parking_time_hours' => null,
+                'data_source' => 'insufficient_aggregates',
+                'is_estimated' => false,
+            ], TelemetryHeatmapConfig::computeAdvertiserTripsKpi($from, $to, $vehicleCount)),
+            $campaignId,
+            $from,
+            $to,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     * @return array<string, mixed>
+     */
+    private function withImpressionEngineSummary(array $summary, int $campaignId, ?string $from, ?string $to): array
+    {
+        if ($from === null || $to === null) {
+            $summary['impression_engine'] = null;
+
+            return $summary;
+        }
+
+        $stat = $this->impressionSnapshots->findLatestDone($campaignId, $from, $to);
+        $summary['impression_engine'] = $this->impressionSnapshots->summaryBlock($stat);
+
+        return $summary;
     }
 
     /**

@@ -4,12 +4,16 @@ namespace App\Http\Controllers\Api\Advertiser;
 
 use App\Http\Controllers\Controller;
 use App\Models\Campaign;
-use App\Models\CampaignImpressionStat;
+use App\Services\ImpressionEngine\CampaignImpressionSnapshotResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdvertiserCampaignImpressionController extends Controller
 {
+    public function __construct(
+        private readonly CampaignImpressionSnapshotResolver $impressionSnapshots,
+    ) {}
+
     public function show(Request $request, Campaign $campaign): JsonResponse
     {
         $this->authorize('viewAnalytics', $campaign);
@@ -19,13 +23,11 @@ class AdvertiserCampaignImpressionController extends Controller
             'date_to' => ['required', 'date_format:Y-m-d', 'after_or_equal:date_from'],
         ]);
 
-        $stat = CampaignImpressionStat::query()
-            ->where('campaign_id', $campaign->id)
-            ->whereDate('date_from', $data['date_from'])
-            ->whereDate('date_to', $data['date_to'])
-            ->where('status', CampaignImpressionStat::STATUS_DONE)
-            ->orderByDesc('id')
-            ->first();
+        $stat = $this->impressionSnapshots->findLatestDone(
+            (int) $campaign->id,
+            (string) $data['date_from'],
+            (string) $data['date_to'],
+        );
 
         if ($stat === null) {
             return response()->json([

@@ -97,6 +97,7 @@ class AdvertiserHeatmapSummaryContractTest extends TestCase
         $this->assertArrayHasKey('is_estimated', $sm);
         $this->assertArrayHasKey('trips', $sm);
         $this->assertArrayHasKey('heatmap_selection', $sm);
+        $this->assertArrayHasKey('impression_engine', $sm);
         $this->assertSame(200, $sm['impressions']);
         $this->assertSame('daily_impressions', $sm['data_source']);
         $this->assertFalse($sm['is_estimated']);

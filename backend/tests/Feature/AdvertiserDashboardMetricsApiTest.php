@@ -31,11 +31,13 @@ class AdvertiserDashboardMetricsApiTest extends TestCase
                 'driving_distance_km',
                 'driving_time_hours',
                 'parking_time_hours',
+                'impression_engine',
                 'source',
             ])
             ->assertJsonPath('source', 'database')
             ->assertJsonPath('active_campaigns_count', 0)
-            ->assertJsonPath('impressions', 0);
+            ->assertJsonPath('impressions', 0)
+            ->assertJsonPath('impression_engine.coverage', 'none');
     }
 
     public function test_dashboard_sums_daily_impressions_for_advertiser_campaigns(): void
@@ -80,7 +82,10 @@ class AdvertiserDashboardMetricsApiTest extends TestCase
             ->assertJsonPath('impressions', 1000)
             ->assertJsonPath('driving_distance_km', 70)
             ->assertJsonPath('driving_time_hours', 2)
-            ->assertJsonPath('parking_time_hours', 2);
+            ->assertJsonPath('parking_time_hours', 2)
+            ->assertJsonPath('impression_engine.coverage', 'none')
+            ->assertJsonPath('impression_engine.campaigns_in_scope', 1)
+            ->assertJsonPath('impression_engine.campaigns_with_snapshot', 0);
     }
 
     public function test_dashboard_excludes_daily_impressions_before_campaign_start_date(): void

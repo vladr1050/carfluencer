@@ -633,6 +633,13 @@ type HeatmapApi = {
     data_source: string;
     is_estimated: boolean;
     trips: number | null;
+    impression_engine: {
+      total_gross_impressions: number;
+      driving_impressions: number;
+      parking_impressions: number;
+      date_from: string;
+      date_to: string;
+    } | null;
     heatmap_selection: {
       date_from: string;
       date_to: string;
@@ -848,6 +855,12 @@ export function AdvertiserHeatmap() {
   const mapLayer = heatmapPayload?.map;
   const mapDebug = heatmapPayload?.debug ?? {};
   const summary = heatmapPayload?.summary_metrics;
+
+  const summaryImpressionEngine = summary?.impression_engine;
+  const impressionsKpiValue =
+    summaryImpressionEngine != null ? summaryImpressionEngine.total_gross_impressions : summary?.impressions ?? null;
+  const impressionsKpiHint =
+    summaryImpressionEngine != null ? 'Impression engine (gross)' : 'Telemetry · daily samples';
 
   const buckets: HeatmapBucket[] = mapLayer?.buckets ?? [];
 
@@ -1194,9 +1207,10 @@ export function AdvertiserHeatmap() {
             <Eye className="w-5 h-5" style={{ color: '#C1F60D' }} />
             <div>
               <div className="text-2xl" style={{ color: '#C1F60D' }}>
-                {summary?.impressions != null ? summary.impressions.toLocaleString() : '—'}
+                {impressionsKpiValue != null ? impressionsKpiValue.toLocaleString() : '—'}
               </div>
               <div className="text-xs text-muted-foreground">Impressions</div>
+              <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground/90">{impressionsKpiHint}</div>
             </div>
           </div>
           <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">

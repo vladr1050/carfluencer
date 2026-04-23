@@ -49,12 +49,15 @@ class HttpDashboardMetricsService implements DashboardMetricsServiceInterface
             $campaigns = $user->campaignsAsAdvertiser()->get();
             $active = $campaigns->where('status', 'active')->count();
 
+            $ie = $json['impression_engine'] ?? null;
+
             return [
                 'active_campaigns_count' => $active,
                 'impressions' => (int) ($json['impressions'] ?? $json['impressions_total'] ?? 0),
                 'driving_distance_km' => (float) ($json['driving_distance_km'] ?? 0),
                 'driving_time_hours' => (float) ($json['driving_time_hours'] ?? 0),
                 'parking_time_hours' => (float) ($json['parking_time_hours'] ?? 0),
+                'impression_engine' => is_array($ie) ? $ie : null,
                 'note' => $json['note'] ?? null,
                 'source' => 'http',
             ];

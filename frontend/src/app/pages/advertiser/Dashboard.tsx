@@ -3,12 +3,22 @@ import { Briefcase, Eye, Navigation, Clock, ParkingCircle, Loader2 } from 'lucid
 import { Link } from 'react-router-dom';
 import { apiJson } from '@/lib/api';
 
+type DashboardImpressionEngine = {
+  total_gross_impressions: number | null;
+  driving_impressions: number | null;
+  parking_impressions: number | null;
+  campaigns_with_snapshot: number;
+  campaigns_in_scope: number;
+  coverage: string;
+};
+
 type DashboardPayload = {
   active_campaigns_count: number;
   impressions: number;
   driving_distance_km: number;
   driving_time_hours: number;
   parking_time_hours: number;
+  impression_engine?: DashboardImpressionEngine;
   note?: string;
   source?: string;
 };
@@ -76,9 +86,27 @@ export function AdvertiserDashboard() {
     );
   }
 
-  const stats = [
+  const ie = dash.impression_engine;
+  const impressionsPrimary =
+    ie?.total_gross_impressions != null ? ie.total_gross_impressions : dash.impressions;
+  const impressionsHint =
+    ie?.total_gross_impressions != null
+      ? ie.coverage === 'partial'
+        ? `Impression engine · ${ie.campaigns_with_snapshot}/${ie.campaigns_in_scope} campaigns`
+        : 'Impression engine (gross)'
+      : 'Telemetry · daily samples';
+
+  type StatCard = {
+    label: string;
+    value: string;
+    hint?: string;
+    icon: typeof Briefcase;
+    color: string;
+  };
+
+  const stats: StatCard[] = [
     { label: 'Active campaigns', value: String(dash.active_campaigns_count), icon: Briefcase, color: '#F10DBF' },
-    { label: 'Impressions', value: Number(dash.impressions).toLocaleString(), icon: Eye, color: '#C1F60D' },
+    { label: 'Impressions', value: Number(impressionsPrimary).toLocaleString(), hint: impressionsHint, icon: Eye, color: '#C1F60D' },
     { label: 'Driving distance', value: `${Number(dash.driving_distance_km).toLocaleString()} km`, icon: Navigation, color: '#F10DBF' },
     { label: 'Driving time', value: `${Number(dash.driving_time_hours).toLocaleString()} hrs`, icon: Clock, color: '#545454' },
     { label: 'Parking time', value: `${Number(dash.parking_time_hours).toLocaleString()} hrs`, icon: ParkingCircle, color: '#F10DBF' },
@@ -106,7 +134,10 @@ export function AdvertiserDashboard() {
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl mb-2">Dashboard</h1>
-          <p className="text-muted-foreground">Campaign stats and telemetry aggregates from the API.</p>
+          <p className="text-muted-foreground">
+            Campaign stats: impressions prefer the impression-engine snapshot when available for each campaign window;
+            distance and time use telemetry aggregates.
+          </p>
         </div>
         <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
           Source: {dashboardSourceLabel(dash.source)}
@@ -125,6 +156,7 @@ export function AdvertiserDashboard() {
               </div>
               <div className="text-2xl mb-1">{stat.value}</div>
               <div className="text-sm text-muted-foreground">{stat.label}</div>
+              {stat.hint ? <div className="mt-1 text-[11px] leading-snug text-muted-foreground/90">{stat.hint}</div> : null}
             </div>
           );
         })}

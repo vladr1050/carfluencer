@@ -7,6 +7,7 @@ use App\Models\DailyImpression;
 use App\Models\DeviceLocation;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\ImpressionEngine\CampaignImpressionSnapshotResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -16,6 +17,10 @@ use Illuminate\Support\Collection;
  */
 class DatabaseDashboardMetricsService implements DashboardMetricsServiceInterface
 {
+    public function __construct(
+        private readonly CampaignImpressionSnapshotResolver $impressionSnapshots,
+    ) {}
+
     public function advertiserSummary(User $user): array
     {
         $campaigns = $user->campaignsAsAdvertiser()->get();
@@ -23,7 +28,10 @@ class DatabaseDashboardMetricsService implements DashboardMetricsServiceInterfac
         $campaignIds = $campaigns->pluck('id');
 
         if ($campaignIds->isEmpty()) {
-            return $this->payload($active, 0, 0.0, 0.0, 0.0, null);
+            return $this->withImpressionEngine(
+                $this->payload($active, 0, 0.0, 0.0, 0.0, null),
+                $campaigns,
+            );
         }
 
         [$impr, $dist, $parkMin] = $this->sumDailyImpressionsWithinCampaignWindows($campaigns);
@@ -39,13 +47,16 @@ class DatabaseDashboardMetricsService implements DashboardMetricsServiceInterfac
                 ? round($parkMin / 60, 1)
                 : ($parkMinSessions > 0 ? round($parkMinSessions / 60, 1) : 0.0);
 
-            return $this->payload(
-                $active,
-                $impr,
-                round($dist, 2),
-                $drivingHours,
-                $parkingHours,
-                null,
+            return $this->withImpressionEngine(
+                $this->payload(
+                    $active,
+                    $impr,
+                    round($dist, 2),
+                    $drivingHours,
+                    $parkingHours,
+                    null,
+                ),
+                $campaigns,
             );
         }
 
@@ -53,16 +64,83 @@ class DatabaseDashboardMetricsService implements DashboardMetricsServiceInterfac
 
         $mult = (int) config('telemetry.impression_sample_multiplier');
 
-        return $this->payload(
-            $active,
-            $rawCount * $mult,
-            0.0,
-            0.0,
-            0.0,
-            $rawCount > 0
-                ? 'Impressions estimated from location samples until daily aggregates are built (run telemetry jobs / daily impression rollup).'
-                : null,
+        return $this->withImpressionEngine(
+            $this->payload(
+                $active,
+                $rawCount * $mult,
+                0.0,
+                0.0,
+                0.0,
+                $rawCount > 0
+                    ? 'Impressions estimated from location samples until daily aggregates are built (run telemetry jobs / daily impression rollup).'
+                    : null,
+            ),
+            $campaigns,
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $base
+     * @param  Collection<int, Campaign>  $campaigns
+     * @return array<string, mixed>
+     */
+    private function withImpressionEngine(array $base, Collection $campaigns): array
+    {
+        return array_merge($base, [
+            'impression_engine' => $this->buildImpressionEngineRollup($campaigns),
+        ]);
+    }
+
+    /**
+     * Sums {@see CampaignImpressionStat} gross rows where snapshot dates match each campaign’s
+     * effective dashboard window (same as telemetry window: start_date..end_date capped at today).
+     *
+     * @param  Collection<int, Campaign>  $campaigns
+     * @return array{
+     *     total_gross_impressions: int|null,
+     *     driving_impressions: int|null,
+     *     parking_impressions: int|null,
+     *     campaigns_with_snapshot: int,
+     *     campaigns_in_scope: int,
+     *     coverage: string
+     * }
+     */
+    private function buildImpressionEngineRollup(Collection $campaigns): array
+    {
+        $totalGross = 0;
+        $totalDriving = 0;
+        $totalParking = 0;
+        $withStat = 0;
+        $eligible = 0;
+
+        foreach ($campaigns as $campaign) {
+            $from = $this->effectiveStatWindowStart($campaign);
+            $to = $this->effectiveStatWindowEnd($campaign);
+            if ($from > $to) {
+                continue;
+            }
+            $eligible++;
+            $stat = $this->impressionSnapshots->findLatestDone((int) $campaign->id, $from, $to);
+            if ($stat !== null) {
+                $withStat++;
+                $totalGross += (int) $stat->total_gross_impressions;
+                $totalDriving += (int) $stat->driving_impressions;
+                $totalParking += (int) $stat->parking_impressions;
+            }
+        }
+
+        $coverage = $eligible === 0
+            ? 'none'
+            : ($withStat === $eligible ? 'full' : ($withStat > 0 ? 'partial' : 'none'));
+
+        return [
+            'total_gross_impressions' => $withStat > 0 ? $totalGross : null,
+            'driving_impressions' => $withStat > 0 ? $totalDriving : null,
+            'parking_impressions' => $withStat > 0 ? $totalParking : null,
+            'campaigns_with_snapshot' => $withStat,
+            'campaigns_in_scope' => $eligible,
+            'coverage' => $coverage,
+        ];
     }
 
     /**
