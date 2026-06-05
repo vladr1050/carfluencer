@@ -28,6 +28,12 @@
         .insights-summary { margin: 8px 0; line-height: 1.45; font-size: 10.5px; }
         .insights-highlights { margin: 8px 0 0 18px; padding: 0; font-size: 10px; line-height: 1.4; }
         .insights-highlights li { margin: 4px 0; }
+        .letter { margin: 14px 0; line-height: 1.5; font-size: 11px; color: #111; }
+        .letter p { margin: 8px 0; }
+        .letter h3 { font-size: 12.5px; margin: 14px 0 6px; color: #111; }
+        .letter ul { margin: 6px 0 8px 18px; padding: 0; }
+        .letter li { margin: 5px 0; }
+        .letter .signoff { margin-top: 12px; line-height: 1.4; }
     </style>
 </head>
 <body>
@@ -54,6 +60,56 @@
         <div><strong>Vehicles:</strong> {{ $vehicleCount }}</div>
         <div><strong>Metrics source:</strong> {{ $aDataSource }} @if($aIsEstimated)(estimated)@endif</div>
     </div>
+
+    @php
+        $companyName = $advertiserName ?: 'team';
+
+        $topZonesList = (is_array($impZones) && !empty($impZones['top_zones']) && is_array($impZones['top_zones']))
+            ? array_values($impZones['top_zones'])
+            : [];
+        $topZone = $topZonesList[0] ?? null;
+        $topZoneName = is_array($topZone) ? ($topZone['name'] ?? null) : null;
+        $topZoneShare = is_array($topZone) ? (float) ($topZone['share_pct'] ?? 0) : null;
+
+        $followNames = [];
+        foreach (array_slice($topZonesList, 1, 3) as $fz) {
+            if (is_array($fz) && ! empty($fz['name'])) {
+                $followNames[] = (string) $fz['name'];
+            }
+        }
+        $followCount = count($followNames);
+        $followText = '';
+        if ($followCount === 1) {
+            $followText = $followNames[0];
+        } elseif ($followCount === 2) {
+            $followText = $followNames[0].' and '.$followNames[1];
+        } elseif ($followCount >= 3) {
+            $followText = $followNames[0].', '.$followNames[1].', and '.$followNames[2];
+        }
+
+        $parkingSharePct = (float) ($aExposure['parking_share'] ?? 0) * 100;
+        $parkingMinutes = is_array($aParkingByZone) ? (int) ($aParkingByZone['totals']['parking_minutes_in_window'] ?? 0) : 0;
+        $parkingHoursVal = $parkingMinutes / 60.0;
+
+        $impressionsVal = (int) ($aKpis['impressions'] ?? 0);
+        $kmVal = (float) ($aKpis['km_driven'] ?? 0);
+    @endphp
+
+    <div class="letter">
+        <p>Dear {{ $companyName }} team,</p>
+        <p>Following the conclusion of our "{{ $campaignName }}" campaign ({{ $dateFrom }} – {{ $dateTo }}), I am proud to present a summary of results that demonstrate the exceptional impact of moving media on the Riga metropolitan landscape.</p>
+        <p>With just {{ $vehicleCount }} vehicles, we transformed everyday urban mobility into a high-frequency branding machine.</p>
+        <h3>Campaign Performance Highlights</h3>
+        <ul>
+            <li><strong>Total Impressions:</strong> {{ number_format($impressionsVal) }} gross exposures.</li>
+            <li><strong>Total Distance:</strong> {{ number_format($kmVal) }} km driven, blanketing Riga's most valuable transit corridors.</li>
+            @if($topZoneName !== null)
+                <li><strong>Geographic Dominance:</strong> {{ number_format((float) $topZoneShare, 2) }}% of impact was concentrated in the {{ $topZoneName }}@if($followText !== ''), followed by high-density districts like {{ $followText }}@endif.</li>
+            @endif
+            <li><strong>Strategic Exposure:</strong> While the cars were highly mobile, {{ number_format($parkingSharePct, 2) }}% of visibility occurred during strategic parking sessions (over {{ number_format($parkingHoursVal) }} hours), turning your brand into a trusted "neighbor" and building massive social proof in residential and commercial hubs.</li>
+        </ul>
+    </div>
+
     <h2>Key metrics</h2>
     <div class="kpis">
         <div class="kpi"><div class="label">Impressions</div><div class="value">{{ $aKpis['impressions'] ?? '—' }}</div></div>
@@ -205,6 +261,23 @@
         </ul>
     @endif
     <p class="note">Parking geography in this section follows the Parking time by zone table (GeoZone attribution), not heatmap sample cells.</p>
+
+    <div class="letter">
+        <h3>The Value Proposition: High Recall, Low Friction</h3>
+        <p>In an era of digital ad-blocking and "banner blindness," Carfluencer provides an unskippable physical presence. Our "1x See, 7x Remember" philosophy was evident here: by appearing consistently in the daily lives of commuters, {{ $companyName }} achieved a level of top-of-mind awareness that static billboards or digital scrolls cannot replicate.</p>
+        <p>Compared to traditional OOH, this campaign delivered a significantly lower CPM, making it one of the most cost-effective investments in your 2026 marketing mix.</p>
+        <h3>Data Integrity &amp; Methodology</h3>
+        <p>The metrics in this report are powered by our Impression Engine (beta), which moves beyond estimates by utilizing real-time.</p>
+        <ul>
+            <li><strong>LVC (Latvian State Roads):</strong> Real-time traffic intensity and volume.</li>
+            <li><strong>TomTom Traffic Index:</strong> Dwell-time analytics to account for higher recall during congestion.</li>
+            <li><strong>GEO RIGA:</strong> Precise pedestrian and neighborhood flow mapping.</li>
+            <li><strong>Telco Mobility Data (LMT/Tele2):</strong> Aggregated device signals to verify unique reach and audience proximity.</li>
+            <li><strong>Carguru GPS:</strong> Second-by-second vehicle telemetry to ensure your ads were exactly where the target audience lives and works.</li>
+        </ul>
+        <p>This campaign has proven that moving media is no longer just a support channel—it is a foundational asset for brand dominance in a regulated market. We look forward to scaling this success in our next phase.</p>
+        <p class="signoff">Best regards,<br>Artūrs Kostins<br>CEO, Carfluencer</p>
+    </div>
 </section>
 
 @if(!empty($includeDriving))
